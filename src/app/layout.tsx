@@ -16,7 +16,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{document.documentElement.setAttribute('data-theme','light');localStorage.setItem('fintrack_theme','light');}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('fintrack_theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
           }}
         />
       </head>

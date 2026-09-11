@@ -11,6 +11,14 @@ import { Transaction, PaymentMethod, Receivable, Category, OtherIncome, Payable,
 const isUUID = (str?: string | null): boolean =>
   typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
+// Map any payable status to the lowercase values the schema CHECK accepts.
+const normalizePayableStatus = (s?: string): 'pending' | 'partial' | 'paid' => {
+  const v = (s || '').toString().toUpperCase();
+  if (v === 'PAID') return 'paid';
+  if (v === 'PARTIALLY_PAID' || v === 'PARTIAL') return 'partial';
+  return 'pending';
+};
+
 export class SupabaseDataService {
   private static logSupabaseError(context: string, error: any) {
     const msg = typeof error === 'string' ? error : (error?.message || error?.details || JSON.stringify(error));
@@ -418,7 +426,11 @@ export class SupabaseDataService {
       }
 
       const { error } = await supabase.from('payment_methods').insert(payload);
-      return !error;
+      if (error) {
+        this.logSupabaseError('createPaymentMethod (POST)', error.message);
+        return false;
+      }
+      return true;
     } catch (e) {
       this.logSupabaseError('createPaymentMethod (catch)', e);
       return false;
@@ -652,7 +664,7 @@ export class SupabaseDataService {
         issue_date: p.issueDate || new Date().toISOString().split('T')[0],
         due_date: p.dueDate || null,
         is_credited_to_debit: !!p.isCreditedToDebit,
-        status: p.status ? p.status.toLowerCase() : 'pending'
+        status: normalizePayableStatus(p.status)
       };
 
       if (isUUID(p.id)) {
@@ -660,7 +672,11 @@ export class SupabaseDataService {
       }
 
       const { error } = await supabase.from('payables').insert(payload);
-      return !error;
+      if (error) {
+        this.logSupabaseError('createPayable (POST)', error.message);
+        return false;
+      }
+      return true;
     } catch (e) {
       this.logSupabaseError('createPayable (catch)', e);
       return false;

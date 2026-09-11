@@ -388,7 +388,7 @@ export class SupabaseDataService {
         type: row.type,
         billingCloseDay: row.billing_close_day || undefined,
         paymentDueDay: row.payment_due_day || undefined,
-        creditLimit: row.credit_limit ? parseFloat(row.credit_limit) : 4000,
+        creditLimit: row.credit_limit != null ? parseFloat(row.credit_limit) : undefined,
         color: row.color || '#3b82f6',
         icon: row.icon || 'credit-card',
         isActive: row.is_active !== false
@@ -421,9 +421,8 @@ export class SupabaseDataService {
       if (isUUID(pm.id)) {
         payload.id = pm.id;
       }
-      if (pm.creditLimit !== undefined) {
-        payload.credit_limit = pm.creditLimit;
-      }
+      // Only credit cards carry a limit; debit/cash stay null (avoids the schema default).
+      payload.credit_limit = pm.type === 'credit' ? (pm.creditLimit ?? null) : null;
 
       const { error } = await supabase.from('payment_methods').insert(payload);
       if (error) {
@@ -447,12 +446,10 @@ export class SupabaseDataService {
         name: pm.name,
         billing_close_day: pm.billingCloseDay || null,
         payment_due_day: pm.paymentDueDay || null,
-        color: pm.color
+        color: pm.color,
+        // Only credit cards carry a limit; debit/cash stay null.
+        credit_limit: pm.type === 'credit' ? (pm.creditLimit ?? null) : null
       };
-
-      if (pm.creditLimit !== undefined) {
-        payload.credit_limit = pm.creditLimit;
-      }
 
       const { error } = await supabase
         .from('payment_methods')

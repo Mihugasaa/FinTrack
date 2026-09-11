@@ -4,9 +4,12 @@
 -- Idempotent. Run once in the Supabase SQL Editor on databases created before
 -- the currency/audit and credit-limit columns were introduced. Safe to re-run.
 
--- payment_methods: credit limit (base schema; absent on older databases)
+-- payment_methods: credit limit applies to credit cards only.
 ALTER TABLE public.payment_methods
-  ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12, 2) DEFAULT 4000.00;
+  ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12, 2);
+-- Drop any legacy default that would fill debit/cash rows, and clear those rows.
+ALTER TABLE public.payment_methods ALTER COLUMN credit_limit DROP DEFAULT;
+UPDATE public.payment_methods SET credit_limit = NULL WHERE type <> 'credit';
 
 -- payables: currency, exchange rate, PEN equivalent, issue date
 ALTER TABLE public.payables

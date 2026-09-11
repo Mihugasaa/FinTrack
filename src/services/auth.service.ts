@@ -15,20 +15,8 @@ export interface UserProfile {
 }
 
 const STORAGE_SESSION_KEY = 'fintrack_current_user';
-const COOKIE_NAME = 'fintrack_session';
 const MIN_PASSWORD_LENGTH = 8;
 const MIN_USERNAME_LENGTH = 3;
-
-function setCookie(name: string, value: string, days: number = 7) {
-  if (typeof document === 'undefined') return;
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
-}
-
-function deleteCookie(name: string) {
-  if (typeof document === 'undefined') return;
-  document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax`;
-}
 
 export class AuthService {
   // Cached non-sensitive profile of the signed-in user (UI convenience only).
@@ -47,10 +35,11 @@ export class AuthService {
     return this.getCurrentUser() !== null;
   }
 
+  // The Supabase browser client owns the auth session cookies; here we only
+  // cache the non-sensitive profile for synchronous UI reads.
   private static persistSession(profile: UserProfile) {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(profile));
-    setCookie(COOKIE_NAME, profile.username, 7);
   }
 
   // Map an app username to the synthetic email used by Supabase Auth.
@@ -163,17 +152,10 @@ export class AuthService {
   public static async logout(): Promise<void> {
     if (typeof window === 'undefined') return;
 
-    deleteCookie(COOKIE_NAME);
     try {
       localStorage.removeItem(STORAGE_SESSION_KEY);
-      // Clear Supabase auth tokens left in localStorage.
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-          localStorage.removeItem(key);
-        }
-      });
     } catch (e) {
-      console.warn('Error al limpiar localStorage en logout:', e);
+      console.warn('Error al limpiar sesión local en logout:', e);
     }
 
     if (supabase && isSupabaseConfigured) {

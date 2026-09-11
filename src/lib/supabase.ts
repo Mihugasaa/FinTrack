@@ -1,15 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export const isSupabaseConfigured = Boolean(
-  supabaseUrl && 
-  supabaseAnonKey && 
+  supabaseUrl &&
+  supabaseAnonKey &&
   !supabaseUrl.includes('tu-proyecto')
 );
 
-// Cliente de Supabase para consultas en el frontend y backend
+// Browser client with cookie-based session storage so the middleware can
+// verify the session server-side.
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createBrowserClient(supabaseUrl, supabaseAnonKey)
   : null;

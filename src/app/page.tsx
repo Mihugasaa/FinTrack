@@ -65,21 +65,14 @@ import { AnalyticsTab } from '@/components/tabs/AnalyticsTab';
 import { ReconciliationTab } from '@/components/tabs/ReconciliationTab';
 import { AnnualTab } from '@/components/tabs/AnnualTab';
 import { AuthService, UserProfile } from '@/services/auth.service';
-import { StorageService } from '@/services/storage.service';
 import { SupabaseDataService } from '@/services/supabaseData.service';
 import { AIIntelligenceService } from '@/services/aiIntelligence.service';
 import { ReconciliationService } from '@/services/reconciliation.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import {
   initialCategories,
-  initialPaymentMethods,
-  initialMonthlyBudgets,
-  initialSalaries,
-  initialReceivables,
-  initialPayables,
-  initialCardPayments,
-  initialTransactions
-} from '@/lib/mockData';
+  initialPaymentMethods
+} from '@/lib/defaults';
 import {
   calculatePaymentDueDate,
   calculatePaymentDueDateDetail,
@@ -191,7 +184,7 @@ export default function DashboardPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
 
   useEffect(() => {
-    // 1. Validar autenticación
+    // Require an authenticated user; otherwise bounce to login.
     const user = AuthService.getCurrentUser();
     if (!user) {
       router.replace('/login');
@@ -199,45 +192,30 @@ export default function DashboardPage() {
     }
     setCurrentUser(user);
 
-    // 2. Cargar datos persistentes específicos del usuario
-    const userData = StorageService.loadUserData(user.username);
-    setPaymentMethods(userData.paymentMethods);
-    setCategories(userData.categories);
-    setTransactions(deduplicateTransactions(userData.transactions));
-    setReceivables(userData.receivables);
-    setPayables(userData.payables || initialPayables);
-    setCardPayments((userData.cardPayments || []).map((cp: any, idx: number) => ({
-      ...cp,
-      id: cp.id || `cp-saved-${idx}`
-    })));
-    setSalaries(userData.salaries);
-    setExtraIncomes(userData.extraIncomes);
-    setInitialDebitBalances(userData.initialDebitBalances);
-
-    // 3. Sincronización asíncrona con Supabase en la nube (GET)
+    // Hydrate account data from Supabase (single source of truth). Month-scoped
+    // data (transactions, incomes, card payments, period) loads in the effect below.
     SupabaseDataService.getPaymentMethods().then(methods => {
       if (methods && methods.length > 0) {
-        setPaymentMethods(methods.map(m => {
-          const localPm = userData.paymentMethods.find(p => p.id === m.id);
-          return {
-            ...m,
-            initialDebt: localPm?.initialDebt !== undefined ? localPm.initialDebt : (m.initialDebt || 0)
-          };
+        setPaymentMethods(prev => methods.map(m => {
+          const known = prev.find(p => p.id === m.id);
+          return { ...m, initialDebt: known?.initialDebt ?? m.initialDebt ?? 0 };
         }));
-      } else if (methods && methods.length === 0 && userData.paymentMethods.length > 0) {
-        userData.paymentMethods.forEach(pm => {
-          SupabaseDataService.createPaymentMethod(pm);
-        });
+      } else if (methods && methods.length === 0) {
+        // Brand-new account: seed the generic starter methods in the cloud.
+        initialPaymentMethods.forEach(pm => SupabaseDataService.createPaymentMethod(pm));
       }
     });
     SupabaseDataService.getReceivables().then(recs => {
       if (recs && recs.length > 0) setReceivables(recs);
     });
+    SupabaseDataService.getPayables().then(pays => {
+      if (pays && pays.length > 0) setPayables(pays);
+    });
     SupabaseDataService.getCategories().then(cats => {
       if (cats && cats.length > 0) setCategories(cats);
     });
 
-    // 4. Tema
+    // Theme is a per-device UI preference, kept in localStorage by design.
     const savedTheme = localStorage.getItem('fintrack_theme') as 'dark' | 'light' | null;
     const initial = savedTheme || 'light';
     setTheme(initial);
@@ -269,26 +247,17 @@ export default function DashboardPage() {
   const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth() + 1); // Septiembre = 9
 
   // 4. Saldo Débito Inicial configurable por el usuario (Dinero con el que arranca)
-  const [initialDebitBalances, setInitialDebitBalances] = useState<Record<string, number>>({
-    '2026-08': 2044.67,
-    '2026-09': 3904.66,
-    '2026-10': 1994.46,
-    '2026-11': 2308.74,
-    '2026-12': 4141.37
-  });
+  const [initialDebitBalances, setInitialDebitBalances] = useState<Record<string, number>>({});
 
   // 5. Estados de Datos Interactivos
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(initialPaymentMethods);
   const [categories, setCategories] = useState(initialCategories);
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [receivables, setReceivables] = useState<Receivable[]>(initialReceivables);
-  const [payables, setPayables] = useState<Payable[]>(initialPayables);
-  const [cardPayments, setCardPayments] = useState<CardPayment[]>(initialCardPayments);
-  const [salaries, setSalaries] = useState<SalaryIncome[]>(initialSalaries);
-  const [extraIncomes, setExtraIncomes] = useState<Record<string, OtherIncome[]>>({
-    '2026-08': [],
-    '2026-09': [{ id: 'oi-1', description: 'Disney', amount: 103.50, receivedDate: '2026-09-05' }]
-  });
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [receivables, setReceivables] = useState<Receivable[]>([]);
+  const [payables, setPayables] = useState<Payable[]>([]);
+  const [cardPayments, setCardPayments] = useState<CardPayment[]>([]);
+  const [salaries, setSalaries] = useState<SalaryIncome[]>([]);
+  const [extraIncomes, setExtraIncomes] = useState<Record<string, OtherIncome[]>>({});
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -303,22 +272,6 @@ export default function DashboardPage() {
   const handleResetDismissedAnomalies = () => {
     setDismissedAnomalyIds([]);
   };
-
-  // Persistencia automática ante cualquier mutación en los datos del usuario activo
-  useEffect(() => {
-    if (!currentUser) return;
-    StorageService.saveUserData(currentUser.username, {
-      categories,
-      paymentMethods,
-      transactions,
-      receivables,
-      payables,
-      cardPayments,
-      salaries,
-      extraIncomes,
-      initialDebitBalances
-    });
-  }, [currentUser, categories, paymentMethods, transactions, receivables, payables, cardPayments, salaries, extraIncomes, initialDebitBalances]);
 
   // 6. Estados de Modales y Subpestañas
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -2147,6 +2100,10 @@ export default function DashboardPage() {
         return p;
       })
     );
+
+    updates.forEach((upd, payableId) => {
+      SupabaseDataService.recordPayablePayment(payableId, upd.paymentRecord, upd.newPaid, upd.isDone);
+    });
   };
 
   const handleOpenPayPayable = (payable: Payable) => {
@@ -2185,21 +2142,24 @@ export default function DashboardPage() {
         notes: payablePaymentNotes || undefined
       };
 
+      const payTotal = payingPayable.totalAmount ?? payingPayable.originalAmount ?? 0;
+      const payNewPaid = payingPayable.paidAmount + num;
+      const payIsDone = Math.max(0, payTotal - payNewPaid) === 0;
+
       setPayables(prev => prev.map(p => {
         if (p.id === payingPayable.id) {
-          const total = p.totalAmount ?? p.originalAmount ?? 0;
-          const newPaid = p.paidAmount + num;
-          const newRemaining = Math.max(0, total - newPaid);
           return {
             ...p,
-            paidAmount: newPaid,
-            remainingAmount: newRemaining,
-            status: newRemaining === 0 ? 'PAID' : 'PARTIALLY_PAID',
+            paidAmount: payNewPaid,
+            remainingAmount: Math.max(0, payTotal - payNewPaid),
+            status: payIsDone ? 'PAID' : 'PARTIALLY_PAID',
             payments: [...(p.payments || []), payRecord]
           };
         }
         return p;
       }));
+
+      SupabaseDataService.recordPayablePayment(payingPayable.id, payRecord, payNewPaid, payIsDone);
 
       setIsPayablePaymentModalOpen(false);
       setPayingPayable(null);

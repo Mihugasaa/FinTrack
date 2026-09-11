@@ -1,5 +1,5 @@
 import { PaymentMethod, Transaction, MonthlyBudget, Receivable, LiquidityDiagnostic, CardDebtSummary, OtherIncome, Payable, CardPayment } from '@/types';
-import { initialPaymentMethods } from './mockData';
+import { initialPaymentMethods } from './defaults';
 
 /**
  * Días feriados oficiales del sistema financiero y laboral en Perú (MM-DD)

@@ -140,6 +140,20 @@ export async function migrateLegacyData(username: string, dryRun = true): Promis
     }
   }
 
+  // Re-link cloud transactions that still point at a legacy method id
+  // (e.g. from an earlier partial run before the cards were created).
+  if (!dryRun && pmMap.size) {
+    for (const mk of txMonths) {
+      const cloud = (await SupabaseDataService.getTransactions(mk)) || [];
+      for (const t of cloud) {
+        const mapped = t.paymentMethodId ? pmMap.get(t.paymentMethodId) : undefined;
+        if (mapped && mapped !== t.paymentMethodId) {
+          await SupabaseDataService.updateTransaction({ ...t, paymentMethodId: mapped });
+        }
+      }
+    }
+  }
+
   // --- Payables: dedup by creditor + amount + issue date; then their payments ---
   const payableSig = (p: Payable) => `${norm(p.creditorName)}|${money(p.originalAmount || p.totalAmount)}|${p.issueDate || ''}`;
   const cloudPayables = (await SupabaseDataService.getPayables()) || [];

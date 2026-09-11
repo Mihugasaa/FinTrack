@@ -107,7 +107,7 @@ export class SupabaseDataService {
           user_id: userId,
           year,
           month,
-          base_salary: 2126.49,
+          base_salary: 0,
           initial_debit_balance: 0
         })
         .select('id')

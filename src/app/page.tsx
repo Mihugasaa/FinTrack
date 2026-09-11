@@ -66,6 +66,7 @@ import { ReconciliationTab } from '@/components/tabs/ReconciliationTab';
 import { AnnualTab } from '@/components/tabs/AnnualTab';
 import { AuthService, UserProfile } from '@/services/auth.service';
 import { SupabaseDataService } from '@/services/supabaseData.service';
+import { migrateLegacyData } from '@/services/migration.service';
 import { AIIntelligenceService } from '@/services/aiIntelligence.service';
 import { ReconciliationService } from '@/services/reconciliation.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
@@ -192,6 +193,10 @@ export default function DashboardPage() {
       return;
     }
     setCurrentUser(user);
+
+    // One-time recovery helper for data that predates the Supabase-only model.
+    // Run window.__fintrackMigrate(true) in the console to preview, then (false) to apply.
+    (window as any).__fintrackMigrate = (dryRun = true) => migrateLegacyData(user.username, dryRun);
 
     // Hydrate account data from Supabase (single source of truth). Month-scoped
     // data (transactions, incomes, card payments, period) loads in the effect below.

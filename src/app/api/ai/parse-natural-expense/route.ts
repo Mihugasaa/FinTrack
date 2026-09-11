@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GEMINI_MODELS, geminiEndpoint } from '@/lib/aiConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const GEMINI_MODELS = [
-  'gemini-3-flash-preview',
-  'gemini-3.5-flash-lite',
-  'gemini-3.7-flash',
-  'gemini-3.6-flash'
-];
 
 interface ParseExpenseRequest {
   text: string;
@@ -83,7 +77,7 @@ REGLAS ESTRICTAS:
 
     for (const model of GEMINI_MODELS) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const url = geminiEndpoint(model, apiKey);
         const payload = {
           contents: [
             {

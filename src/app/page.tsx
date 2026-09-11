@@ -73,6 +73,7 @@ import {
   initialCategories,
   initialPaymentMethods
 } from '@/lib/defaults';
+import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import {
   calculatePaymentDueDate,
   calculatePaymentDueDateDetail,
@@ -295,7 +296,7 @@ export default function DashboardPage() {
   const [payablePaymentDate, setPayablePaymentDate] = useState('');
   const [payablePaymentNotes, setPayablePaymentNotes] = useState('');
   const [payableCurrency, setPayableCurrency] = useState<CurrencyCode>('PEN');
-  const [payableExchangeRate, setPayableExchangeRate] = useState('3.75');
+  const [payableExchangeRate, setPayableExchangeRate] = useState(FALLBACK_USD_PEN_RATE_STR);
   const [payableIssueDate, setPayableIssueDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
@@ -375,7 +376,7 @@ export default function DashboardPage() {
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<CurrencyCode>('PEN');
-  const [exchangeRate, setExchangeRate] = useState('3.75');
+  const [exchangeRate, setExchangeRate] = useState(FALLBACK_USD_PEN_RATE_STR);
   const [isFetchingTc, setIsFetchingTc] = useState(false);
   const [tcInfo, setTcInfo] = useState<ExchangeRateResult | null>(null);
   const [hasUserManuallyEditedTc, setHasUserManuallyEditedTc] = useState(false);
@@ -443,7 +444,7 @@ export default function DashboardPage() {
   const [loanDesc, setLoanDesc] = useState('');
   const [loanAmount, setLoanAmount] = useState('');
   const [loanCurrency, setLoanCurrency] = useState<CurrencyCode>('PEN');
-  const [loanExchangeRate, setLoanExchangeRate] = useState('3.75');
+  const [loanExchangeRate, setLoanExchangeRate] = useState(FALLBACK_USD_PEN_RATE_STR);
   const [loanDate, setLoanDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
@@ -829,7 +830,7 @@ export default function DashboardPage() {
       };
 
       const isUsd = r.currency === 'USD';
-      const exRate = r.exchangeRate || 3.75;
+      const exRate = r.exchangeRate || FALLBACK_USD_PEN_RATE;
       const origPen = isUsd ? (r.amountPen || r.originalAmount * exRate) : r.originalAmount;
       const paidPen = isUsd ? (r.paidAmount * exRate) : r.paidAmount;
       const remPen = isUsd ? (r.remainingAmount * exRate) : r.remainingAmount;
@@ -909,7 +910,7 @@ export default function DashboardPage() {
       const orig = (isUsd && p.originalAmount) ? p.originalAmount : (p.originalAmount ?? p.totalAmount ?? 0);
       const paid = p.paidAmount ?? 0;
       const rem = (isUsd && p.remainingAmount > orig) ? Math.max(0, orig - paid) : (p.remainingAmount ?? orig);
-      const exRate = p.exchangeRate || 3.75;
+      const exRate = p.exchangeRate || FALLBACK_USD_PEN_RATE;
       const origPen = isUsd ? (p.amountPen || orig * exRate) : orig;
       const paidPen = isUsd ? (paid * exRate) : paid;
       const remPen = isUsd ? (rem * exRate) : rem;
@@ -1166,7 +1167,7 @@ export default function DashboardPage() {
   const totalReceivablesRemaining = useMemo(() => {
     return receivables.reduce((acc, curr) => {
       const isUsd = curr.currency === 'USD';
-      const exRate = curr.exchangeRate || 3.75;
+      const exRate = curr.exchangeRate || FALLBACK_USD_PEN_RATE;
       const pen = isUsd ? (curr.amountPen ? (curr.remainingAmount / (curr.originalAmount || 1)) * curr.amountPen : curr.remainingAmount * exRate) : curr.remainingAmount;
       return acc + pen;
     }, 0);
@@ -1182,7 +1183,7 @@ export default function DashboardPage() {
       const orig = (isUsd && curr.originalAmount) ? curr.originalAmount : (curr.originalAmount ?? curr.totalAmount ?? 0);
       const paid = curr.paidAmount ?? 0;
       const rem = (isUsd && curr.remainingAmount > orig) ? Math.max(0, orig - paid) : (curr.remainingAmount ?? orig);
-      const exRate = curr.exchangeRate || 3.75;
+      const exRate = curr.exchangeRate || FALLBACK_USD_PEN_RATE;
       const pen = isUsd ? (curr.amountPen ? (rem / (orig || 1)) * curr.amountPen : rem * exRate) : rem;
       return acc + pen;
     }, 0);
@@ -1224,7 +1225,7 @@ export default function DashboardPage() {
     try {
       const info = await ExchangeRateService.getRateForDate(targetDate);
       setTcInfo(info);
-      if (forceOverwrite || !hasUserManuallyEditedTc || !exchangeRate || exchangeRate === '3.75' || exchangeRate === '1') {
+      if (forceOverwrite || !hasUserManuallyEditedTc || !exchangeRate || exchangeRate === FALLBACK_USD_PEN_RATE_STR || exchangeRate === '1') {
         setExchangeRate(info.rate.toFixed(4));
         if (forceOverwrite) setHasUserManuallyEditedTc(false);
       }
@@ -1249,7 +1250,7 @@ export default function DashboardPage() {
     try {
       const info = await ExchangeRateService.getRateForDate(targetDate);
       setLoanTcInfo(info);
-      if (forceOverwrite || !hasUserManuallyEditedLoanTc || !loanExchangeRate || loanExchangeRate === '3.75' || loanExchangeRate === '1') {
+      if (forceOverwrite || !hasUserManuallyEditedLoanTc || !loanExchangeRate || loanExchangeRate === FALLBACK_USD_PEN_RATE_STR || loanExchangeRate === '1') {
         setLoanExchangeRate(info.rate.toFixed(4));
         if (forceOverwrite) setHasUserManuallyEditedLoanTc(false);
       }
@@ -1273,7 +1274,7 @@ export default function DashboardPage() {
     try {
       const info = await ExchangeRateService.getRateForDate(targetDate);
       setPayableTcInfo(info);
-      if (forceOverwrite || !hasUserManuallyEditedPayableTc || !payableExchangeRate || payableExchangeRate === '3.75' || payableExchangeRate === '1') {
+      if (forceOverwrite || !hasUserManuallyEditedPayableTc || !payableExchangeRate || payableExchangeRate === FALLBACK_USD_PEN_RATE_STR || payableExchangeRate === '1') {
         setPayableExchangeRate(info.rate.toFixed(4));
         if (forceOverwrite) setHasUserManuallyEditedPayableTc(false);
       }
@@ -1296,7 +1297,7 @@ export default function DashboardPage() {
     setDesc('');
     setAmount('');
     setCurrency('PEN');
-    setExchangeRate('3.75');
+    setExchangeRate(FALLBACK_USD_PEN_RATE_STR);
     setTcInfo(null);
     setHasUserManuallyEditedTc(false);
     setSelectedCategoryId(categories[0]?.id || 'cat-1');
@@ -1322,7 +1323,7 @@ export default function DashboardPage() {
     setDesc(tx.description);
     setAmount(tx.originalAmount.toString());
     setCurrency(tx.currency);
-    setExchangeRate(tx.exchangeRate?.toString() || '3.75');
+    setExchangeRate(tx.exchangeRate?.toString() || FALLBACK_USD_PEN_RATE_STR);
     setTcInfo(null);
     setHasUserManuallyEditedTc(true); // Tratar como valor customizado para no sobreescribir involuntariamente
     setSelectedCategoryId(tx.categoryId);
@@ -1453,7 +1454,7 @@ export default function DashboardPage() {
     setLoanDesc('');
     setLoanAmount('');
     setLoanCurrency('PEN');
-    setLoanExchangeRate('3.75');
+    setLoanExchangeRate(FALLBACK_USD_PEN_RATE_STR);
     setLoanTcInfo(null);
     setHasUserManuallyEditedLoanTc(false);
     const d = new Date();
@@ -1951,7 +1952,7 @@ export default function DashboardPage() {
     setPayableAmount('');
     setPayableDueDate('');
     setPayableCurrency('PEN');
-    setPayableExchangeRate('3.75');
+    setPayableExchangeRate(FALLBACK_USD_PEN_RATE_STR);
     setPayableTcInfo(null);
     setHasUserManuallyEditedPayableTc(false);
     const d = new Date();
@@ -1965,7 +1966,7 @@ export default function DashboardPage() {
     if (!payableCreditorName || !payableAmount) return;
     const num = parseFloat(payableAmount);
     if (isNaN(num) || num <= 0) return;
-    const tc = payableCurrency === 'USD' ? (parseFloat(payableExchangeRate) || 3.75) : 1;
+    const tc = payableCurrency === 'USD' ? (parseFloat(payableExchangeRate) || FALLBACK_USD_PEN_RATE) : 1;
     const totalInPen = payableCurrency === 'USD' ? num * tc : num;
 
     const newPayable: Payable = {
@@ -2013,7 +2014,7 @@ export default function DashboardPage() {
     setPayableAmount('');
     setPayableDueDate('');
     setPayableCurrency('PEN');
-    setPayableExchangeRate('3.75');
+    setPayableExchangeRate(FALLBACK_USD_PEN_RATE_STR);
     setPayableTcInfo(null);
     setHasUserManuallyEditedPayableTc(false);
     setPayableIsCreditedToDebit(false);
@@ -2025,7 +2026,7 @@ export default function DashboardPage() {
     setPayableAmount('');
     setPayableDueDate('');
     setPayableCurrency('PEN');
-    setPayableExchangeRate('3.75');
+    setPayableExchangeRate(FALLBACK_USD_PEN_RATE_STR);
     setPayableTcInfo(null);
     setHasUserManuallyEditedPayableTc(false);
     const d = new Date();
@@ -2191,7 +2192,7 @@ export default function DashboardPage() {
 
     const orig = parseFloat(loanAmount);
     if (isNaN(orig) || orig <= 0) return;
-    const tc = loanCurrency === 'USD' ? (parseFloat(loanExchangeRate) || 3.75) : 1;
+    const tc = loanCurrency === 'USD' ? (parseFloat(loanExchangeRate) || FALLBACK_USD_PEN_RATE) : 1;
     const amountPen = loanCurrency === 'USD' ? orig * tc : orig;
 
     const newRec: Receivable = {
@@ -2217,7 +2218,7 @@ export default function DashboardPage() {
     setLoanDesc('');
     setLoanAmount('');
     setLoanCurrency('PEN');
-    setLoanExchangeRate('3.75');
+    setLoanExchangeRate(FALLBACK_USD_PEN_RATE_STR);
     setLoanTcInfo(null);
     setHasUserManuallyEditedLoanTc(false);
   };
@@ -4379,7 +4380,7 @@ export default function DashboardPage() {
                           setLoanExchangeRate(e.target.value);
                           setHasUserManuallyEditedLoanTc(true);
                         }}
-                        placeholder="3.7500"
+                        placeholder={FALLBACK_USD_PEN_RATE_STR4}
                       />
                       {isFetchingLoanTc && (
                         <div style={{
@@ -4579,7 +4580,7 @@ export default function DashboardPage() {
                           setPayableExchangeRate(e.target.value);
                           setHasUserManuallyEditedPayableTc(true);
                         }}
-                        placeholder="3.7500"
+                        placeholder={FALLBACK_USD_PEN_RATE_STR4}
                       />
                       {isFetchingPayableTc && (
                         <div style={{
@@ -4677,7 +4678,7 @@ export default function DashboardPage() {
                   <strong>¿Abonar este monto inicial a mi saldo en cuenta Débito?</strong>
                   <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '2px' }}>
                     {payableCurrency === 'USD' && payableAmount && !isNaN(parseFloat(payableAmount))
-                      ? `Se abonarán S/ ${(parseFloat(payableAmount) * (parseFloat(payableExchangeRate) || 3.75)).toFixed(2)} • $${parseFloat(payableAmount).toFixed(2)} USD al cambio • a tu saldo disponible actual.`
+                      ? `Se abonarán S/ ${(parseFloat(payableAmount) * (parseFloat(payableExchangeRate) || FALLBACK_USD_PEN_RATE)).toFixed(2)} • $${parseFloat(payableAmount).toFixed(2)} USD al cambio • a tu saldo disponible actual.`
                       : 'Marca esta opción si el dinero ingresó a tu cuenta bancaria para sumar a tu saldo disponible actual.'}
                   </span>
                 </label>
@@ -4738,7 +4739,7 @@ export default function DashboardPage() {
                           const paid = payingPayable.paidAmount ?? 0;
                           const rem = (isUsd && payingPayable.remainingAmount > orig) ? Math.max(0, orig - paid) : (payingPayable.remainingAmount ?? orig);
                           if (isUsd) {
-                            const pen = payingPayable.amountPen ? (rem / (orig || 1)) * payingPayable.amountPen : rem * (payingPayable.exchangeRate || 3.75);
+                            const pen = payingPayable.amountPen ? (rem / (orig || 1)) * payingPayable.amountPen : rem * (payingPayable.exchangeRate || FALLBACK_USD_PEN_RATE);
                             return `$ ${rem.toFixed(2)} USD • ${formatSoles(pen)}`;
                           }
                           return formatSoles(rem);

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -554,7 +555,7 @@ export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
                                     <span>{item.description}</span>
                                     {item.currency === 'USD' && (
                                       <span className="badge badge-neutral nowrap" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-                                        USD • TC {item.exchangeRate ? item.exchangeRate.toFixed(4) : '3.7500'}
+                                        USD • TC {item.exchangeRate ? item.exchangeRate.toFixed(4) : FALLBACK_USD_PEN_RATE_STR4}
                                       </span>
                                     )}
                                   </div>
@@ -564,12 +565,12 @@ export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
                                 </div>
 
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                                  <div style={{ textAlign: 'right' }} title={`Capital prestado: ${item.currency === 'USD' ? `$ ${item.originalAmount.toFixed(2)} USD • ${formatSoles(item.amountPen || (item.originalAmount * (item.exchangeRate || 3.75)))}` : formatSoles(item.originalAmount)}`}>
+                                  <div style={{ textAlign: 'right' }} title={`Capital prestado: ${item.currency === 'USD' ? `$ ${item.originalAmount.toFixed(2)} USD • ${formatSoles(item.amountPen || (item.originalAmount * (item.exchangeRate || FALLBACK_USD_PEN_RATE)))}` : formatSoles(item.originalAmount)}`}>
                                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Prestado</span>
                                     {item.currency === 'USD' ? (
                                       <>
                                         <span className="tabular-nums nowrap" style={{ fontWeight: 600, color: '#38bdf8' }}>$ {item.originalAmount.toFixed(2)} USD</span>
-                                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(item.amountPen || (item.originalAmount * (item.exchangeRate || 3.75)))}</span>
+                                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(item.amountPen || (item.originalAmount * (item.exchangeRate || FALLBACK_USD_PEN_RATE)))}</span>
                                       </>
                                     ) : (
                                       <span className="tabular-nums nowrap" style={{ fontWeight: 600 }}>{formatSoles(item.originalAmount)}</span>
@@ -580,7 +581,7 @@ export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
                                     {item.currency === 'USD' ? (
                                       <>
                                         <span className="tabular-nums nowrap" style={{ color: 'var(--accent-success)', fontWeight: 600 }}>$ {item.paidAmount.toFixed(2)} USD</span>
-                                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(item.paidAmount * (item.exchangeRate || 3.75))}</span>
+                                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(item.paidAmount * (item.exchangeRate || FALLBACK_USD_PEN_RATE))}</span>
                                       </>
                                     ) : (
                                       <span className="tabular-nums nowrap" style={{ color: 'var(--accent-success)', fontWeight: 600 }}>{formatSoles(item.paidAmount)}</span>
@@ -593,7 +594,7 @@ export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
                                         <span className="tabular-nums nowrap" style={{ fontWeight: 700, color: itemPaid ? 'var(--accent-success)' : 'var(--accent-warning)' }}>
                                           $ {item.remainingAmount.toFixed(2)} USD
                                         </span>
-                                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(item.remainingAmount * (item.exchangeRate || 3.75))}</span>
+                                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(item.remainingAmount * (item.exchangeRate || FALLBACK_USD_PEN_RATE))}</span>
                                       </>
                                     ) : (
                                       <span className="tabular-nums nowrap" style={{ fontWeight: 700, color: itemPaid ? 'var(--accent-success)' : 'var(--accent-warning)' }}>
@@ -858,7 +859,7 @@ export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
                                       <span>{item.description}</span>
                                       {item.currency === 'USD' && (
                                         <span className="badge badge-neutral nowrap" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-                                          USD • TC {item.exchangeRate ? item.exchangeRate.toFixed(4) : '3.7500'}
+                                          USD • TC {item.exchangeRate ? item.exchangeRate.toFixed(4) : FALLBACK_USD_PEN_RATE_STR4}
                                         </span>
                                       )}
                                     </div>
@@ -868,12 +869,12 @@ export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
                                   </div>
 
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                                    <div style={{ textAlign: 'right' }} title={`Monto asumido: ${item.currency === 'USD' ? `$ ${itemTotal.toFixed(2)} USD • ${formatSoles(item.amountPen || (itemTotal * (item.exchangeRate || 3.75)))}` : formatSoles(itemTotal)}`}>
+                                    <div style={{ textAlign: 'right' }} title={`Monto asumido: ${item.currency === 'USD' ? `$ ${itemTotal.toFixed(2)} USD • ${formatSoles(item.amountPen || (itemTotal * (item.exchangeRate || FALLBACK_USD_PEN_RATE)))}` : formatSoles(itemTotal)}`}>
                                       <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Monto</span>
                                       {item.currency === 'USD' ? (
                                         <>
                                           <span className="tabular-nums nowrap" style={{ fontWeight: 600, color: '#38bdf8' }}>$ {itemTotal.toFixed(2)} USD</span>
-                                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(item.amountPen || (itemTotal * (item.exchangeRate || 3.75)))}</span>
+                                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(item.amountPen || (itemTotal * (item.exchangeRate || FALLBACK_USD_PEN_RATE)))}</span>
                                         </>
                                       ) : (
                                         <span className="tabular-nums nowrap" style={{ fontWeight: 600 }}>{formatSoles(itemTotal)}</span>
@@ -884,7 +885,7 @@ export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
                                       {item.currency === 'USD' ? (
                                         <>
                                           <span className="tabular-nums nowrap" style={{ color: 'var(--accent-success)', fontWeight: 600 }}>$ {(item.paidAmount ?? 0).toFixed(2)} USD</span>
-                                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles((item.paidAmount ?? 0) * (item.exchangeRate || 3.75))}</span>
+                                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles((item.paidAmount ?? 0) * (item.exchangeRate || FALLBACK_USD_PEN_RATE))}</span>
                                         </>
                                       ) : (
                                         <span className="tabular-nums nowrap" style={{ color: 'var(--accent-success)', fontWeight: 600 }}>{formatSoles(item.paidAmount ?? 0)}</span>
@@ -897,7 +898,7 @@ export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
                                           <span className="tabular-nums nowrap" style={{ fontWeight: 700, color: itemPaid ? 'var(--accent-success)' : 'var(--accent-warning)' }}>
                                             $ {itemRem.toFixed(2)} USD
                                           </span>
-                                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(itemRem * (item.exchangeRate || 3.75))}</span>
+                                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>{formatSoles(itemRem * (item.exchangeRate || FALLBACK_USD_PEN_RATE))}</span>
                                         </>
                                       ) : (
                                         <span className="tabular-nums nowrap" style={{ fontWeight: 700, color: itemPaid ? 'var(--accent-success)' : 'var(--accent-warning)' }}>

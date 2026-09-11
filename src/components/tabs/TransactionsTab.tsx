@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 import {
   Search,
   Layers,
@@ -443,7 +444,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                             {pay.currency === 'USD' ? (
                               <div>
                                 <span className="tabular-nums nowrap" style={{ fontWeight: 600 }}>-$ {pay.amount.toFixed(2)} USD</span>
-                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>-{formatSoles(pay.amount * (pay.exchangeRate || 3.75))}</span>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>-{formatSoles(pay.amount * (pay.exchangeRate || FALLBACK_USD_PEN_RATE))}</span>
                               </div>
                             ) : (
                               `-${formatSoles(pay.amount)}`
@@ -722,7 +723,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           {pay.currency === 'USD' ? (
                             <div style={{ textAlign: 'right' }}>
                               <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-danger)' }}>-$ {pay.amount.toFixed(2)} USD</span>
-                              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>-{formatSoles(pay.amount * (pay.exchangeRate || 3.75))}</span>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>-{formatSoles(pay.amount * (pay.exchangeRate || FALLBACK_USD_PEN_RATE))}</span>
                             </div>
                           ) : (
                             <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-danger)' }}>-{formatSoles(pay.amount)}</span>

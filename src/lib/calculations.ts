@@ -1,5 +1,5 @@
 import { PaymentMethod, Transaction, MonthlyBudget, Receivable, LiquidityDiagnostic, CardDebtSummary, OtherIncome, Payable, CardPayment } from '@/types';
-import { initialPaymentMethods } from './defaults';
+import { FALLBACK_USD_PEN_RATE } from './constants';
 
 /**
  * Días feriados oficiales del sistema financiero y laboral en Perú (MM-DD)
@@ -332,7 +332,7 @@ export function calculateCurrentDebitBalance(
 
   payables.forEach(p => {
     const isUsd = p.currency === 'USD';
-    const exRate = p.exchangeRate || 3.75;
+    const exRate = p.exchangeRate || FALLBACK_USD_PEN_RATE;
     const orig = (isUsd && p.originalAmount) ? p.originalAmount : (p.originalAmount ?? p.totalAmount ?? 0);
     const penAmount = isUsd ? (p.amountPen || orig * exRate) : orig;
 
@@ -486,13 +486,13 @@ export function calculateCardsDebtSummary(
     const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
     const isFutureMonth = new Date(currentYear, currentMonth - 1, 1) > now;
 
-    // Helper para emparejar por ID directo o por alias de tarjeta (ej. UUID de Supabase vs 'pm-2')
+    // Match by direct id, or by same-name alias against the real methods list
+    // (handles a legacy id that points to a card now stored under a new id).
     const matchesCard = (methodId?: string) => {
       if (!methodId) return false;
       if (methodId === card.id) return true;
-      const initialPm = initialPaymentMethods.find(p => p.id === methodId);
-      if (initialPm && initialPm.name.toLowerCase() === card.name.toLowerCase()) return true;
-      return false;
+      const aliased = cards.find(p => p.id === methodId);
+      return !!aliased && aliased.name.toLowerCase() === card.name.toLowerCase();
     };
 
     // Consumo total registrado en el mes calendario (incluye programados y descuenta reembolsos)

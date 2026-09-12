@@ -60,6 +60,8 @@ import { DeleteConfirmModal } from '@/components/modals/DeleteConfirmModal';
 import { AdjustDebitModal } from '@/components/modals/AdjustDebitModal';
 import { IncomeModal } from '@/components/modals/IncomeModal';
 import { SalaryModal } from '@/components/modals/SalaryModal';
+import { PaymentModal } from '@/components/modals/PaymentModal';
+import { CollectModal } from '@/components/modals/CollectModal';
 import { OverviewTab } from '@/components/tabs/OverviewTab';
 import { IncomesTab } from '@/components/tabs/IncomesTab';
 import { TransactionsTab } from '@/components/tabs/TransactionsTab';
@@ -3616,105 +3618,17 @@ export default function DashboardPage() {
 
       {/* MODAL: REGISTRAR ABONO O COBRO PARCIAL A PRÉSTAMO */}
       {isCollectModalOpen && (collectingRec || collectingDebtorGroup) && (
-        <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(() => setIsCollectModalOpen(false))}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <div className="modal-drag-handle" />
-            <div className="modal-title-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Coins size={18} color="var(--accent-success)" />
-                <span className="text-h2 font-bold">
-                  {collectingDebtorGroup ? 'Registrar Abono a Deudor' : 'Registrar Abono a Préstamo'}
-                </span>
-              </div>
-              <button id="btn-close-collect-modal" className="month-nav-btn" onClick={() => setIsCollectModalOpen(false)}>
-                <X size={16} />
-              </button>
-
-            </div>
-
-            <form onSubmit={handleSaveCollect}>
-              <div style={{ padding: '12px 14px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginBottom: '16px' }}>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {collectingDebtorGroup ? collectingDebtorGroup.debtorName : collectingRec?.debtorName}
-                </div>
-                <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {collectingDebtorGroup
-                    ? `Abono consolidado para ${collectingDebtorGroup.items.length} préstamos acumulados`
-                    : collectingRec?.description}
-                </div>
-                {collectingDebtorGroup && (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--accent-brand)', marginTop: '6px', background: 'var(--accent-brand-subtle)', padding: '6px 8px', borderRadius: '6px', lineHeight: '1.4' }}>
-                    💡 <strong>Método Cascada • FIFO:</strong> El abono saldará primero los préstamos más antiguos y el saldo restante amortizará los siguientes.
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.8rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Deuda restante total:</span>
-                  <strong className="tabular-nums" style={{ color: 'var(--accent-warning)' }}>
-                    {formatSoles(collectingDebtorGroup ? collectingDebtorGroup.totalRemaining : (collectingRec?.remainingAmount || 0))}
-                  </strong>
-                </div>
-              </div>
-
-              {(() => {
-                const rawRem = collectingDebtorGroup ? collectingDebtorGroup.totalRemaining : (collectingRec?.remainingAmount || 0);
-                const maxRem = Math.round(rawRem * 100) / 100;
-                return (
-                  <>
-                    <div className="form-group">
-                      <label className="form-label">Monto que te abonaron hoy • Soles</label>
-                      <input
-                        id="input-collect-amount"
-                        type="number"
-                        step="0.01"
-                        max={maxRem}
-                        min="0.01"
-                        placeholder="0.00"
-                        className="form-input"
-                        required
-                        value={collectAmountInput}
-                        onChange={e => setCollectAmountInput(e.target.value)}
-                        autoFocus
-                      />
-
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        style={{ flex: 1, padding: '6px 10px', fontSize: '0.75rem' }}
-                        onClick={() => setCollectAmountInput((maxRem / 2).toFixed(2))}
-                      >
-                        Mitad • 50%: S/ {(maxRem / 2).toFixed(2)}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        style={{ flex: 1, padding: '6px 10px', fontSize: '0.75rem' }}
-                        onClick={() => setCollectAmountInput(maxRem.toFixed(2))}
-                      >
-                        Total • 100%: S/ {maxRem.toFixed(2)}
-                      </button>
-                    </div>
-                  </>
-                );
-              })()}
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setIsCollectModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary">
-                  Registrar Cobranza
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <CollectModal
+          onClose={() => setIsCollectModalOpen(false)}
+          onSubmit={handleSaveCollect}
+          collectingRec={collectingRec}
+          collectingDebtorGroup={collectingDebtorGroup}
+          collectAmountInput={collectAmountInput}
+          setCollectAmountInput={setCollectAmountInput}
+          formatSoles={formatSoles}
+          handleBackdropMouseDown={handleBackdropMouseDown}
+          handleBackdropClick={handleBackdropClick}
+        />
       )}
 
       {/* MODAL 3: REGISTRAR INGRESO EXTRA A DÉBITO */}
@@ -4028,134 +3942,28 @@ export default function DashboardPage() {
 
       {/* MODAL 5: REGISTRAR O MODIFICAR ABONO / PAGO A TARJETA */}
       {isPaymentModalOpen && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={handleBackdropMouseDown}
-          onClick={handleBackdropClick(() => {
+        <PaymentModal
+          onClose={() => {
             setIsPaymentModalOpen(false);
             setEditingCardPaymentId(null);
             setEditingCardPaymentIndex(null);
             setPaymentAmount('');
-          })}
-        >
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <div className="modal-drag-handle" />
-            <div className="modal-title-row">
-              <span className="text-h2 font-bold">
-                {editingCardPaymentIndex !== null ? 'Modificar Abono a Tarjeta' : 'Registrar Abono a Tarjeta'}
-              </span>
-              <button
-                className="month-nav-btn"
-                onClick={() => {
-                  setIsPaymentModalOpen(false);
-                  setEditingCardPaymentId(null);
-                  setEditingCardPaymentIndex(null);
-                  setPaymentAmount('');
-                }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleMakeCardPayment}>
-              <div className="form-group">
-                <label className="form-label">Tarjeta a la que abonaste</label>
-                <CustomSelect
-                  id="select-payment-card-target"
-                  value={paymentCardId}
-                  onChange={val => setPaymentCardId(val)}
-                  options={paymentMethods.filter(p => p.type === 'credit').map(p => ({
-                    value: p.id,
-                    label: p.name,
-                    colorDot: p.color || '#6366f1',
-                    icon: <CreditCard size={15} style={{ color: p.color || '#6366f1' }} />
-                  }))}
-                />
-              </div>
-
-
-              <div className="form-group">
-                <label className="form-label">Origen de los Fondos / Motivo del Abono</label>
-                <CustomSelect
-                  id="select-card-payment-source"
-                  value={paymentSourceType}
-                  onChange={val => setPaymentSourceType(val as 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT')}
-                  options={[
-                    {
-                      value: 'DEBIT_ACCOUNT',
-                      label: 'Pago desde Cuenta Débito / Bancos',
-                      subtitle: 'Descuenta de tu saldo disponible en banco',
-                      icon: <Banknote size={15} style={{ color: '#10b981' }} />
-                    },
-                    {
-                      value: 'MERCHANT_REFUND',
-                      label: 'Reembolso de Comercio / Devolución',
-                      subtitle: 'Devolución directa a la tarjeta (no descuenta de banco)',
-                      icon: <TrendingUp size={15} style={{ color: '#0ea5e9' }} />
-                    },
-                    {
-                      value: 'BANK_CREDIT',
-                      label: 'Abono de Banco / Cashback / Saldo a Favor',
-                      subtitle: 'Abono promocional o regularización del banco',
-                      icon: <DollarSign size={15} style={{ color: '#8b5cf6' }} />
-                    }
-                  ]}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Monto Abonado / Pagado (S/)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  className="form-input"
-                  required
-                  value={paymentAmount}
-                  onChange={e => setPaymentAmount(e.target.value)}
-                  autoFocus
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Fecha de Pago</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  required
-                  value={paymentDate}
-                  onChange={e => setPaymentDate(e.target.value)}
-                />
-              </div>
-
-              <div style={{ padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginBottom: '14px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                💡 <strong>Efecto en tus finanzas:</strong> {
-                  paymentSourceType === 'DEBIT_ACCOUNT'
-                    ? `Este abono amortizará la deuda de la tarjeta y descontará automáticamente ${formatSoles(parseFloat(paymentAmount) || 0)} de tu Saldo Débito (Bancos).`
-                    : `Este abono amortizará la deuda de la tarjeta (o generará saldo a favor) SIN descontar dinero de tu cuenta bancaria ni saldo débito.`
-                }
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    setIsPaymentModalOpen(false);
-                    setEditingCardPaymentId(null);
-                    setEditingCardPaymentIndex(null);
-                    setPaymentAmount('');
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary">
-                  {editingCardPaymentIndex !== null ? 'Guardar Cambios' : 'Registrar Abono'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          }}
+          onSubmit={handleMakeCardPayment}
+          isEditing={editingCardPaymentIndex !== null}
+          paymentMethods={paymentMethods}
+          paymentCardId={paymentCardId}
+          setPaymentCardId={setPaymentCardId}
+          paymentSourceType={paymentSourceType}
+          setPaymentSourceType={setPaymentSourceType}
+          paymentAmount={paymentAmount}
+          setPaymentAmount={setPaymentAmount}
+          paymentDate={paymentDate}
+          setPaymentDate={setPaymentDate}
+          formatSoles={formatSoles}
+          handleBackdropMouseDown={handleBackdropMouseDown}
+          handleBackdropClick={handleBackdropClick}
+        />
       )}
 
       {/* MODAL 6: NUEVA CUENTA POR COBRAR */}

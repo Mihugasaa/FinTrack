@@ -7,6 +7,7 @@ import { useTabNavigation, ActiveTab } from '@/hooks/useTabNavigation';
 import { useMonthNavigation } from '@/hooks/useMonthNavigation';
 import { useTheme } from '@/hooks/useTheme';
 import { useReconciliation } from '@/hooks/useReconciliation';
+import { useIncomes } from '@/hooks/useIncomes';
 import { Header } from '@/components/layout/Header';
 import { NavigationTabs } from '@/components/layout/NavigationTabs';
 import { MobileNav } from '@/components/layout/MobileNav';
@@ -60,7 +61,6 @@ import {
   PayablePayment,
   CreditorGroup,
   OtherIncome,
-  SalaryIncome,
   CardPayment,
   AIAnomaly,
   CashflowForecastMonth
@@ -145,8 +145,6 @@ export default function DashboardPage() {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [payables, setPayables] = useState<Payable[]>([]);
   const [cardPayments, setCardPayments] = useState<CardPayment[]>([]);
-  const [salaries, setSalaries] = useState<SalaryIncome[]>([]);
-  const [extraIncomes, setExtraIncomes] = useState<Record<string, OtherIncome[]>>({});
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -168,8 +166,6 @@ export default function DashboardPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
   const [isAdjustDebitModalOpen, setIsAdjustDebitModalOpen] = useState(false);
-  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
-  const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
 
   // Modales y formularios de Deudas y Préstamos
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
@@ -292,19 +288,6 @@ export default function DashboardPage() {
   // Form Ajustar Saldo Débito
   const [tempDebitBalance, setTempDebitBalance] = useState('0');
 
-  // Form Ingreso Extra
-  const [incomeDesc, setIncomeDesc] = useState('');
-  const [incomeAmount, setIncomeAmount] = useState('');
-  const [incomeDate, setIncomeDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-  });
-
-  // Form Configurar Sueldo
-  const [salarySource, setSalarySource] = useState('Empleo Principal (Nómina)');
-  const [salaryAmount, setSalaryAmount] = useState('2126.49');
-  const [salaryPayDay, setSalaryPayDay] = useState('30');
-
   // Form Nueva Tarjeta
   const [newCardName, setNewCardName] = useState('');
   const [newCardType, setNewCardType] = useState<'credit' | 'debit'>('credit');
@@ -351,7 +334,35 @@ export default function DashboardPage() {
 
   const monthKey = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
   const initialDebitForMonth = initialDebitBalances[monthKey] ?? 0;
-  const currentOtherIncomes = extraIncomes[monthKey] || [];
+
+  // Ingresos: sueldo base e ingresos extra del mes (con sus formularios y modales)
+  const {
+    salaries,
+    setSalaries,
+    extraIncomes,
+    setExtraIncomes,
+    currentOtherIncomes,
+    totalSalaryAmount,
+    isIncomeModalOpen,
+    setIsIncomeModalOpen,
+    isSalaryModalOpen,
+    setIsSalaryModalOpen,
+    incomeDesc,
+    setIncomeDesc,
+    incomeAmount,
+    setIncomeAmount,
+    incomeDate,
+    setIncomeDate,
+    salarySource,
+    setSalarySource,
+    salaryAmount,
+    setSalaryAmount,
+    salaryPayDay,
+    setSalaryPayDay,
+    handleAddExtraIncome,
+    deleteExtraIncome,
+    handleSaveSalary
+  } = useIncomes({ monthKey, currentYear, currentMonth });
 
   // Sincronización de datos desde Supabase al cambiar de mes
   useEffect(() => {
@@ -464,8 +475,6 @@ export default function DashboardPage() {
     : isPastMonth
     ? `${currentYear}-${currentMonth.toString().padStart(2, '0')}-31`
     : `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
-
-  const totalSalaryAmount = salaries.reduce((acc, curr) => acc + curr.amount, 0);
 
   const budget = {
     year: currentYear,
@@ -1658,11 +1667,7 @@ export default function DashboardPage() {
       setTransactions(prev => prev.filter(t => t.id !== itemToDelete.id));
       SupabaseDataService.deleteTransaction(itemToDelete.id);
     } else if (itemToDelete.type === 'income') {
-      setExtraIncomes(prev => ({
-        ...prev,
-        [monthKey]: (prev[monthKey] || []).filter(i => i.id !== itemToDelete.id)
-      }));
-      SupabaseDataService.deleteOtherIncome(itemToDelete.id);
+      deleteExtraIncome(itemToDelete.id);
     } else if (itemToDelete.type === 'receivable') {
       setReceivables(prev => prev.filter(r => r.id !== itemToDelete.id));
       SupabaseDataService.deleteReceivable(itemToDelete.id);
@@ -1690,33 +1695,6 @@ export default function DashboardPage() {
     // Sincronizar saldo de débito en Supabase
     SupabaseDataService.updateInitialDebitBalance(currentYear, currentMonth, newBal);
     setIsAdjustDebitModalOpen(false);
-  };
-
-  const handleAddExtraIncome = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!incomeDesc || !incomeAmount) return;
-
-    const date = incomeDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-15`;
-    const targetMonthKey = date.slice(0, 7);
-
-    const newInc: OtherIncome = {
-      id: `oi-${Date.now()}`,
-      description: incomeDesc,
-      amount: parseFloat(incomeAmount),
-      receivedDate: date
-    };
-
-    setExtraIncomes(prev => ({
-      ...prev,
-      [targetMonthKey]: [...(prev[targetMonthKey] || []), newInc]
-    }));
-
-    // POST a Supabase en la nube con fecha exacta
-    SupabaseDataService.createOtherIncome(newInc, date);
-
-    setIsIncomeModalOpen(false);
-    setIncomeDesc('');
-    setIncomeAmount('');
   };
 
   const handleCreateCard = (e: React.FormEvent) => {
@@ -2669,24 +2647,7 @@ export default function DashboardPage() {
       {isSalaryModalOpen && (
         <SalaryModal
           onClose={() => setIsSalaryModalOpen(false)}
-          onSubmit={e => {
-            e.preventDefault();
-            if (!salaryAmount) return;
-            const amt = parseFloat(salaryAmount);
-            const pDay = parseInt(salaryPayDay, 10) || 30;
-
-            setSalaries([
-              {
-                id: 'sal-1',
-                source: salarySource || 'Empleo Principal',
-                amount: amt,
-                payDay: pDay
-              }
-            ]);
-            // Sincronizar sueldo base en Supabase
-            SupabaseDataService.updateBaseSalary(currentYear, currentMonth, amt);
-            setIsSalaryModalOpen(false);
-          }}
+          onSubmit={handleSaveSalary}
           salarySource={salarySource}
           setSalarySource={setSalarySource}
           salaryAmount={salaryAmount}

@@ -8,6 +8,7 @@ import { useMonthNavigation } from '@/hooks/useMonthNavigation';
 import { useTheme } from '@/hooks/useTheme';
 import { useReconciliation } from '@/hooks/useReconciliation';
 import { useIncomes } from '@/hooks/useIncomes';
+import { useCardPayments } from '@/hooks/useCardPayments';
 import { Header } from '@/components/layout/Header';
 import { NavigationTabs } from '@/components/layout/NavigationTabs';
 import { MobileNav } from '@/components/layout/MobileNav';
@@ -144,7 +145,6 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [payables, setPayables] = useState<Payable[]>([]);
-  const [cardPayments, setCardPayments] = useState<CardPayment[]>([]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -163,7 +163,6 @@ export default function DashboardPage() {
   // 6. Estados de Modales y Subpestañas
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
   const [isAdjustDebitModalOpen, setIsAdjustDebitModalOpen] = useState(false);
 
@@ -195,9 +194,6 @@ export default function DashboardPage() {
   const [installmentsCount, setInstallmentsCount] = useState('3');
   const [hasInterest, setHasInterest] = useState(false);
   const [monthlyInstallmentAmount, setMonthlyInstallmentAmount] = useState('');
-
-  // Origen de Abono a Tarjeta
-  const [paymentSourceType, setPaymentSourceType] = useState<'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT'>('DEBIT_ACCOUNT');
 
   // Estados de Edición y Cobro Parcial
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
@@ -297,17 +293,6 @@ export default function DashboardPage() {
   const [newCardColor, setNewCardColor] = useState('#6366f1');
   const [newCardInitialDebt, setNewCardInitialDebt] = useState('');
 
-  // Form Abono
-  const [paymentCardId, setPaymentCardId] = useState(initialPaymentMethods[1].id);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentDate, setPaymentDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-  });
-  const [editingCardPaymentId, setEditingCardPaymentId] = useState<string | null>(null);
-  const [editingCardPaymentIndex, setEditingCardPaymentIndex] = useState<number | null>(null);
-  const [showAllHistoricalPayments, setShowAllHistoricalPayments] = useState(false);
-
   // Form Préstamo
   const [debtorName, setDebtorName] = useState('');
   const [loanDesc, setLoanDesc] = useState('');
@@ -363,6 +348,32 @@ export default function DashboardPage() {
     deleteExtraIncome,
     handleSaveSalary
   } = useIncomes({ monthKey, currentYear, currentMonth });
+
+  // Abonos a tarjetas: historial, formulario/modal y listado del mes activo
+  const {
+    cardPayments,
+    setCardPayments,
+    currentMonthCardPayments,
+    isPaymentModalOpen,
+    setIsPaymentModalOpen,
+    paymentSourceType,
+    setPaymentSourceType,
+    paymentCardId,
+    setPaymentCardId,
+    paymentAmount,
+    setPaymentAmount,
+    paymentDate,
+    setPaymentDate,
+    editingCardPaymentId,
+    editingCardPaymentIndex,
+    showAllHistoricalPayments,
+    setShowAllHistoricalPayments,
+    handleOpenCreateCardPayment,
+    handleOpenEditCardPayment,
+    handleMakeCardPayment,
+    handleClosePaymentModal,
+    handleDeleteCardPayment
+  } = useCardPayments({ paymentMethods, currentYear, currentMonth });
 
   // Sincronización de datos desde Supabase al cambiar de mes
   useEffect(() => {
@@ -815,13 +826,6 @@ export default function DashboardPage() {
   }, [creditorGroups, payablesFilter]);
 
   // Pagos a Tarjetas Realizados en el Mes Activo (Comprobantes de Salida Bancaria)
-  const currentMonthCardPayments = useMemo(() => {
-    const targetYM = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
-    return cardPayments
-      .filter(p => p.paymentDate.startsWith(targetYM))
-      .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
-  }, [cardPayments, currentYear, currentMonth]);
-
   // Desglose de Gastos por Categoría
   const categoryBreakdown = useMemo(() => {
     const map = new Map<string, { category: typeof initialCategories[0]; total: number }>();
@@ -1722,80 +1726,6 @@ export default function DashboardPage() {
     setNewCardInitialDebt('');
   };
 
-  const handleOpenCreateCardPayment = () => {
-    setEditingCardPaymentId(null);
-    setEditingCardPaymentIndex(null);
-    const creditCards = paymentMethods.filter(p => p.type === 'credit');
-    if (creditCards.length > 0) {
-      setPaymentCardId(creditCards[0].id);
-    }
-    setPaymentAmount('');
-    setPaymentSourceType('DEBIT_ACCOUNT');
-    const now = new Date();
-    const day = (currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1))
-      ? now.getDate().toString().padStart(2, '0')
-      : '20';
-    setPaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${day}`);
-    setIsPaymentModalOpen(true);
-  };
-
-  const handleOpenEditCardPayment = (pay: CardPayment, idx: number) => {
-    setEditingCardPaymentId(pay.id || `cp-${idx}`);
-    setEditingCardPaymentIndex(idx);
-    setPaymentCardId(pay.paymentMethodId);
-    setPaymentAmount(pay.amountPaid.toString());
-    setPaymentDate(pay.paymentDate);
-    setPaymentSourceType(pay.sourceType || 'DEBIT_ACCOUNT');
-    setIsPaymentModalOpen(true);
-  };
-
-  const handleMakeCardPayment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!paymentAmount || !paymentCardId) return;
-
-    const num = parseFloat(paymentAmount);
-    if (isNaN(num) || num <= 0) return;
-
-    const targetDate = paymentDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-20`;
-
-    if (editingCardPaymentIndex !== null || editingCardPaymentId !== null) {
-      // Modificar pago existente
-      setCardPayments(prev => prev.map((p, idx) => {
-        const matches = (editingCardPaymentId && p.id === editingCardPaymentId) ||
-          (editingCardPaymentIndex !== null && idx === editingCardPaymentIndex);
-        if (matches) {
-          return {
-            ...p,
-            paymentMethodId: paymentCardId,
-            amountPaid: num,
-            paymentDate: targetDate,
-            sourceType: paymentSourceType
-          };
-        }
-        return p;
-      }));
-      setIsPaymentModalOpen(false);
-      setEditingCardPaymentId(null);
-      setEditingCardPaymentIndex(null);
-      setPaymentAmount('');
-      return;
-    }
-
-    const newPay: CardPayment = {
-      id: `cp-${Date.now()}`,
-      paymentMethodId: paymentCardId,
-      amountPaid: num,
-      paymentDate: targetDate,
-      sourceType: paymentSourceType
-    };
-
-    setCardPayments([newPay, ...cardPayments]);
-    // POST a Supabase en la nube
-    SupabaseDataService.createCardPayment(newPay);
-    setIsPaymentModalOpen(false);
-    setPaymentAmount('');
-  };
-
   // Handlers para Mis Deudas (Payables)
   const handleOpenCreatePayable = () => {
     setPayableCreditorName('');
@@ -2023,18 +1953,6 @@ export default function DashboardPage() {
   const handleDeletePayable = (payableId: string) => {
     setPayables(prev => prev.filter(p => p.id !== payableId));
     SupabaseDataService.deletePayable(payableId);
-  };
-
-  const handleDeleteCardPayment = (targetId?: string, targetIndex?: number) => {
-    setCardPayments(prev => prev.filter((p, idx) => {
-      if (targetId && p.id && p.id === targetId) return false;
-      if (targetId && !p.id && `cp-${idx}` === targetId) return false;
-      if (!targetId && targetIndex !== undefined && idx === targetIndex) return false;
-      return true;
-    }));
-    if (targetId && !targetId.startsWith('cp-saved-') && !targetId.startsWith('cp-legacy-') && !targetId.startsWith('cp-tx-')) {
-      SupabaseDataService.deleteCardPayment(targetId);
-    }
   };
 
   const handleCreateReceivable = (e: React.FormEvent) => {
@@ -2545,12 +2463,7 @@ export default function DashboardPage() {
       {/* MODAL 5: REGISTRAR O MODIFICAR ABONO / PAGO A TARJETA */}
       {isPaymentModalOpen && (
         <PaymentModal
-          onClose={() => {
-            setIsPaymentModalOpen(false);
-            setEditingCardPaymentId(null);
-            setEditingCardPaymentIndex(null);
-            setPaymentAmount('');
-          }}
+          onClose={handleClosePaymentModal}
           onSubmit={handleMakeCardPayment}
           isEditing={editingCardPaymentIndex !== null}
           paymentMethods={paymentMethods}

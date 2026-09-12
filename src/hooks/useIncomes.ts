@@ -67,6 +67,16 @@ export function useIncomes({ monthKey, currentYear, currentMonth }: UseIncomesDe
     setIncomeAmount('');
   };
 
+  // Acredita a débito un ingreso por un préstamo recibido: se coloca al frente
+  // del mes activo (lo usa usePayables cuando la deuda se abona a cuenta débito).
+  const creditLoanIncome = (income: OtherIncome, date: string) => {
+    setExtraIncomes(prev => ({
+      ...prev,
+      [monthKey]: [income, ...(prev[monthKey] || [])]
+    }));
+    SupabaseDataService.createOtherIncome(income, date);
+  };
+
   // Elimina un ingreso extra del mes activo (usado por el confirmador de borrado compartido)
   const deleteExtraIncome = (id: string) => {
     setExtraIncomes(prev => ({
@@ -119,6 +129,7 @@ export function useIncomes({ monthKey, currentYear, currentMonth }: UseIncomesDe
     salaryPayDay,
     setSalaryPayDay,
     handleAddExtraIncome,
+    creditLoanIncome,
     deleteExtraIncome,
     handleSaveSalary
   };

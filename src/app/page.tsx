@@ -3,55 +3,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import '@/styles/dashboard.css';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  Search,
-  Check,
-  CheckCircle2,
-  AlertCircle,
-  X,
-  CreditCard,
-  Layers,
-  Sun,
-  Moon,
-  PieChart,
-  Calendar,
-  ListFilter,
-  Users,
-  Trash2,
-  Pencil,
-  Repeat,
-  AlertTriangle,
-  Download,
-  DollarSign,
-  Wallet,
-  TrendingDown,
-  TrendingUp,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Landmark,
-  Coins,
-  Briefcase,
-  Building2,
-  Tag,
-  Banknote,
-  ChevronDown,
-  ChevronUp,
-  MoreHorizontal,
-  LogOut,
-  Sparkles,
-  UploadCloud,
-  FileSpreadsheet,
-  BarChart3,
-  CheckCheck,
-  HelpCircle,
-  ShieldCheck,
-  Columns,
-  Camera
-} from 'lucide-react';
-import { CustomSelect } from '@/components/CustomSelect';
 import { useTabNavigation, ActiveTab } from '@/hooks/useTabNavigation';
 import { Header } from '@/components/layout/Header';
 import { NavigationTabs } from '@/components/layout/NavigationTabs';
@@ -85,7 +36,7 @@ import {
   initialCategories,
   initialPaymentMethods
 } from '@/lib/defaults';
-import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR, FALLBACK_USD_PEN_RATE_STR4, CARD_COLOR_PRESETS } from '@/lib/constants';
+import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import {
   calculatePaymentDueDate,
   calculatePaymentDueDateDetail,

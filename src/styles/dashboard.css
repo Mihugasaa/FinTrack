@@ -617,6 +617,21 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Las tablas de movimientos (Movimientos y "Últimos Movimientos" de Visión General,
+   ambas dentro de .transactions-panel) solo caben con holgura a partir de ~960px.
+   Por debajo mostramos su feed de tarjetas táctil (más aire, sin scroll horizontal)
+   en lugar de una tabla comprimida. Ambos paneles tienen su .mobile-tx-feed de
+   reemplazo. Scoped a .transactions-panel para no afectar otros .desktop-only /
+   .mobile-only (nav, Conciliación, matriz anual, etc.). */
+@media (max-width: 960px) {
+  .transactions-panel .table-responsive {
+    display: none !important;
+  }
+  .transactions-panel .mobile-tx-feed {
+    display: flex !important;
+  }
+}
+
 .progress-track {
   height: 8px;
   background: var(--bg-subtle);
@@ -1872,7 +1887,17 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 180px;
+  /* Trunca de forma responsiva llenando el ancho disponible hasta el monto,
+     en lugar de un tope fijo de 180px que desperdiciaba espacio en pantallas anchas. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Las etiquetas junto al título (Fijo, Reembolso, Cuota) no deben encogerse:
+   solo el título se trunca. */
+.mobile-tx-title-row > .badge,
+.mobile-tx-title-row > .badge-fixed-tag {
+  flex-shrink: 0;
 }
 
 .mobile-tx-meta {

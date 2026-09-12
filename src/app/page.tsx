@@ -56,6 +56,8 @@ import { useTabNavigation, ActiveTab } from '@/hooks/useTabNavigation';
 import { Header } from '@/components/layout/Header';
 import { NavigationTabs } from '@/components/layout/NavigationTabs';
 import { MobileNav } from '@/components/layout/MobileNav';
+import { DeleteConfirmModal } from '@/components/modals/DeleteConfirmModal';
+import { AdjustDebitModal } from '@/components/modals/AdjustDebitModal';
 import { OverviewTab } from '@/components/tabs/OverviewTab';
 import { IncomesTab } from '@/components/tabs/IncomesTab';
 import { TransactionsTab } from '@/components/tabs/TransactionsTab';
@@ -3332,79 +3334,19 @@ export default function DashboardPage() {
 
       {/* MODAL 2: AJUSTAR SALDO DÉBITO INICIAL */}
       {isAdjustDebitModalOpen && (
-        <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(() => setIsAdjustDebitModalOpen(false))}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <div className="modal-drag-handle" />
-            <div className="modal-title-row">
-              <span className="text-h2 font-bold">Ajustar Saldo Débito Inicial</span>
-              <button className="month-nav-btn" onClick={() => setIsAdjustDebitModalOpen(false)}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAdjustDebit}>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-                Indica con cuánto dinero en cuenta o débito arrancaste el mes de <strong>{monthNames[currentMonth]} {currentYear}</strong>.
-              </p>
-
-              {prevMonthClosingBalance && (
-                <div style={{ marginBottom: '14px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setTempDebitBalance(prevMonthClosingBalance.amount.toFixed(2))}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      background: 'rgba(56, 189, 248, 0.08)',
-                      border: '1px solid rgba(56, 189, 248, 0.25)',
-                      color: 'var(--accent-info)',
-                      cursor: 'pointer',
-                      fontSize: '0.78rem',
-                      fontWeight: 500,
-                      transition: 'all 0.2s ease'
-                    }}
-                    title={`Copiar saldo de cierre de ${prevMonthClosingBalance.monthName}`}
-                  >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <Sparkles size={14} /> Usar cierre de {prevMonthClosingBalance.monthName}:
-                    </span>
-                    <strong className="tabular-nums font-bold">{formatSoles(prevMonthClosingBalance.amount)}</strong>
-                  </button>
-                </div>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Saldo Inicial (S/)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="form-input"
-                  required
-                  value={tempDebitBalance}
-                  onChange={e => setTempDebitBalance(e.target.value)}
-                  autoFocus
-                />
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setIsAdjustDebitModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary">
-                  Actualizar Saldo
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AdjustDebitModal
+          onClose={() => setIsAdjustDebitModalOpen(false)}
+          onSubmit={handleAdjustDebit}
+          monthNames={monthNames}
+          currentMonth={currentMonth}
+          currentYear={currentYear}
+          prevMonthClosingBalance={prevMonthClosingBalance}
+          tempDebitBalance={tempDebitBalance}
+          setTempDebitBalance={setTempDebitBalance}
+          handleBackdropMouseDown={handleBackdropMouseDown}
+          handleBackdropClick={handleBackdropClick}
+          formatSoles={formatSoles}
+        />
       )}
 
       {/* MODAL: EDITAR TARJETA / MEDIO DE PAGO */}
@@ -4979,103 +4921,15 @@ export default function DashboardPage() {
 
       {/* 3.6 MODAL DE CONFIRMACIÓN DE ELIMINACIÓN SEGURA */}
       {itemToDelete && (
-        <div className="modal-overlay" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(() => setItemToDelete(null))}>
-          <div
-            className="modal-box modal-confirm-delete"
-            onClick={e => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-delete-title"
-          >
-            <div className="modal-drag-handle" />
-            <div className="modal-header" style={{ marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div className="delete-warning-icon">
-                  <AlertTriangle size={20} color="var(--accent-danger)" />
-                </div>
-                <div>
-                  <h2 id="modal-delete-title" className="modal-title" style={{ fontSize: '1.05rem', margin: 0 }}>
-                    ¿Eliminar este {itemToDelete.type === 'transaction' ? 'gasto' : itemToDelete.type === 'income' ? 'ingreso' : 'préstamo'}?
-                  </h2>
-                  <p style={{ margin: '3px 0 0 0', fontSize: '0.775rem', color: 'var(--text-muted)' }}>
-                    Esta acción no se puede deshacer y se actualizará en la base de datos.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn-action-icon"
-                onClick={() => setItemToDelete(null)}
-                title="Cerrar modal"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Tarjeta de Resumen del Registro a Eliminar */}
-            <div className="delete-summary-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
-                      {itemToDelete.description}
-                    </span>
-                    {itemToDelete.isFixed && (
-                      <span className="badge-fixed-tag">
-                        <Repeat size={10} /> Fijo
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginTop: '6px', fontSize: '0.775rem', color: 'var(--text-muted)' }}>
-                    {itemToDelete.date && <span>{formatDisplayDate(itemToDelete.date)}</span>}
-                    {itemToDelete.paymentMethodName && (
-                      <>
-                        <span>•</span>
-                        <span style={{ color: itemToDelete.paymentMethodColor || 'inherit', fontWeight: 600 }}>
-                          {itemToDelete.paymentMethodName}
-                        </span>
-                      </>
-                    )}
-                    {itemToDelete.categoryName && (
-                      <>
-                        <span>•</span>
-                        <span>{itemToDelete.categoryName}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--accent-danger)' }} className="tabular-nums">
-                    {formatSoles(itemToDelete.amount)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Botones de Acción */}
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
-              <button
-                id="btn-cancel-delete"
-                type="button"
-                className="btn-secondary"
-                onClick={() => setItemToDelete(null)}
-                style={{ minWidth: '95px' }}
-              >
-                Cancelar
-              </button>
-              <button
-                id="btn-confirm-delete"
-                type="button"
-                className="btn-danger-confirm"
-                onClick={handleConfirmDelete}
-                style={{ minWidth: '125px' }}
-              >
-                <Trash2 size={15} />
-                <span>Sí, Eliminar</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteConfirmModal
+          item={itemToDelete}
+          onClose={() => setItemToDelete(null)}
+          onConfirm={handleConfirmDelete}
+          handleBackdropMouseDown={handleBackdropMouseDown}
+          handleBackdropClick={handleBackdropClick}
+          formatDisplayDate={formatDisplayDate}
+          formatSoles={formatSoles}
+        />
       )}
 
       {/* 4. NAVEGACIÓN MÓVIL MODULAR */}

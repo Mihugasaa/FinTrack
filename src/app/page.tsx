@@ -4,6 +4,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import '@/styles/dashboard.css';
 import { useTabNavigation, ActiveTab } from '@/hooks/useTabNavigation';
+import { useMonthNavigation } from '@/hooks/useMonthNavigation';
+import { useTheme } from '@/hooks/useTheme';
 import { Header } from '@/components/layout/Header';
 import { NavigationTabs } from '@/components/layout/NavigationTabs';
 import { MobileNav } from '@/components/layout/MobileNav';
@@ -132,7 +134,7 @@ export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   // 1. Tema Claro / Oscuro (Predeterminado: Claro)
-  const [theme, setTheme] = useState<'dark' | 'light'>('light');
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     // Require an authenticated user; otherwise bounce to login.
@@ -165,12 +167,6 @@ export default function DashboardPage() {
     SupabaseDataService.getCategories().then(cats => {
       if (cats && cats.length > 0) setCategories(cats);
     });
-
-    // Theme is a per-device UI preference, kept in localStorage by design.
-    const savedTheme = localStorage.getItem('fintrack_theme') as 'dark' | 'light' | null;
-    const initial = savedTheme || 'light';
-    setTheme(initial);
-    document.documentElement.setAttribute('data-theme', initial);
   }, [router]);
 
   const handleLogout = async () => {
@@ -178,12 +174,6 @@ export default function DashboardPage() {
     window.location.href = '/login';
   };
 
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    document.documentElement.setAttribute('data-theme', nextTheme);
-    localStorage.setItem('fintrack_theme', nextTheme);
-  };
 
   // 2. Pestaña Activa y Subpestañas (Sincronizadas con URL y localStorage)
   const {
@@ -194,8 +184,17 @@ export default function DashboardPage() {
   } = useTabNavigation('overview');
 
   // 3. Mes y Año activo (Sincronizado en tiempo real con la fecha del sistema)
-  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth() + 1); // Septiembre = 9
+  const {
+    currentYear,
+    currentMonth,
+    isMonthDropdownOpen,
+    setIsMonthDropdownOpen,
+    monthPickerRef,
+    handlePrevMonth,
+    handleNextMonth,
+    handleGoToCurrentMonth,
+    handleSelectMonth
+  } = useMonthNavigation();
 
   // 4. Saldo Débito Inicial configurable por el usuario (Dinero con el que arranca)
   const [initialDebitBalances, setInitialDebitBalances] = useState<Record<string, number>>({});
@@ -295,8 +294,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Ref para cerrar selector de meses al hacer clic fuera
-  const monthPickerRef = useRef<HTMLDivElement>(null);
 
   const [isEditCardModalOpen, setIsEditCardModalOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
@@ -416,53 +413,7 @@ export default function DashboardPage() {
   const [reconciliationFilter, setReconciliationFilter] = useState<'all' | 'matched' | 'unmatched_app' | 'mismatch'>('all');
   const [statementFileName, setStatementFileName] = useState<string>('');
 
-  const handlePrevMonth = () => {
-    if (currentMonth === 1) {
-      setCurrentMonth(12);
-      setCurrentYear(prev => prev - 1);
-    } else {
-      setCurrentMonth(prev => prev - 1);
-    }
-  };
-
-  const handleNextMonth = () => {
-    if (currentMonth === 12) {
-      setCurrentMonth(1);
-      setCurrentYear(prev => prev + 1);
-    } else {
-      setCurrentMonth(prev => prev + 1);
-    }
-  };
-
-  const handleGoToCurrentMonth = () => {
-    const d = new Date();
-    setCurrentYear(d.getFullYear());
-    setCurrentMonth(d.getMonth() + 1);
-    setIsMonthDropdownOpen(false);
-  };
-
-  const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
-
-  // Cerrar selector de meses al hacer clic fuera
-  useEffect(() => {
-    const handleClickOutsideMonthPicker = (e: MouseEvent) => {
-      if (isMonthDropdownOpen && monthPickerRef.current && !monthPickerRef.current.contains(e.target as Node)) {
-        setIsMonthDropdownOpen(false);
-      }
-    };
-    if (isMonthDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutsideMonthPicker);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutsideMonthPicker);
-    };
-  }, [isMonthDropdownOpen]);
-
-  const handleSelectMonth = (m: number) => {
-    setCurrentMonth(m);
-    setIsMonthDropdownOpen(false);
-  };
 
   const monthKey = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
   const initialDebitForMonth = initialDebitBalances[monthKey] ?? 0;

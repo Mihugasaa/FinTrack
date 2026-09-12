@@ -1163,6 +1163,23 @@ export default function DashboardPage() {
     return items.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime());
   }, [txTypeFilter, filteredTransactions, currentMonthCardPayments, paymentMethods, searchQuery, selectedCategory, selectedPaymentMethod, salaries, monthKey, currentOtherIncomes, payables]);
 
+  // Total de movimientos del mes SIN filtros — fuente única para el badge de "Movimientos"
+  // (pestaña de navegación y cabecera del listado). Cuenta los cuatro tipos que alimentan
+  // combinedMovements: gastos, pagos a tarjeta, ingresos (sueldos + extras) y pagos de deuda.
+  const monthMovementsTotal = useMemo(() => {
+    const payablePaymentsThisMonth = payables.reduce(
+      (acc, p) => acc + (p.payments || []).filter(pay => pay.paymentDate.startsWith(monthKey)).length,
+      0
+    );
+    return (
+      currentMonthTransactions.length +
+      currentMonthCardPayments.length +
+      salaries.length +
+      currentOtherIncomes.length +
+      payablePaymentsThisMonth
+    );
+  }, [currentMonthTransactions, currentMonthCardPayments, salaries, currentOtherIncomes, payables, monthKey]);
+
   // Métricas Consolidadas de Préstamos y Deudas con Paridad Cambiaria
   const totalReceivablesRemaining = useMemo(() => {
     return receivables.reduce((acc, curr) => {
@@ -2469,7 +2486,7 @@ export default function DashboardPage() {
         onSelectTab={setActiveTab}
         salariesCount={salaries.length}
         otherIncomesCount={currentOtherIncomes.length}
-        transactionsCount={currentMonthTransactions.length}
+        movementsCount={monthMovementsTotal}
         cardsCount={paymentMethods.length}
         pendingReceivablesCount={receivables.filter(r => r.remainingAmount > 0).length}
         pendingPayablesCount={payables.filter(p => p.remainingAmount > 0).length}
@@ -2542,6 +2559,7 @@ export default function DashboardPage() {
         <TransactionsTab
           currentDateStr={currentDateStr}
           combinedMovements={combinedMovements}
+          monthMovementsTotal={monthMovementsTotal}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           txTypeFilter={txTypeFilter}

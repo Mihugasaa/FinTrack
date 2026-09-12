@@ -18,7 +18,7 @@ interface NavigationTabsProps {
   onSelectTab: (tab: ActiveTab) => void;
   salariesCount: number;
   otherIncomesCount: number;
-  transactionsCount: number;
+  movementsCount: number;
   cardsCount: number;
   pendingReceivablesCount: number;
   pendingPayablesCount: number;
@@ -29,7 +29,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
   onSelectTab,
   salariesCount,
   otherIncomesCount,
-  transactionsCount,
+  movementsCount,
   cardsCount,
   pendingReceivablesCount,
   pendingPayablesCount
@@ -63,10 +63,10 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
         id="tab-transactions"
         className={`tab-button ${activeTab === 'transactions' ? 'active' : ''}`}
         onClick={() => onSelectTab('transactions')}
-        title={`Movimientos: Gastos y reembolsos del mes • ${transactionsCount}`}
+        title={`Movimientos: Gastos, pagos de tarjeta, ingresos y pagos de deuda del mes • ${movementsCount}`}
       >
         <ListFilter size={15} />
-        <span>Movimientos • {transactionsCount}</span>
+        <span>Movimientos • {movementsCount}</span>
       </button>
 
       <button

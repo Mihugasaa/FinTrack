@@ -22,6 +22,7 @@ import { Transaction, PaymentMethod, Category, CardPayment, SalaryIncome, OtherI
 
 interface TransactionsTabProps {
   combinedMovements: any[];
+  monthMovementsTotal: number;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   txTypeFilter: 'ALL' | 'FIXED' | 'VARIABLE' | 'CARD_PAYMENTS' | 'INCOMES' | 'PAYABLES';
@@ -60,6 +61,7 @@ interface TransactionsTabProps {
 
 export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   combinedMovements,
+  monthMovementsTotal,
   searchQuery,
   setSearchQuery,
   txTypeFilter,
@@ -130,7 +132,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       <div className="panel-header-row">
         <div className="panel-header-title-group">
           <span className="panel-title">Listado de Movimientos</span>
-          <span className="badge badge-neutral">{combinedMovements.length} movimientos</span>
+          <span className="badge badge-neutral">
+            {isAnyFilterActive
+              ? `${combinedMovements.length} de ${monthMovementsTotal} movimientos`
+              : `${monthMovementsTotal} movimientos`}
+          </span>
         </div>
       </div>
 

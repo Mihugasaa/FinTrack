@@ -58,6 +58,8 @@ import { NavigationTabs } from '@/components/layout/NavigationTabs';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { DeleteConfirmModal } from '@/components/modals/DeleteConfirmModal';
 import { AdjustDebitModal } from '@/components/modals/AdjustDebitModal';
+import { IncomeModal } from '@/components/modals/IncomeModal';
+import { SalaryModal } from '@/components/modals/SalaryModal';
 import { OverviewTab } from '@/components/tabs/OverviewTab';
 import { IncomesTab } from '@/components/tabs/IncomesTab';
 import { TransactionsTab } from '@/components/tabs/TransactionsTab';
@@ -3717,72 +3719,18 @@ export default function DashboardPage() {
 
       {/* MODAL 3: REGISTRAR INGRESO EXTRA A DÉBITO */}
       {isIncomeModalOpen && (
-        <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(() => setIsIncomeModalOpen(false))}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <div className="modal-drag-handle" />
-            <div className="modal-title-row">
-              <span className="text-h2 font-bold">Registrar Ingreso Extra</span>
-              <button id="btn-close-income-modal" className="month-nav-btn modal-close-btn" onClick={() => setIsIncomeModalOpen(false)}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddExtraIncome}>
-              <div className="form-group">
-                <label className="form-label">Descripción del Ingreso</label>
-                <input
-                  id="input-income-desc"
-                  type="text"
-                  placeholder="ej. Bono, Venta de producto, Freelance"
-                  className="form-input"
-                  required
-                  value={incomeDesc}
-                  onChange={e => setIncomeDesc(e.target.value)}
-                  autoFocus
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Fecha del Ingreso</label>
-                <input
-                  id="input-income-date"
-                  type="date"
-                  className="form-input"
-                  required
-                  value={incomeDate}
-                  onChange={e => setIncomeDate(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Monto Ingresado • Soles</label>
-                <input
-                  id="input-income-amount"
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  className="form-input"
-                  required
-                  value={incomeAmount}
-                  onChange={e => setIncomeAmount(e.target.value)}
-                />
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setIsIncomeModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary">
-                  Agregar a Débito
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <IncomeModal
+          onClose={() => setIsIncomeModalOpen(false)}
+          onSubmit={handleAddExtraIncome}
+          incomeDesc={incomeDesc}
+          setIncomeDesc={setIncomeDesc}
+          incomeDate={incomeDate}
+          setIncomeDate={setIncomeDate}
+          incomeAmount={incomeAmount}
+          setIncomeAmount={setIncomeAmount}
+          handleBackdropMouseDown={handleBackdropMouseDown}
+          handleBackdropClick={handleBackdropClick}
+        />
       )}
 
       {/* MODAL 4: NUEVA TARJETA PERSONALIZADA */}
@@ -4806,117 +4754,38 @@ export default function DashboardPage() {
 
       {/* 11. MODAL: CONFIGURAR SUELDO / NÓMINA */}
       {isSalaryModalOpen && (
-        <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(() => setIsSalaryModalOpen(false))}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <div className="modal-drag-handle" />
-            <div className="modal-title-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Building2 size={18} color="var(--accent-brand)" />
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Configurar Sueldo / Nómina</h3>
-              </div>
-              <button className="btn-action-icon" onClick={() => setIsSalaryModalOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
+        <SalaryModal
+          onClose={() => setIsSalaryModalOpen(false)}
+          onSubmit={e => {
+            e.preventDefault();
+            if (!salaryAmount) return;
+            const amt = parseFloat(salaryAmount);
+            const pDay = parseInt(salaryPayDay, 10) || 30;
 
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                if (!salaryAmount) return;
-                const amt = parseFloat(salaryAmount);
-                const pDay = parseInt(salaryPayDay, 10) || 30;
-
-                setSalaries([
-                  {
-                    id: 'sal-1',
-                    source: salarySource || 'Empleo Principal',
-                    amount: amt,
-                    payDay: pDay
-                  }
-                ]);
-                // Sincronizar sueldo base en Supabase
-                SupabaseDataService.updateBaseSalary(currentYear, currentMonth, amt);
-                setIsSalaryModalOpen(false);
-              }}
-            >
-              <div className="form-group">
-                <label className="form-label">Empresa / Empleo</label>
-                <input
-                  type="text"
-                  placeholder="ej. Empleo Principal, Empresa SAC"
-                  className="form-input"
-                  required
-                  value={salarySource}
-                  onChange={e => setSalarySource(e.target.value)}
-                  autoFocus
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Monto Neto Mensual (S/)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="2126.49"
-                  className="form-input"
-                  required
-                  value={salaryAmount}
-                  onChange={e => setSalaryAmount(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Día del mes en que te abonan</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  placeholder="30 (último día hábil o día 25)"
-                  className="form-input"
-                  required
-                  value={salaryPayDay}
-                  onChange={e => setSalaryPayDay(e.target.value)}
-                />
-                <span style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginTop: '3px' }}>
-                  Permite calcular tu dinero disponible real si estás a mitad de mes antes del pago.
-                </span>
-              </div>
-
-              <div
-                style={{
-                  background: 'var(--accent-brand-subtle)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '8px',
-                  padding: '10px 12px',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '16px'
-                }}
-              >
-                <Sparkles size={16} color="var(--accent-brand)" style={{ flexShrink: 0 }} />
-                <span>
-                  <strong>Vigencia:</strong> Aplica a partir de <strong>{monthNames[currentMonth]} {currentYear}</strong> en adelante. Tus meses históricos anteriores conservan su registro original intacto.
-                </span>
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setIsSalaryModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary">
-                  Guardar Sueldo
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            setSalaries([
+              {
+                id: 'sal-1',
+                source: salarySource || 'Empleo Principal',
+                amount: amt,
+                payDay: pDay
+              }
+            ]);
+            // Sincronizar sueldo base en Supabase
+            SupabaseDataService.updateBaseSalary(currentYear, currentMonth, amt);
+            setIsSalaryModalOpen(false);
+          }}
+          salarySource={salarySource}
+          setSalarySource={setSalarySource}
+          salaryAmount={salaryAmount}
+          setSalaryAmount={setSalaryAmount}
+          salaryPayDay={salaryPayDay}
+          setSalaryPayDay={setSalaryPayDay}
+          monthNames={monthNames}
+          currentMonth={currentMonth}
+          currentYear={currentYear}
+          handleBackdropMouseDown={handleBackdropMouseDown}
+          handleBackdropClick={handleBackdropClick}
+        />
       )}
 
       {/* 3.6 MODAL DE CONFIRMACIÓN DE ELIMINACIÓN SEGURA */}

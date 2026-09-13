@@ -22,6 +22,7 @@ export const IncomesTab: React.FC = () => {
     totalSalaryAmount,
     currentOtherIncomes,
     debitStats,
+    diagnostic,
     salaries,
     setSalarySource,
     setSalaryAmount,
@@ -36,9 +37,10 @@ export const IncomesTab: React.FC = () => {
 
   // Cálculos 100% dinámicos en base a datos reales (sin valores hardcodeados)
   const fixedExpenses = fixedExpensesTotal;
-  // Nota: el padre nunca conectó `diagnostic` a este tab, por lo que este total
-  // siempre equivalía a los gastos fijos. Se mantiene ese comportamiento.
-  const consumedTotal = fixedExpensesTotal;
+  // Total consumido del mes (fijos + variables, neto de reembolsos), tomado del
+  // diagnóstico de liquidez. Así el desglose de la barra separa correctamente el
+  // gasto variable en vez de dejarlo siempre en 0.
+  const consumedTotal = diagnostic.totalExpensesConsumed;
   const variableExpenses = Math.max(0, consumedTotal - fixedExpenses);
   const estimatedMargin = Math.max(0, totalIncome - consumedTotal);
 

@@ -391,226 +391,28 @@ export function DashboardContent() {
           ========================================================================= */}
 
       {/* PESTAÑA 1: VISIÓN GENERAL & GRÁFICOS */}
-      {activeTab === 'overview' && (
-        <OverviewTab
-          isCurrentActiveMonth={isCurrentActiveMonth}
-          isPastMonth={isPastMonth}
-          isFutureMonth={isFutureMonth}
-          monthNames={monthNames}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-          monthKey={monthKey}
-          now={now}
-          debitStats={debitStats}
-          initialDebitForMonth={initialDebitForMonth}
-          totalSalaryAmount={totalSalaryAmount}
-          currentOtherIncomes={currentOtherIncomes}
-          setTempDebitBalance={setTempDebitBalance}
-          setIsAdjustDebitModalOpen={setIsAdjustDebitModalOpen}
-          prevMonthClosingBalance={prevMonthClosingBalance}
-          setInitialDebitBalances={setInitialDebitBalances}
-          diagnostic={diagnostic}
-          fixedExpensesTotal={fixedExpensesTotal}
-          currentMonthTransactions={currentMonthTransactions}
-          categoryBreakdown={categoryBreakdown}
-          monthlyComparison={monthlyComparison}
-          setActiveTab={setActiveTab}
-          paymentMethods={paymentMethods}
-          categories={categories}
-          resolvePaymentMethod={resolvePaymentMethod}
-          handleOpenEditTransaction={handleOpenEditTransaction}
-          promptDeleteTransaction={promptDeleteTransaction}
-          cardAdvisor={cardAdvisor}
-          formatDisplayDate={formatDisplayDate}
-          formatSoles={formatSoles}
-        />
-      )}
+      {activeTab === 'overview' && <OverviewTab />}
 
       {/* PESTAÑA 2: INGRESOS & SUELDOS */}
-      {activeTab === 'incomes' && (
-        <IncomesTab
-          monthNames={monthNames}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-          setIsIncomeModalOpen={setIsIncomeModalOpen}
-          setIsSalaryModalOpen={setIsSalaryModalOpen}
-          totalSalaryAmount={totalSalaryAmount}
-          currentOtherIncomes={currentOtherIncomes}
-          debitStats={debitStats}
-          salaries={salaries}
-          setSalarySource={setSalarySource}
-          setSalaryAmount={setSalaryAmount}
-          setSalaryPayDay={setSalaryPayDay}
-          setItemToDelete={setItemToDelete}
-          fixedExpensesTotal={fixedExpensesTotal}
-          formatDisplayDate={formatDisplayDate}
-          formatSoles={formatSoles}
-        />
-      )}
+      {activeTab === 'incomes' && <IncomesTab />}
 
       {/* PESTAÑA 3: MOVIMIENTOS COMPLETOS */}
-      {activeTab === 'transactions' && (
-        <TransactionsTab
-          currentDateStr={currentDateStr}
-          combinedMovements={combinedMovements}
-          monthMovementsTotal={monthMovementsTotal}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          txTypeFilter={txTypeFilter}
-          setTxTypeFilter={setTxTypeFilter}
-          currentMonthTransactions={currentMonthTransactions}
-          currentMonthCardPayments={currentMonthCardPayments}
-          salaries={salaries}
-          currentOtherIncomes={currentOtherIncomes}
-          payables={payables}
-          monthKey={monthKey}
-          selectedPaymentMethod={selectedPaymentMethod}
-          setSelectedPaymentMethod={setSelectedPaymentMethod}
-          paymentMethods={paymentMethods}
-          selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
-          categories={categories}
-          handleOpenCreateCardPayment={handleOpenCreateCardPayment}
-          monthNames={monthNames}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-          isCurrentMonthViewed={isCurrentMonthViewed}
-          todayDividerIndex={todayDividerIndex}
-          renderTodayDividerRow={renderTodayDividerRow}
-          renderTodayDividerMobile={renderTodayDividerMobile}
-          handleOpenEditCardPayment={handleOpenEditCardPayment}
-          handleDeleteCardPayment={handleDeleteCardPayment}
-          resolvePaymentMethod={resolvePaymentMethod}
-          handleOpenEditTransaction={handleOpenEditTransaction}
-          promptDeleteTransaction={promptDeleteTransaction}
-          formatDisplayDate={formatDisplayDate}
-          formatSoles={formatSoles}
-          handleParseNaturalExpense={handleParseNaturalExpense}
-          isParsingNaturalExpense={isParsingNaturalExpense}
-        />
-      )}
+      {activeTab === 'transactions' && <TransactionsTab />}
 
       {/* PESTAÑA 4: CUENTAS & TARJETAS (DÉBITO Y CRÉDITO) */}
-      {activeTab === 'cards' && (
-        <CardsTab
-          handleOpenCreateCardPayment={handleOpenCreateCardPayment}
-          setIsCardModalOpen={setIsCardModalOpen}
-          setTempDebitBalance={setTempDebitBalance}
-          initialDebitForMonth={initialDebitForMonth}
-          setIsAdjustDebitModalOpen={setIsAdjustDebitModalOpen}
-          debitStats={debitStats}
-          cardDebtSummary={cardDebtSummary}
-          paymentMethods={paymentMethods}
-          handleOpenEditCard={handleOpenEditCard}
-          showAllHistoricalPayments={showAllHistoricalPayments}
-          setShowAllHistoricalPayments={setShowAllHistoricalPayments}
-          monthNames={monthNames}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-          cardPayments={cardPayments}
-          currentMonthCardPayments={currentMonthCardPayments}
-          handleOpenEditCardPayment={handleOpenEditCardPayment}
-          handleDeleteCardPayment={handleDeleteCardPayment}
-          formatDisplayDate={formatDisplayDate}
-          formatSoles={formatSoles}
-        />
-      )}
+      {activeTab === 'cards' && <CardsTab />}
 
       {/* PESTAÑA 5: PRÉSTAMOS Y DEUDAS */}
-      {activeTab === 'receivables' && (
-        <ReceivablesTab
-          totalReceivablesRemaining={totalReceivablesRemaining}
-          totalPayablesRemaining={totalPayablesRemaining}
-          totalReceivablesRemainingUsd={totalReceivablesRemainingUsd}
-          totalPayablesRemainingUsd={totalPayablesRemainingUsd}
-          receivables={receivables}
-          payables={payables}
-          loansSubTab={loansSubTab}
-          setLoansSubTab={setLoansSubTab}
-          setDebtorName={setDebtorName}
-          setLoanDesc={setLoanDesc}
-          setLoanAmount={setLoanAmount}
-          setIsReceivableModalOpen={setIsReceivableModalOpen}
-          receivablesFilter={receivablesFilter}
-          setReceivablesFilter={setReceivablesFilter}
-          debtorGroups={debtorGroups}
-          filteredDebtorGroups={filteredDebtorGroups}
-          expandedDebtors={expandedDebtors}
-          toggleDebtorExpanded={toggleDebtorExpanded}
-          handleOpenGroupCollectModal={handleOpenGroupCollectModal}
-          handleCascadeCollect={handleCascadeCollect}
-          handleOpenAddLoanForDebtor={handleOpenAddLoanForDebtor}
-          handleOpenCollectModal={handleOpenCollectModal}
-          setItemToDelete={setItemToDelete}
-          handleOpenCreatePayable={handleOpenCreatePayable}
-          payablesFilter={payablesFilter}
-          setPayablesFilter={setPayablesFilter}
-          creditorGroups={creditorGroups}
-          filteredCreditorGroups={filteredCreditorGroups}
-          expandedCreditors={expandedCreditors}
-          toggleCreditorExpanded={toggleCreditorExpanded}
-          handleOpenGroupPayModal={handleOpenGroupPayModal}
-          handleCascadePay={handleCascadePay}
-          handleOpenAddLoanForCreditor={handleOpenAddLoanForCreditor}
-          handleOpenPayPayable={handleOpenPayPayable}
-          handleDeletePayable={handleDeletePayable}
-          formatDisplayDate={formatDisplayDate}
-          formatSoles={formatSoles}
-        />
-      )}
+      {activeTab === 'receivables' && <ReceivablesTab />}
 
       {/* PESTAÑA 6: RESUMEN ANUAL */}
-      {activeTab === 'annual' && (
-        <AnnualTab
-          monthlyHistoricalFlow={monthlyHistoricalFlow}
-          categoryBreakdown={categoryBreakdown}
-          formatSoles={formatSoles}
-        />
-      )}
+      {activeTab === 'annual' && <AnnualTab />}
 
       {/* PESTAÑA 7: ANALÍTICA AVANZADA, PROYECCIONES & IA */}
-      {activeTab === 'analytics' && (
-        <AnalyticsTab
-          forecastHorizon={forecastHorizon}
-          setForecastHorizon={setForecastHorizon}
-          monthlyHistoricalFlow={monthlyHistoricalFlow}
-          monthNames={monthNames}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-          categoryBreakdown={categoryBreakdown}
-          forecastData={forecastData}
-          dismissedAnomalyIds={dismissedAnomalyIds}
-          handleResetDismissedAnomalies={handleResetDismissedAnomalies}
-          aiAnomalies={aiAnomalies}
-          handleDismissAnomaly={handleDismissAnomaly}
-          formatSoles={formatSoles}
-          liquidityDiagnostic={diagnostic}
-          totalSalaryAmount={totalSalaryAmount}
-          totalReceivablesRemaining={totalReceivablesRemaining}
-          totalPayablesRemaining={totalPayablesRemaining}
-        />
-      )}
+      {activeTab === 'analytics' && <AnalyticsTab />}
 
       {/* PESTAÑA 8: CONCILIACIÓN BANCARIA INTELIGENTE */}
-      {activeTab === 'reconciliation' && (
-        <ReconciliationTab
-          handleLoadDemoStatement={handleLoadDemoStatement}
-          handleStatementFileUpload={handleStatementFileUpload}
-          statementFileName={statementFileName}
-          isParsingStatement={isParsingStatement}
-          reconciliationSummary={reconciliationSummary}
-          reconciliationFilter={reconciliationFilter}
-          setReconciliationFilter={setReconciliationFilter}
-          setReconciliationSummary={setReconciliationSummary}
-          setStatementFileName={setStatementFileName}
-          currentMonthTransactionsCount={currentMonthTransactions.length}
-          creditCards={paymentMethods.filter(pm => pm.type === 'credit' && pm.isActive)}
-          handleImportStatementItem={handleImportStatementItem}
-          handleImportAllUnmatched={handleImportAllUnmatched}
-          formatDisplayDate={formatDisplayDate}
-          formatSoles={formatSoles}
-        />
-      )}
+      {activeTab === 'reconciliation' && <ReconciliationTab />}
 
       {/* =========================================================================
           MODALES DEL SISTEMA COMPLETO

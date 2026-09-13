@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
+import { useFinance } from '@/contexts/FinanceContext';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -85,45 +86,46 @@ interface ReceivablesTabProps {
   formatSoles: (v: number) => string;
 }
 
-export const ReceivablesTab: React.FC<ReceivablesTabProps> = ({
-  totalReceivablesRemaining,
-  totalPayablesRemaining,
-  totalReceivablesRemainingUsd = 0,
-  totalPayablesRemainingUsd = 0,
-  receivables,
-  payables,
-  loansSubTab,
-  setLoansSubTab,
-  setDebtorName,
-  setLoanDesc,
-  setLoanAmount,
-  setIsReceivableModalOpen,
-  receivablesFilter,
-  setReceivablesFilter,
-  debtorGroups,
-  filteredDebtorGroups,
-  expandedDebtors,
-  toggleDebtorExpanded,
-  handleOpenGroupCollectModal,
-  handleCascadeCollect,
-  handleOpenAddLoanForDebtor,
-  handleOpenCollectModal,
-  setItemToDelete,
-  handleOpenCreatePayable,
-  payablesFilter,
-  setPayablesFilter,
-  creditorGroups,
-  filteredCreditorGroups,
-  expandedCreditors,
-  toggleCreditorExpanded,
-  handleOpenGroupPayModal,
-  handleCascadePay,
-  handleOpenAddLoanForCreditor,
-  handleOpenPayPayable,
-  handleDeletePayable,
-  formatDisplayDate,
-  formatSoles
-}) => {
+export const ReceivablesTab: React.FC = () => {
+  const {
+    totalReceivablesRemaining,
+    totalPayablesRemaining,
+    totalReceivablesRemainingUsd,
+    totalPayablesRemainingUsd,
+    receivables,
+    payables,
+    loansSubTab,
+    setLoansSubTab,
+    setDebtorName,
+    setLoanDesc,
+    setLoanAmount,
+    setIsReceivableModalOpen,
+    receivablesFilter,
+    setReceivablesFilter,
+    debtorGroups,
+    filteredDebtorGroups,
+    expandedDebtors,
+    toggleDebtorExpanded,
+    handleOpenGroupCollectModal,
+    handleCascadeCollect,
+    handleOpenAddLoanForDebtor,
+    handleOpenCollectModal,
+    setItemToDelete,
+    handleOpenCreatePayable,
+    payablesFilter,
+    setPayablesFilter,
+    creditorGroups,
+    filteredCreditorGroups,
+    expandedCreditors,
+    toggleCreditorExpanded,
+    handleOpenGroupPayModal,
+    handleCascadePay,
+    handleOpenAddLoanForCreditor,
+    handleOpenPayPayable,
+    handleDeletePayable,
+    formatDisplayDate,
+    formatSoles
+  } = useFinance();
   const [activeReminderGroup, setActiveReminderGroup] = React.useState<DebtorGroup | null>(null);
   const [reminderOptions, setReminderOptions] = React.useState<Array<{ tone: string; badge: string; message: string }>>([]);
   const [isGeneratingReminder, setIsGeneratingReminder] = React.useState(false);

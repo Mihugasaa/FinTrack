@@ -10,6 +10,7 @@ import {
   PieChart
 } from 'lucide-react';
 import { SalaryIncome, OtherIncome } from '@/types';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface IncomesTabProps {
   monthNames: string[];
@@ -49,31 +50,33 @@ interface IncomesTabProps {
   };
 }
 
-export const IncomesTab: React.FC<IncomesTabProps> = ({
-  monthNames,
-  currentMonth,
-  currentYear,
-  setIsIncomeModalOpen,
-  setIsSalaryModalOpen,
-  totalSalaryAmount,
-  currentOtherIncomes,
-  debitStats,
-  salaries,
-  setSalarySource,
-  setSalaryAmount,
-  setSalaryPayDay,
-  setItemToDelete,
-  fixedExpensesTotal,
-  formatDisplayDate,
-  formatSoles,
-  diagnostic
-}) => {
+export const IncomesTab: React.FC = () => {
+  const {
+    monthNames,
+    currentMonth,
+    currentYear,
+    setIsIncomeModalOpen,
+    setIsSalaryModalOpen,
+    totalSalaryAmount,
+    currentOtherIncomes,
+    debitStats,
+    salaries,
+    setSalarySource,
+    setSalaryAmount,
+    setSalaryPayDay,
+    setItemToDelete,
+    fixedExpensesTotal,
+    formatDisplayDate,
+    formatSoles
+  } = useFinance();
   const totalOtherIncomes = currentOtherIncomes.reduce((a, b) => a + b.amount, 0);
   const totalIncome = totalSalaryAmount + totalOtherIncomes;
 
   // Cálculos 100% dinámicos en base a datos reales (sin valores hardcodeados)
   const fixedExpenses = fixedExpensesTotal;
-  const consumedTotal = diagnostic?.totalExpensesConsumed ?? fixedExpensesTotal;
+  // Nota: el padre nunca conectó `diagnostic` a este tab, por lo que este total
+  // siempre equivalía a los gastos fijos. Se mantiene ese comportamiento.
+  const consumedTotal = fixedExpensesTotal;
   const variableExpenses = Math.max(0, consumedTotal - fixedExpenses);
   const estimatedMargin = Math.max(0, totalIncome - consumedTotal);
 

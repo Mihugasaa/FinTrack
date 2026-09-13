@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useFinance } from '@/contexts/FinanceContext';
 import {
   BarChart3,
   TrendingUp,
@@ -52,25 +53,26 @@ interface CFODiagnosisData {
   actionableRecommendation: string;
 }
 
-export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
-  forecastHorizon,
-  setForecastHorizon,
-  monthlyHistoricalFlow,
-  monthNames,
-  currentMonth,
-  currentYear,
-  categoryBreakdown,
-  forecastData,
-  dismissedAnomalyIds,
-  handleResetDismissedAnomalies,
-  aiAnomalies,
-  handleDismissAnomaly,
-  formatSoles,
-  liquidityDiagnostic,
-  totalSalaryAmount,
-  totalReceivablesRemaining,
-  totalPayablesRemaining
-}) => {
+export const AnalyticsTab: React.FC = () => {
+  const {
+    forecastHorizon,
+    setForecastHorizon,
+    monthlyHistoricalFlow,
+    monthNames,
+    currentMonth,
+    currentYear,
+    categoryBreakdown,
+    forecastData,
+    dismissedAnomalyIds,
+    handleResetDismissedAnomalies,
+    aiAnomalies,
+    handleDismissAnomaly,
+    formatSoles,
+    diagnostic: liquidityDiagnostic,
+    totalSalaryAmount,
+    totalReceivablesRemaining,
+    totalPayablesRemaining
+  } = useFinance();
   const [cfoDiagnosis, setCfoDiagnosis] = useState<CFODiagnosisData | null>(null);
   const [isLoadingCfo, setIsLoadingCfo] = useState(false);
   const [cfoError, setCfoError] = useState<string | null>(null);

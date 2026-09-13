@@ -15,6 +15,7 @@ import {
 import { SupabaseDataService } from '@/services/supabaseData.service';
 import { Transaction, PaymentMethod, Category, OtherIncome } from '@/types';
 import { ActiveTab } from '@/hooks/useTabNavigation';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface OverviewTabProps {
   isCurrentActiveMonth: boolean;
@@ -88,38 +89,39 @@ interface OverviewTabProps {
   formatSoles: (v: number) => string;
 }
 
-export const OverviewTab: React.FC<OverviewTabProps> = ({
-  isCurrentActiveMonth,
-  isPastMonth,
-  isFutureMonth,
-  monthNames,
-  currentMonth,
-  currentYear,
-  monthKey,
-  now,
-  debitStats,
-  initialDebitForMonth,
-  totalSalaryAmount,
-  currentOtherIncomes,
-  setTempDebitBalance,
-  setIsAdjustDebitModalOpen,
-  prevMonthClosingBalance,
-  setInitialDebitBalances,
-  diagnostic,
-  fixedExpensesTotal,
-  currentMonthTransactions,
-  categoryBreakdown,
-  monthlyComparison,
-  setActiveTab,
-  paymentMethods,
-  categories,
-  resolvePaymentMethod,
-  handleOpenEditTransaction,
-  promptDeleteTransaction,
-  cardAdvisor,
-  formatDisplayDate,
-  formatSoles
-}) => {
+export const OverviewTab: React.FC = () => {
+  const {
+    isCurrentActiveMonth,
+    isPastMonth,
+    isFutureMonth,
+    monthNames,
+    currentMonth,
+    currentYear,
+    monthKey,
+    now,
+    debitStats,
+    initialDebitForMonth,
+    totalSalaryAmount,
+    currentOtherIncomes,
+    setTempDebitBalance,
+    setIsAdjustDebitModalOpen,
+    prevMonthClosingBalance,
+    setInitialDebitBalances,
+    diagnostic,
+    fixedExpensesTotal,
+    currentMonthTransactions,
+    categoryBreakdown,
+    monthlyComparison,
+    setActiveTab,
+    paymentMethods,
+    categories,
+    resolvePaymentMethod,
+    handleOpenEditTransaction,
+    promptDeleteTransaction,
+    cardAdvisor,
+    formatDisplayDate,
+    formatSoles
+  } = useFinance();
   return (
     <div>
       {/* 3. HERO MASTER: MI DINERO EN DÉBITO (ARMONÍA ZEN Y FOCO EN LIQUIDEZ) */}

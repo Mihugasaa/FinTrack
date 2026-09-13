@@ -10,6 +10,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { PaymentMethod, CardPayment } from '@/types';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface CardsTabProps {
   handleOpenCreateCardPayment: () => void;
@@ -53,28 +54,29 @@ interface CardsTabProps {
   formatSoles: (v: number) => string;
 }
 
-export const CardsTab: React.FC<CardsTabProps> = ({
-  handleOpenCreateCardPayment,
-  setIsCardModalOpen,
-  setTempDebitBalance,
-  initialDebitForMonth,
-  setIsAdjustDebitModalOpen,
-  debitStats,
-  cardDebtSummary,
-  paymentMethods,
-  handleOpenEditCard,
-  showAllHistoricalPayments,
-  setShowAllHistoricalPayments,
-  monthNames,
-  currentMonth,
-  currentYear,
-  cardPayments,
-  currentMonthCardPayments,
-  handleOpenEditCardPayment,
-  handleDeleteCardPayment,
-  formatDisplayDate,
-  formatSoles
-}) => {
+export const CardsTab: React.FC = () => {
+  const {
+    handleOpenCreateCardPayment,
+    setIsCardModalOpen,
+    setTempDebitBalance,
+    initialDebitForMonth,
+    setIsAdjustDebitModalOpen,
+    debitStats,
+    cardDebtSummary,
+    paymentMethods,
+    handleOpenEditCard,
+    showAllHistoricalPayments,
+    setShowAllHistoricalPayments,
+    monthNames,
+    currentMonth,
+    currentYear,
+    cardPayments,
+    currentMonthCardPayments,
+    handleOpenEditCardPayment,
+    handleDeleteCardPayment,
+    formatDisplayDate,
+    formatSoles
+  } = useFinance();
   const [activeSubTab, setActiveSubTab] = useState<'payments' | 'schedule'>('payments');
 
   // Cálculo de Deuda Consolidada Total en Tarjetas de Crédito

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useFinance } from '@/contexts/FinanceContext';
 
 export interface AnnualHistoricalFlowItem {
   key: string;
@@ -116,11 +117,8 @@ const DEFAULT_CATEGORIES = [
   { name: 'Otros Consumos', total: 1105.20, pct: 16.0, color: '#64748b' }
 ];
 
-export const AnnualTab: React.FC<AnnualTabProps> = ({
-  monthlyHistoricalFlow,
-  categoryBreakdown,
-  formatSoles = (val: number) => `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}) => {
+export const AnnualTab: React.FC = () => {
+  const { monthlyHistoricalFlow, categoryBreakdown, formatSoles } = useFinance();
   const [filterMode, setFilterMode] = useState<'all' | 'closed'>('all');
   const [visualTab, setVisualTab] = useState<'flow' | 'categories'>('flow');
 

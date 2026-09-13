@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
+import { useFinance } from '@/contexts/FinanceContext';
 import {
   Search,
   Layers,
@@ -59,44 +60,45 @@ interface TransactionsTabProps {
   isParsingNaturalExpense?: boolean;
 }
 
-export const TransactionsTab: React.FC<TransactionsTabProps> = ({
-  combinedMovements,
-  monthMovementsTotal,
-  searchQuery,
-  setSearchQuery,
-  txTypeFilter,
-  setTxTypeFilter,
-  currentMonthTransactions,
-  currentMonthCardPayments,
-  salaries,
-  currentOtherIncomes,
-  payables,
-  monthKey,
-  selectedPaymentMethod,
-  setSelectedPaymentMethod,
-  paymentMethods,
-  selectedCategory,
-  setSelectedCategory,
-  categories,
-  handleOpenCreateCardPayment,
-  monthNames,
-  currentMonth,
-  currentYear,
-  isCurrentMonthViewed,
-  todayDividerIndex,
-  renderTodayDividerRow,
-  renderTodayDividerMobile,
-  handleOpenEditCardPayment,
-  handleDeleteCardPayment,
-  resolvePaymentMethod,
-  handleOpenEditTransaction,
-  promptDeleteTransaction,
-  formatDisplayDate,
-  formatSoles,
-  currentDateStr,
-  handleParseNaturalExpense,
-  isParsingNaturalExpense = false
-}) => {
+export const TransactionsTab: React.FC = () => {
+  const {
+    combinedMovements,
+    monthMovementsTotal,
+    searchQuery,
+    setSearchQuery,
+    txTypeFilter,
+    setTxTypeFilter,
+    currentMonthTransactions,
+    currentMonthCardPayments,
+    salaries,
+    currentOtherIncomes,
+    payables,
+    monthKey,
+    selectedPaymentMethod,
+    setSelectedPaymentMethod,
+    paymentMethods,
+    selectedCategory,
+    setSelectedCategory,
+    categories,
+    handleOpenCreateCardPayment,
+    monthNames,
+    currentMonth,
+    currentYear,
+    isCurrentMonthViewed,
+    todayDividerIndex,
+    renderTodayDividerRow,
+    renderTodayDividerMobile,
+    handleOpenEditCardPayment,
+    handleDeleteCardPayment,
+    resolvePaymentMethod,
+    handleOpenEditTransaction,
+    promptDeleteTransaction,
+    formatDisplayDate,
+    formatSoles,
+    currentDateStr,
+    handleParseNaturalExpense,
+    isParsingNaturalExpense
+  } = useFinance();
   const [naturalText, setNaturalText] = useState('');
   const isItemFuture = (sortDate: string) => {
     if (isCurrentMonthViewed) {

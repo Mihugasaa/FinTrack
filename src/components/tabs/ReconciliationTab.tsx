@@ -3,6 +3,7 @@
 import React from 'react';
 import { CheckCheck, Sparkles, UploadCloud, Plus } from 'lucide-react';
 import { ReconciliationSummary, ReconciliationItem, PaymentMethod } from '@/types';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface ReconciliationTabProps {
   handleLoadDemoStatement: () => void;
@@ -22,23 +23,27 @@ interface ReconciliationTabProps {
   formatSoles: (val: number) => string;
 }
 
-export const ReconciliationTab: React.FC<ReconciliationTabProps> = ({
-  handleLoadDemoStatement,
-  handleStatementFileUpload,
-  statementFileName,
-  isParsingStatement,
-  reconciliationSummary,
-  reconciliationFilter,
-  setReconciliationFilter,
-  setReconciliationSummary,
-  setStatementFileName,
-  currentMonthTransactionsCount,
-  creditCards = [],
-  handleImportStatementItem,
-  handleImportAllUnmatched,
-  formatDisplayDate,
-  formatSoles
-}) => {
+export const ReconciliationTab: React.FC = () => {
+  const {
+    handleLoadDemoStatement,
+    handleStatementFileUpload,
+    statementFileName,
+    isParsingStatement,
+    reconciliationSummary,
+    reconciliationFilter,
+    setReconciliationFilter,
+    setReconciliationSummary,
+    setStatementFileName,
+    currentMonthTransactions,
+    paymentMethods,
+    handleImportStatementItem,
+    handleImportAllUnmatched,
+    formatDisplayDate,
+    formatSoles
+  } = useFinance();
+  // Derivados locales (antes calculados por el padre y pasados como props)
+  const currentMonthTransactionsCount = currentMonthTransactions.length;
+  const creditCards = paymentMethods.filter(pm => pm.type === 'credit' && pm.isActive);
   // Filtrar elementos de auditoría según filtro activo
   const filteredItems = (reconciliationSummary?.items || []).filter(item => {
     if (reconciliationFilter === 'matched') return item.status === 'matched';

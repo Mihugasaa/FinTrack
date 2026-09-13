@@ -18,7 +18,7 @@ import {
   initialCategories,
   initialPaymentMethods
 } from '@/lib/defaults';
-import { generateUUID, resolvePaymentMethod } from '@/lib/utils';
+import { generateUUID, resolvePaymentMethod, deduplicateTransactions } from '@/lib/utils';
 import {
   getBestCardRecommendation,
   calculateMonthlyDiagnostic,
@@ -490,6 +490,62 @@ function useFinanceController() {
     });
   }, [monthKey, currentUser, currentYear, currentMonth]);
 
+  // Carga única del HISTORIAL COMPLETO (una vez por sesión autenticada). El resto
+  // de la app trabaja mes a mes, pero las vistas consolidadas (Anual / Analítica)
+  // necesitan todos los movimientos reales para derivar el flujo de cada mes en
+  // lugar de datos fijos. Traemos transacciones, ingresos extra y abonos a tarjeta
+  // de todo el historial y los fusionamos sin duplicar con lo ya cargado.
+  const didLoadAllHistoryRef = useRef(false);
+  useEffect(() => {
+    if (!currentUser || didLoadAllHistoryRef.current) return;
+    didLoadAllHistoryRef.current = true;
+
+    SupabaseDataService.getAllTransactions().then(allTxs => {
+      if (allTxs && allTxs.length > 0) {
+        setTransactions(prev => deduplicateTransactions([...allTxs, ...prev]));
+      }
+    });
+
+    SupabaseDataService.getAllOtherIncomes().then(grouped => {
+      if (grouped) {
+        setExtraIncomes(prev => {
+          const merged = { ...prev };
+          Object.entries(grouped).forEach(([k, list]) => {
+            const byId = new Map((merged[k] || []).map(i => [i.id, i]));
+            list.forEach(i => byId.set(i.id, i));
+            merged[k] = Array.from(byId.values());
+          });
+          return merged;
+        });
+      }
+    });
+
+    SupabaseDataService.getAllCardPayments().then(allPayments => {
+      if (allPayments && allPayments.length > 0) {
+        setCardPayments(prev => {
+          const keyOf = (p: CardPayment) => p.id || `${p.paymentMethodId}_${p.amountPaid}_${p.paymentDate}`;
+          const byKey = new Map<string, CardPayment>();
+          prev.forEach(p => byKey.set(keyOf(p), p));
+          allPayments.forEach(cp => {
+            const local = byKey.get(keyOf(cp));
+            byKey.set(keyOf(cp), {
+              id: cp.id || local?.id,
+              paymentMethodId: cp.paymentMethodId,
+              amountPaid: cp.amountPaid,
+              paymentDate: cp.paymentDate,
+              // Conservamos el origen especializado (Reembolso / Abono banco) si el
+              // registro en la nube todavía lo trae como el genérico DEBIT_ACCOUNT.
+              sourceType: (cp.sourceType && cp.sourceType !== 'DEBIT_ACCOUNT')
+                ? cp.sourceType
+                : (local?.sourceType || 'DEBIT_ACCOUNT')
+            });
+          });
+          return Array.from(byKey.values());
+        });
+      }
+    });
+  }, [currentUser, setTransactions, setExtraIncomes, setCardPayments]);
+
   const budget = {
     year: currentYear,
     month: currentMonth,
@@ -689,6 +745,29 @@ function useFinanceController() {
     }));
   }, [currentMonthTransactions, categories, diagnostic.totalExpensesConsumed]);
 
+  // Desglose de Gastos por Categoría del AÑO completo (para la donut de la vista
+  // Anual). Agrega todo el historial cargado del año visible, neto de reembolsos.
+  const annualCategoryBreakdown = useMemo(() => {
+    const yearPrefix = `${currentYear}-`;
+    const map = new Map<string, { category: typeof initialCategories[0]; total: number }>();
+    transactions.forEach(t => {
+      if (!(t.date || '').startsWith(yearPrefix)) return;
+      const cat = categories.find(c => c.id === t.categoryId) || categories[11];
+      const existing = map.get(cat.id) || { category: cat, total: 0 };
+      const net = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
+      existing.total += net;
+      map.set(cat.id, existing);
+    });
+
+    const items = Array.from(map.values()).filter(i => i.total > 0).sort((a, b) => b.total - a.total);
+    const totalSpent = items.reduce((acc, i) => acc + i.total, 0) || 1;
+
+    return items.map(item => ({
+      ...item,
+      percentage: (item.total / totalSpent) * 100
+    }));
+  }, [transactions, categories, currentYear]);
+
   // Total de Gastos Fijos del mes
   const fixedExpensesTotal = useMemo(() => {
     return currentMonthTransactions
@@ -722,39 +801,74 @@ function useFinanceController() {
     return detected.filter(a => !dismissedAnomalyIds.includes(a.id));
   }, [currentMonthTransactions, categories, dismissedAnomalyIds]);
 
-  // Evolución Histórica Multimes (para gráfico de barras y analítica dinámica)
+  // Evolución Histórica Multimes (para gráfico de barras y analítica dinámica).
+  // Se deriva por completo de datos reales: la salida de caja de cada mes es la
+  // suma de las transacciones cuyo vencimiento cae en ese mes (neta de reembolsos),
+  // es decir diagnostic.realCashOutflow generalizado a todo el historial cargado.
+  // El ingreso combina el sueldo recurrente con los ingresos extra reales del mes.
   const monthlyHistoricalFlow = useMemo(() => {
-    const baseSalary = salaries.reduce((acc, s) => acc + s.amount, 0) || 2126.49;
+    const baseSalary = salaries.reduce((acc, s) => acc + s.amount, 0);
 
-    const monthsDef = [
-      { key: '2026-08', label: 'Ago 2026', baseOut: 266.50 },
-      { key: '2026-09', label: 'Sep 2026', baseOut: 4140.19 },
-      { key: '2026-10', label: 'Oct 2026', baseOut: 1812.21 },
-      { key: '2026-11', label: 'Nov 2026', baseOut: 293.86 },
-      { key: '2026-12', label: 'Dic 2026', baseOut: 293.86 }
-    ];
+    // "Hoy" real: los meses posteriores al mes en curso se marcan como proyectados.
+    const nowRef = new Date();
+    const realCurrentKey = `${nowRef.getFullYear()}-${(nowRef.getMonth() + 1).toString().padStart(2, '0')}`;
+    const yearPrefix = `${currentYear}-`;
 
-    return monthsDef.map(m => {
-      const extraList = extraIncomes[m.key] || [];
-      const extraTotal = extraList.reduce((acc, curr) => acc + curr.amount, 0);
-      const inVal = Number((baseSalary + extraTotal).toFixed(2));
-
-      let outVal = m.baseOut;
-      if (m.key === monthKey && diagnostic.realCashOutflow > 0) {
-        outVal = Number(diagnostic.realCashOutflow.toFixed(2));
+    // Dos agregados netos por mes del año visible (ambos descuentan reembolsos):
+    //  - outByMonth: salida real de caja (por fecha de vencimiento del pago).
+    //  - consumedByMonth: gasto devengado (por fecha en que se realizó el gasto).
+    const outByMonth = new Map<string, number>();
+    const consumedByMonth = new Map<string, number>();
+    const candidateMonths = new Set<string>();
+    transactions.forEach(t => {
+      const net = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
+      const dueKey = (t.paymentDueDate || t.date || '').slice(0, 7);
+      if (dueKey.startsWith(yearPrefix)) {
+        outByMonth.set(dueKey, (outByMonth.get(dueKey) || 0) + net);
+        candidateMonths.add(dueKey);
       }
+      const dateKey = (t.date || '').slice(0, 7);
+      if (dateKey.startsWith(yearPrefix)) {
+        consumedByMonth.set(dateKey, (consumedByMonth.get(dateKey) || 0) + net);
+        candidateMonths.add(dateKey);
+      }
+    });
 
+    // Meses candidatos del año: los que tienen actividad real (gastos vencidos,
+    // gastos registrados o ingresos extra), más el mes en curso y el visible.
+    Object.keys(extraIncomes).forEach(k => { if (k.startsWith(yearPrefix)) candidateMonths.add(k); });
+    if (monthKey.startsWith(yearPrefix)) candidateMonths.add(monthKey);
+    if (realCurrentKey.startsWith(yearPrefix)) candidateMonths.add(realCurrentKey);
+
+    // Sin datos del año todavía: no inventamos meses.
+    if (candidateMonths.size === 0) return [];
+
+    // Rango contiguo desde el primer al último mes con actividad (sin huecos).
+    const monthNums = Array.from(candidateMonths).map(k => parseInt(k.split('-')[1], 10));
+    const firstMonth = Math.min(...monthNums);
+    const lastMonth = Math.max(...monthNums);
+
+    const items = [];
+    for (let m = firstMonth; m <= lastMonth; m++) {
+      const key = `${currentYear}-${m.toString().padStart(2, '0')}`;
+      const extraTotal = (extraIncomes[key] || []).reduce((acc, curr) => acc + curr.amount, 0);
+      const inVal = Number((baseSalary + extraTotal).toFixed(2));
+      const outVal = Number((outByMonth.get(key) || 0).toFixed(2));
+      const consumed = Number((consumedByMonth.get(key) || 0).toFixed(2));
       const savings = Number((inVal - outVal).toFixed(2));
 
-      return {
-        key: m.key,
-        label: m.label,
+      items.push({
+        key,
+        label: `${MONTH_NAMES[m].slice(0, 3)} ${currentYear}`,
         inVal,
         outVal,
-        savings
-      };
-    });
-  }, [salaries, extraIncomes, monthKey, diagnostic.realCashOutflow]);
+        consumed,
+        savings,
+        isProjected: key > realCurrentKey
+      });
+    }
+    return items;
+  }, [salaries, extraIncomes, transactions, monthKey, currentYear]);
 
   // Filtro de transacciones (Búsqueda + Categoría + Tarjeta/Medio + Tipo Fijo/Variable)
   const filteredTransactions = useMemo(() => {
@@ -1398,6 +1512,7 @@ function useFinanceController() {
     cardAdvisor,
     cardDebtSummary,
     categoryBreakdown,
+    annualCategoryBreakdown,
     fixedExpensesTotal,
     forecastData,
     aiAnomalies,

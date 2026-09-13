@@ -18,16 +18,6 @@ export interface DeleteConfirmItem {
   isFixed?: boolean;
 }
 
-interface DeleteConfirmModalProps {
-  item: DeleteConfirmItem;
-  onClose: () => void;
-  onConfirm: () => void;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-  formatDisplayDate: (d?: string) => string;
-  formatSoles: (v: number) => string;
-}
-
 export const DeleteConfirmModal: React.FC = () => {
   const {
     itemToDelete,

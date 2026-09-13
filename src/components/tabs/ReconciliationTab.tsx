@@ -5,24 +5,6 @@ import { CheckCheck, Sparkles, UploadCloud, Plus } from 'lucide-react';
 import { ReconciliationSummary, ReconciliationItem, PaymentMethod } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface ReconciliationTabProps {
-  handleLoadDemoStatement: () => void;
-  handleStatementFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  statementFileName: string;
-  isParsingStatement: boolean;
-  reconciliationSummary: ReconciliationSummary | null;
-  reconciliationFilter: 'all' | 'matched' | 'unmatched_app' | 'mismatch';
-  setReconciliationFilter: (f: 'all' | 'matched' | 'unmatched_app' | 'mismatch') => void;
-  setReconciliationSummary: (s: ReconciliationSummary | null) => void;
-  setStatementFileName: (n: string) => void;
-  currentMonthTransactionsCount: number;
-  creditCards?: PaymentMethod[];
-  handleImportStatementItem: (item: ReconciliationItem) => void;
-  handleImportAllUnmatched?: () => void;
-  formatDisplayDate: (d: string | undefined, fallback?: string) => string;
-  formatSoles: (val: number) => string;
-}
-
 export const ReconciliationTab: React.FC = () => {
   const {
     handleLoadDemoStatement,

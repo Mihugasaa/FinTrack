@@ -14,29 +14,6 @@ import {
 import { UserProfile } from '@/services/auth.service';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface HeaderProps {
-  isCurrentActiveMonth: boolean;
-  isPastMonth: boolean;
-  isFutureMonth: boolean;
-  currentMonth: number;
-  currentYear: number;
-  monthNames: string[];
-  monthPickerRef: React.RefObject<HTMLDivElement | null>;
-  isMonthDropdownOpen: boolean;
-  setIsMonthDropdownOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  handleGoToCurrentMonth: () => void;
-  handlePrevMonth: () => void;
-  handleNextMonth: () => void;
-  handleSelectMonth: (monthNum: number) => void;
-  currentDebitBalance: number;
-  handleOpenCreateTransaction: () => void;
-  theme: 'light' | 'dark';
-  toggleTheme: () => void;
-  currentUser: UserProfile | null;
-  handleLogout: () => void;
-  formatSoles: (amount: number) => string;
-}
-
 export const Header: React.FC = () => {
   const {
     isCurrentActiveMonth,

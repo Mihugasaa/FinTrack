@@ -12,44 +12,6 @@ import {
 import { SalaryIncome, OtherIncome } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface IncomesTabProps {
-  monthNames: string[];
-  currentMonth: number;
-  currentYear: number;
-  setIsIncomeModalOpen: (open: boolean) => void;
-  setIsSalaryModalOpen: (open: boolean) => void;
-  totalSalaryAmount: number;
-  currentOtherIncomes: OtherIncome[];
-  debitStats: {
-    salariesReceivedToday: number;
-    otherIncomesReceivedToday: number;
-    isSalaryCreditedToday: boolean;
-    salariesPending: number;
-    salaryPayDay: number;
-    projectedDebitBalanceMonthEnd: number;
-  };
-  salaries: SalaryIncome[];
-  setSalarySource: (s: string) => void;
-  setSalaryAmount: (a: string) => void;
-  setSalaryPayDay: (p: string) => void;
-  setItemToDelete: (item: {
-    id: string;
-    type: 'income';
-    description: string;
-    amount: number;
-    date: string;
-    categoryName: string;
-  }) => void;
-  fixedExpensesTotal: number;
-  formatDisplayDate: (d: string) => string;
-  formatSoles: (v: number) => string;
-  diagnostic?: {
-    totalExpensesConsumed: number;
-    liquidityMargin: number;
-    isPositive: boolean;
-  };
-}
-
 export const IncomesTab: React.FC = () => {
   const {
     monthNames,

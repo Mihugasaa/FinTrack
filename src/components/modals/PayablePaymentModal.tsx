@@ -6,22 +6,6 @@ import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 import { Payable, CreditorGroup } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface PayablePaymentModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  payingPayable: Payable | null;
-  payingCreditorGroup: CreditorGroup | null;
-  payablePaymentAmount: string;
-  setPayablePaymentAmount: (v: string) => void;
-  payablePaymentDate: string;
-  setPayablePaymentDate: (v: string) => void;
-  payablePaymentNotes: string;
-  setPayablePaymentNotes: (v: string) => void;
-  formatSoles: (v: number) => string;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const PayablePaymentModal: React.FC = () => {
   const {
     setIsPayablePaymentModalOpen,

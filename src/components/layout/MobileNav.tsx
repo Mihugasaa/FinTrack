@@ -18,22 +18,6 @@ import { ActiveTab } from '@/hooks/useTabNavigation';
 import { UserProfile } from '@/services/auth.service';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface MobileNavProps {
-  activeTab: ActiveTab;
-  onSelectTab: (tab: ActiveTab) => void;
-  isMoreMenuOpen: boolean;
-  setIsMoreMenuOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  pendingReceivablesCount: number;
-  pendingPayablesCount: number;
-  initialDebitForMonth?: number;
-  setTempDebitBalance?: (val: string) => void;
-  setIsAdjustDebitModalOpen?: (open: boolean) => void;
-  currentUser: UserProfile | null;
-  handleLogout: () => void;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const MobileNav: React.FC = () => {
   const {
     activeTab,

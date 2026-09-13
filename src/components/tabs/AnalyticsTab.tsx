@@ -15,36 +15,6 @@ import {
 } from 'lucide-react';
 import { AIAnomaly, CashflowForecastMonth, LiquidityDiagnostic } from '@/types';
 
-interface AnalyticsTabProps {
-  forecastHorizon: 3 | 6;
-  setForecastHorizon: (horizon: 3 | 6) => void;
-  monthlyHistoricalFlow: Array<{
-    key: string;
-    label: string;
-    inVal: number;
-    outVal: number;
-    savings: number;
-  }>;
-  monthNames: string[];
-  currentMonth: number;
-  currentYear: number;
-  categoryBreakdown: Array<{
-    category: { id: string; name: string; color: string };
-    total: number;
-    percentage: number;
-  }>;
-  forecastData: CashflowForecastMonth[];
-  dismissedAnomalyIds: string[];
-  handleResetDismissedAnomalies: () => void;
-  aiAnomalies: AIAnomaly[];
-  handleDismissAnomaly: (id: string) => void;
-  formatSoles: (val: number) => string;
-  liquidityDiagnostic?: LiquidityDiagnostic;
-  totalSalaryAmount?: number;
-  totalReceivablesRemaining?: number;
-  totalPayablesRemaining?: number;
-}
-
 interface CFODiagnosisData {
   healthScore: number;
   healthLevel: string;

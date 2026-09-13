@@ -8,24 +8,6 @@ import { useFinance } from '@/contexts/FinanceContext';
 
 type PaymentSourceType = 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT';
 
-interface PaymentModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  isEditing: boolean;
-  paymentMethods: PaymentMethod[];
-  paymentCardId: string;
-  setPaymentCardId: (v: string) => void;
-  paymentSourceType: PaymentSourceType;
-  setPaymentSourceType: (v: PaymentSourceType) => void;
-  paymentAmount: string;
-  setPaymentAmount: (v: string) => void;
-  paymentDate: string;
-  setPaymentDate: (v: string) => void;
-  formatSoles: (v: number) => string;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const PaymentModal: React.FC = () => {
   const {
     handleClosePaymentModal,

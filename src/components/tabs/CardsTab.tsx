@@ -12,48 +12,6 @@ import {
 import { PaymentMethod, CardPayment } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface CardsTabProps {
-  handleOpenCreateCardPayment: () => void;
-  setIsCardModalOpen: (open: boolean) => void;
-  setTempDebitBalance: (v: string) => void;
-  initialDebitForMonth: number;
-  setIsAdjustDebitModalOpen: (open: boolean) => void;
-  debitStats: {
-    currentDebitBalanceToday: number;
-    debitExpenses: number;
-  };
-  cardDebtSummary: Array<{
-    paymentMethodId: string;
-    cardName: string;
-    cardColor: string;
-    billingCloseDay: number;
-    paymentDueDay: number;
-    totalAccumulatedDebt: number;
-    hasPositiveBalance?: boolean;
-    creditBalanceAmount?: number;
-    initialDebt?: number;
-    consumedThisMonth: number;
-    paidThisMonth: number;
-    paidInSelectedMonth: number;
-    isPaidThisMonth?: boolean;
-    netDueInSelectedMonth: number;
-    dueInSelectedMonth: number;
-  }>;
-  paymentMethods: PaymentMethod[];
-  handleOpenEditCard: (pm: PaymentMethod) => void;
-  showAllHistoricalPayments: boolean;
-  setShowAllHistoricalPayments: (show: boolean | ((p: boolean) => boolean)) => void;
-  monthNames: string[];
-  currentMonth: number;
-  currentYear: number;
-  cardPayments: CardPayment[];
-  currentMonthCardPayments: CardPayment[];
-  handleOpenEditCardPayment: (pay: CardPayment, idx: number) => void;
-  handleDeleteCardPayment: (id?: string, idx?: number) => void;
-  formatDisplayDate: (d: string) => string;
-  formatSoles: (v: number) => string;
-}
-
 export const CardsTab: React.FC = () => {
   const {
     handleOpenCreateCardPayment,

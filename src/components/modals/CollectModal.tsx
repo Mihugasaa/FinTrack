@@ -11,18 +11,6 @@ export interface CollectingDebtorGroup {
   items: Receivable[];
 }
 
-interface CollectModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  collectingRec: Receivable | null;
-  collectingDebtorGroup: CollectingDebtorGroup | null;
-  collectAmountInput: string;
-  setCollectAmountInput: (v: string) => void;
-  formatSoles: (v: number) => string;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const CollectModal: React.FC = () => {
   const {
     setIsCollectModalOpen,

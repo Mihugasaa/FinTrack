@@ -4,22 +4,6 @@ import React from 'react';
 import { Building2, X, Sparkles } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface SalaryModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  salarySource: string;
-  setSalarySource: (v: string) => void;
-  salaryAmount: string;
-  setSalaryAmount: (v: string) => void;
-  salaryPayDay: string;
-  setSalaryPayDay: (v: string) => void;
-  monthNames: string[];
-  currentMonth: number;
-  currentYear: number;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const SalaryModal: React.FC = () => {
   const {
     setIsSalaryModalOpen,

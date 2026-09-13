@@ -5,25 +5,6 @@ import { CreditCard, X, Check } from 'lucide-react';
 import { CARD_COLOR_PRESETS } from '@/lib/constants';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface EditCardModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  editCardName: string;
-  setEditCardName: (v: string) => void;
-  editCardColor: string;
-  setEditCardColor: (v: string) => void;
-  editCardLimit: string;
-  setEditCardLimit: (v: string) => void;
-  editCardInitialDebt: string;
-  setEditCardInitialDebt: (v: string) => void;
-  editCardCloseDay: string;
-  setEditCardCloseDay: (v: string) => void;
-  editCardDueDay: string;
-  setEditCardDueDay: (v: string) => void;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const EditCardModal: React.FC = () => {
   const {
     setIsEditCardModalOpen,

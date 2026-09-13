@@ -4,20 +4,6 @@ import React from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface AdjustDebitModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  monthNames: string[];
-  currentMonth: number;
-  currentYear: number;
-  prevMonthClosingBalance?: { amount: number; monthName: string } | null;
-  tempDebitBalance: string;
-  setTempDebitBalance: (v: string) => void;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-  formatSoles: (v: number) => string;
-}
-
 export const AdjustDebitModal: React.FC = () => {
   const {
     setIsAdjustDebitModalOpen,

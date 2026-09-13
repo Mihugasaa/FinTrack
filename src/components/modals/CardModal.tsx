@@ -6,27 +6,6 @@ import { CustomSelect } from '@/components/CustomSelect';
 import { CARD_COLOR_PRESETS } from '@/lib/constants';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface CardModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  newCardName: string;
-  setNewCardName: (v: string) => void;
-  newCardType: 'credit' | 'debit';
-  setNewCardType: (v: 'credit' | 'debit') => void;
-  newCardColor: string;
-  setNewCardColor: (v: string) => void;
-  newCardLimit: string;
-  setNewCardLimit: (v: string) => void;
-  newCardCloseDay: string;
-  setNewCardCloseDay: (v: string) => void;
-  newCardDueDay: string;
-  setNewCardDueDay: (v: string) => void;
-  newCardInitialDebt: string;
-  setNewCardInitialDebt: (v: string) => void;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const CardModal: React.FC = () => {
   const {
     setIsCardModalOpen,

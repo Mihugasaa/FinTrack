@@ -8,29 +8,6 @@ import { CurrencyCode } from '@/types';
 import { ExchangeRateResult } from '@/services/exchangeRate.service';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface ReceivableModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  debtorName: string;
-  setDebtorName: (v: string) => void;
-  loanDesc: string;
-  setLoanDesc: (v: string) => void;
-  loanAmount: string;
-  setLoanAmount: (v: string) => void;
-  loanCurrency: CurrencyCode;
-  setLoanCurrency: (v: CurrencyCode) => void;
-  loanDate: string;
-  setLoanDate: (v: string) => void;
-  loanExchangeRate: string;
-  setLoanExchangeRate: (v: string) => void;
-  loanTcInfo: ExchangeRateResult | null;
-  isFetchingLoanTc: boolean;
-  setHasUserManuallyEditedLoanTc: (v: boolean) => void;
-  fetchLoanSunatRate: (dateForTc?: string, forceOverwrite?: boolean) => void;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const ReceivableModal: React.FC = () => {
   const {
     setIsReceivableModalOpen,

@@ -8,33 +8,6 @@ import { CurrencyCode } from '@/types';
 import { ExchangeRateResult } from '@/services/exchangeRate.service';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface PayableModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  payableCreditorName: string;
-  setPayableCreditorName: (v: string) => void;
-  payableDesc: string;
-  setPayableDesc: (v: string) => void;
-  payableAmount: string;
-  setPayableAmount: (v: string) => void;
-  payableCurrency: CurrencyCode;
-  setPayableCurrency: (v: CurrencyCode) => void;
-  payableIssueDate: string;
-  setPayableIssueDate: (v: string) => void;
-  payableExchangeRate: string;
-  setPayableExchangeRate: (v: string) => void;
-  payableTcInfo: ExchangeRateResult | null;
-  isFetchingPayableTc: boolean;
-  setHasUserManuallyEditedPayableTc: (v: boolean) => void;
-  payableDueDate: string;
-  setPayableDueDate: (v: string) => void;
-  payableIsCreditedToDebit: boolean;
-  setPayableIsCreditedToDebit: (v: boolean | ((prev: boolean) => boolean)) => void;
-  fetchPayableSunatRate: (dateForTc?: string, forceOverwrite?: boolean) => void;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const PayableModal: React.FC = () => {
   const {
     setIsPayableModalOpen,

@@ -16,62 +16,6 @@ interface AiSuggestion {
   isFixedSuggestion: boolean;
 }
 
-interface ExpenseModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  editingTransactionId: string | null;
-  isRefundMode: boolean;
-  setIsRefundMode: (v: boolean) => void;
-  isInstallment: boolean;
-  setIsInstallment: (v: boolean | ((prev: boolean) => boolean)) => void;
-  modalNaturalText: string;
-  setModalNaturalText: (v: string) => void;
-  isParsingNaturalExpense: boolean;
-  handleParseNaturalExpense: (text: string) => Promise<void>;
-  handleScanReceiptFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  isScanningReceipt: boolean;
-  scanReceiptError: string | null;
-  desc: string;
-  setDesc: (v: string) => void;
-  aiSuggestion: AiSuggestion | null;
-  setAiSuggestion: (v: AiSuggestion | null) => void;
-  selectedCategoryId: string;
-  setSelectedCategoryId: (v: string) => void;
-  isRecurring: boolean;
-  setIsRecurring: (v: boolean | ((prev: boolean) => boolean)) => void;
-  amount: string;
-  setAmount: (v: string) => void;
-  currency: CurrencyCode;
-  setCurrency: (v: CurrencyCode) => void;
-  exchangeRate: string;
-  setExchangeRate: (v: string) => void;
-  tcInfo: ExchangeRateResult | null;
-  isFetchingTc: boolean;
-  setHasUserManuallyEditedTc: (v: boolean) => void;
-  fetchSunatRate: (dateForTc?: string, forceOverwrite?: boolean) => void;
-  selectedMethodId: string;
-  setSelectedMethodId: (v: string) => void;
-  paymentMethods: PaymentMethod[];
-  categories: Category[];
-  txDate: string;
-  setTxDate: (v: string) => void;
-  installmentsCount: string;
-  setInstallmentsCount: (v: string) => void;
-  hasInterest: boolean;
-  setHasInterest: (v: boolean) => void;
-  monthlyInstallmentAmount: string;
-  setMonthlyInstallmentAmount: (v: string) => void;
-  overrideDueDate: string;
-  setOverrideDueDate: (v: string) => void;
-  modalCalculatedDueDate: string;
-  modalDueDateDetail: DueDateDetail;
-  isSubmittingExpense: boolean;
-  formatDisplayDate: (d?: string) => string;
-  formatSoles: (v: number) => string;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const ExpenseModal: React.FC = () => {
   const {
     setIsExpenseModalOpen,

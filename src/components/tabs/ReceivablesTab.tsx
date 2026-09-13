@@ -39,53 +39,6 @@ interface DebtorGroup {
   isFullyPaid: boolean;
 }
 
-interface ReceivablesTabProps {
-  totalReceivablesRemaining: number;
-  totalPayablesRemaining: number;
-  totalReceivablesRemainingUsd?: number;
-  totalPayablesRemainingUsd?: number;
-  receivables: Receivable[];
-  payables: Payable[];
-  loansSubTab: 'receivables' | 'payables';
-  setLoansSubTab: (subtab: 'receivables' | 'payables') => void;
-  setDebtorName: (n: string) => void;
-  setLoanDesc: (d: string) => void;
-  setLoanAmount: (a: string) => void;
-  setIsReceivableModalOpen: (open: boolean) => void;
-  receivablesFilter: 'pending' | 'all' | 'paid';
-  setReceivablesFilter: (f: 'pending' | 'all' | 'paid') => void;
-  debtorGroups: DebtorGroup[];
-  filteredDebtorGroups: DebtorGroup[];
-  expandedDebtors: Set<string>;
-  toggleDebtorExpanded: (key: string) => void;
-  handleOpenGroupCollectModal: (group: DebtorGroup) => void;
-  handleCascadeCollect: (debtorName: string, totalRemaining: number) => void;
-  handleOpenAddLoanForDebtor: (debtorName: string) => void;
-  handleOpenCollectModal: (item: Receivable) => void;
-  setItemToDelete: (item: {
-    id: string;
-    type: 'receivable';
-    description: string;
-    amount: number;
-    date?: string;
-    categoryName: string;
-  }) => void;
-  handleOpenCreatePayable: () => void;
-  payablesFilter: 'pending' | 'all' | 'paid';
-  setPayablesFilter: (f: 'pending' | 'all' | 'paid') => void;
-  creditorGroups: CreditorGroup[];
-  filteredCreditorGroups: CreditorGroup[];
-  expandedCreditors: Set<string>;
-  toggleCreditorExpanded: (key: string) => void;
-  handleOpenGroupPayModal: (group: CreditorGroup) => void;
-  handleCascadePay: (creditorName: string, totalRemaining: number) => void;
-  handleOpenAddLoanForCreditor: (creditorName: string) => void;
-  handleOpenPayPayable: (item: Payable) => void;
-  handleDeletePayable: (id: string) => void;
-  formatDisplayDate: (d?: string, fallback?: string) => string;
-  formatSoles: (v: number) => string;
-}
-
 export const ReceivablesTab: React.FC = () => {
   const {
     totalReceivablesRemaining,

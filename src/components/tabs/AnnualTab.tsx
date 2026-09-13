@@ -21,12 +21,6 @@ export interface AnnualCategoryItem {
   total: number;
 }
 
-interface AnnualTabProps {
-  monthlyHistoricalFlow?: AnnualHistoricalFlowItem[];
-  categoryBreakdown?: AnnualCategoryItem[];
-  formatSoles?: (val: number) => string;
-}
-
 interface MonthDetailRecord {
   id: string;
   name: string;

@@ -21,45 +21,6 @@ import {
 import { CustomSelect } from '@/components/CustomSelect';
 import { Transaction, PaymentMethod, Category, CardPayment, SalaryIncome, OtherIncome, Payable } from '@/types';
 
-interface TransactionsTabProps {
-  combinedMovements: any[];
-  monthMovementsTotal: number;
-  searchQuery: string;
-  setSearchQuery: (q: string) => void;
-  txTypeFilter: 'ALL' | 'FIXED' | 'VARIABLE' | 'CARD_PAYMENTS' | 'INCOMES' | 'PAYABLES';
-  setTxTypeFilter: (f: 'ALL' | 'FIXED' | 'VARIABLE' | 'CARD_PAYMENTS' | 'INCOMES' | 'PAYABLES') => void;
-  currentMonthTransactions: Transaction[];
-  currentMonthCardPayments: CardPayment[];
-  salaries: SalaryIncome[];
-  currentOtherIncomes: OtherIncome[];
-  payables: Payable[];
-  monthKey: string;
-  selectedPaymentMethod: string;
-  setSelectedPaymentMethod: (m: string) => void;
-  paymentMethods: PaymentMethod[];
-  selectedCategory: string;
-  setSelectedCategory: (c: string) => void;
-  categories: Category[];
-  handleOpenCreateCardPayment: () => void;
-  monthNames: string[];
-  currentMonth: number;
-  currentYear: number;
-  isCurrentMonthViewed: boolean;
-  todayDividerIndex: number;
-  renderTodayDividerRow: (suffix: string | number) => React.ReactNode;
-  renderTodayDividerMobile: (suffix: string | number) => React.ReactNode;
-  handleOpenEditCardPayment: (pay: CardPayment, idx: number) => void;
-  handleDeleteCardPayment: (id?: string, idx?: number) => void;
-  resolvePaymentMethod: (tx: any, pms: PaymentMethod[]) => PaymentMethod | undefined;
-  handleOpenEditTransaction: (t: Transaction) => void;
-  promptDeleteTransaction: (t: Transaction) => void;
-  formatDisplayDate: (d?: string) => string;
-  formatSoles: (v: number) => string;
-  currentDateStr: string;
-  handleParseNaturalExpense?: (text: string) => Promise<void>;
-  isParsingNaturalExpense?: boolean;
-}
-
 export const TransactionsTab: React.FC = () => {
   const {
     combinedMovements,

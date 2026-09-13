@@ -14,17 +14,6 @@ import {
 import { ActiveTab } from '@/hooks/useTabNavigation';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface NavigationTabsProps {
-  activeTab: ActiveTab;
-  onSelectTab: (tab: ActiveTab) => void;
-  salariesCount: number;
-  otherIncomesCount: number;
-  movementsCount: number;
-  cardsCount: number;
-  pendingReceivablesCount: number;
-  pendingPayablesCount: number;
-}
-
 export const NavigationTabs: React.FC = () => {
   const {
     activeTab,

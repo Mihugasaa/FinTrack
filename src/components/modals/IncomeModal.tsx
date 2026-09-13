@@ -4,19 +4,6 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
-interface IncomeModalProps {
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  incomeDesc: string;
-  setIncomeDesc: (v: string) => void;
-  incomeDate: string;
-  setIncomeDate: (v: string) => void;
-  incomeAmount: string;
-  setIncomeAmount: (v: string) => void;
-  handleBackdropMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
-}
-
 export const IncomeModal: React.FC = () => {
   const {
     setIsIncomeModalOpen,

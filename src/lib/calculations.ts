@@ -1,4 +1,4 @@
-import { PaymentMethod, Transaction, MonthlyBudget, Receivable, LiquidityDiagnostic, CardDebtSummary, OtherIncome, Payable, CardPayment } from '@/types';
+import { PaymentMethod, Transaction, MonthlyBudget, Receivable, LiquidityDiagnostic, CardDebtSummary, OtherIncome, Payable } from '@/types';
 import { FALLBACK_USD_PEN_RATE } from './constants';
 
 /**
@@ -483,8 +483,6 @@ export function calculateCardsDebtSummary(
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
     const targetYM = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
-    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
-    const isFutureMonth = new Date(currentYear, currentMonth - 1, 1) > now;
 
     // Match by direct id, or by same-name alias against the real methods list
     // (handles a legacy id that points to a card now stored under a new id).

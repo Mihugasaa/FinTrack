@@ -124,16 +124,10 @@ export const ReceivablesTab: React.FC = () => {
   // Cálculos consolidados para los 4 KPIs superiores
   const pendingReceivablesCount = receivables.filter(r => r.remainingAmount > 0).length;
   const activePayablesCount = payables.filter(p => (p.remainingAmount ?? (p.totalAmount ?? p.originalAmount)) > 0).length;
-  const netPosition = totalReceivablesRemaining - totalPayablesRemaining;
 
   const totalReceivablesOrig = receivables.reduce((a, b) => a + b.originalAmount, 0);
-  const totalReceivablesPaid = receivables.reduce((a, b) => a + b.paidAmount, 0);
-  const recoveryRatio = totalReceivablesOrig > 0
-    ? Math.round((totalReceivablesPaid / totalReceivablesOrig) * 100)
-    : 100;
 
   const totalPayablesOrig = payables.reduce((a, b) => a + (b.totalAmount ?? b.originalAmount), 0);
-  const totalPayablesPaid = payables.reduce((a, b) => a + (b.paidAmount ?? 0), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>

@@ -864,7 +864,7 @@ export class SupabaseDataService {
       const userId = await this.getAuthUserId();
       if (!userId) return null;
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('monthly_periods')
         .select('initial_debit_balance, base_salary')
         .eq('user_id', userId)

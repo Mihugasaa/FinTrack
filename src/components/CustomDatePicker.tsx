@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CustomDatePickerProps {
   value: string; // Formato YYYY-MM-DD
@@ -127,7 +127,6 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   const formatDisplay = (val: string) => {
     if (!val || !/^\d{4}-\d{2}-\d{2}$/.test(val)) return '';
     const [y, m, d] = val.split('-');
-    const mIdx = parseInt(m, 10) - 1;
     return `${d}/${m}/${y}`;
   };
 

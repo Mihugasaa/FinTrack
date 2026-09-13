@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { X } from 'lucide-react';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface IncomeModalProps {
   onClose: () => void;
@@ -16,18 +17,21 @@ interface IncomeModalProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const IncomeModal: React.FC<IncomeModalProps> = ({
-  onClose,
-  onSubmit,
-  incomeDesc,
-  setIncomeDesc,
-  incomeDate,
-  setIncomeDate,
-  incomeAmount,
-  setIncomeAmount,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const IncomeModal: React.FC = () => {
+  const {
+    setIsIncomeModalOpen,
+    handleAddExtraIncome,
+    incomeDesc,
+    setIncomeDesc,
+    incomeDate,
+    setIncomeDate,
+    incomeAmount,
+    setIncomeAmount,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const onClose = () => setIsIncomeModalOpen(false);
+  const onSubmit = handleAddExtraIncome;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

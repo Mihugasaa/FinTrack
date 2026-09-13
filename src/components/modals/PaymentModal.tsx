@@ -4,6 +4,7 @@ import React from 'react';
 import { X, CreditCard, Banknote, TrendingUp, DollarSign } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { PaymentMethod } from '@/types';
+import { useFinance } from '@/contexts/FinanceContext';
 
 type PaymentSourceType = 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT';
 
@@ -25,23 +26,27 @@ interface PaymentModalProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const PaymentModal: React.FC<PaymentModalProps> = ({
-  onClose,
-  onSubmit,
-  isEditing,
-  paymentMethods,
-  paymentCardId,
-  setPaymentCardId,
-  paymentSourceType,
-  setPaymentSourceType,
-  paymentAmount,
-  setPaymentAmount,
-  paymentDate,
-  setPaymentDate,
-  formatSoles,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const PaymentModal: React.FC = () => {
+  const {
+    handleClosePaymentModal,
+    handleMakeCardPayment,
+    editingCardPaymentIndex,
+    paymentMethods,
+    paymentCardId,
+    setPaymentCardId,
+    paymentSourceType,
+    setPaymentSourceType,
+    paymentAmount,
+    setPaymentAmount,
+    paymentDate,
+    setPaymentDate,
+    formatSoles,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const onClose = handleClosePaymentModal;
+  const onSubmit = handleMakeCardPayment;
+  const isEditing = editingCardPaymentIndex !== null;
   return (
     <div
       className="modal-backdrop"

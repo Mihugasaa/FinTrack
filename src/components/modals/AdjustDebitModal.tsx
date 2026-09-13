@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { X, Sparkles } from 'lucide-react';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface AdjustDebitModalProps {
   onClose: () => void;
@@ -17,19 +18,22 @@ interface AdjustDebitModalProps {
   formatSoles: (v: number) => string;
 }
 
-export const AdjustDebitModal: React.FC<AdjustDebitModalProps> = ({
-  onClose,
-  onSubmit,
-  monthNames,
-  currentMonth,
-  currentYear,
-  prevMonthClosingBalance,
-  tempDebitBalance,
-  setTempDebitBalance,
-  handleBackdropMouseDown,
-  handleBackdropClick,
-  formatSoles
-}) => {
+export const AdjustDebitModal: React.FC = () => {
+  const {
+    setIsAdjustDebitModalOpen,
+    handleAdjustDebit,
+    monthNames,
+    currentMonth,
+    currentYear,
+    prevMonthClosingBalance,
+    tempDebitBalance,
+    setTempDebitBalance,
+    handleBackdropMouseDown,
+    handleBackdropClick,
+    formatSoles
+  } = useFinance();
+  const onClose = () => setIsAdjustDebitModalOpen(false);
+  const onSubmit = handleAdjustDebit;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

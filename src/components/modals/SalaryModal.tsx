@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Building2, X, Sparkles } from 'lucide-react';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface SalaryModalProps {
   onClose: () => void;
@@ -19,21 +20,24 @@ interface SalaryModalProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const SalaryModal: React.FC<SalaryModalProps> = ({
-  onClose,
-  onSubmit,
-  salarySource,
-  setSalarySource,
-  salaryAmount,
-  setSalaryAmount,
-  salaryPayDay,
-  setSalaryPayDay,
-  monthNames,
-  currentMonth,
-  currentYear,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const SalaryModal: React.FC = () => {
+  const {
+    setIsSalaryModalOpen,
+    handleSaveSalary,
+    salarySource,
+    setSalarySource,
+    salaryAmount,
+    setSalaryAmount,
+    salaryPayDay,
+    setSalaryPayDay,
+    monthNames,
+    currentMonth,
+    currentYear,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const onClose = () => setIsSalaryModalOpen(false);
+  const onSubmit = handleSaveSalary;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

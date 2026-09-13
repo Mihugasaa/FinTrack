@@ -25,366 +25,40 @@ import { AnalyticsTab } from '@/components/tabs/AnalyticsTab';
 import { ReconciliationTab } from '@/components/tabs/ReconciliationTab';
 import { AnnualTab } from '@/components/tabs/AnnualTab';
 
+/**
+ * Maquetación del dashboard. Solo decide qué pestaña y qué modales están
+ * visibles; todos los datos y handlers los obtiene cada hijo directamente del
+ * FinanceContext vía useFinance(), por lo que aquí únicamente se leen los flags
+ * de apertura y las condiciones de los guards.
+ */
 export function DashboardContent() {
   const {
-    // Usuario / sesión
-    currentUser,
-    handleLogout,
-    // Tema
-    theme,
-    toggleTheme,
-    // Navegación de pestañas
     activeTab,
-    setActiveTab,
-    loansSubTab,
-    setLoansSubTab,
-    // Navegación de mes
-    currentYear,
-    currentMonth,
-    isMonthDropdownOpen,
-    setIsMonthDropdownOpen,
-    monthPickerRef,
-    handlePrevMonth,
-    handleNextMonth,
-    handleGoToCurrentMonth,
-    handleSelectMonth,
-    monthNames,
-    // Contexto temporal derivado
-    now,
-    monthKey,
-    isCurrentActiveMonth,
-    isPastMonth,
-    isFutureMonth,
-    isCurrentMonthViewed,
-    currentDateStr,
-    // Saldo débito inicial
-    setInitialDebitBalances,
-    initialDebitForMonth,
-    tempDebitBalance,
-    setTempDebitBalance,
-    handleAdjustDebit,
-    // Medios de pago y categorías
-    paymentMethods,
-    categories,
-    // Filtros de movimientos
-    searchQuery,
-    setSearchQuery,
-    selectedCategory,
-    setSelectedCategory,
-    selectedPaymentMethod,
-    setSelectedPaymentMethod,
-    txTypeFilter,
-    setTxTypeFilter,
-    // Anomalías IA
-    dismissedAnomalyIds,
-    handleDismissAnomaly,
-    handleResetDismissedAnomalies,
-    // Modales varios
-    isCardModalOpen,
-    setIsCardModalOpen,
-    isAdjustDebitModalOpen,
-    setIsAdjustDebitModalOpen,
-    itemToDelete,
-    setItemToDelete,
-    handleConfirmDelete,
-    // Backdrop de modales
-    handleBackdropMouseDown,
-    handleBackdropClick,
-    // Editar tarjeta
-    isEditCardModalOpen,
-    setIsEditCardModalOpen,
-    editCardName,
-    setEditCardName,
-    editCardLimit,
-    setEditCardLimit,
-    editCardCloseDay,
-    setEditCardCloseDay,
-    editCardDueDay,
-    setEditCardDueDay,
-    editCardColor,
-    setEditCardColor,
-    editCardInitialDebt,
-    setEditCardInitialDebt,
-    handleOpenEditCard,
-    handleSaveEditCard,
-    // Crear tarjeta
-    newCardName,
-    setNewCardName,
-    newCardType,
-    setNewCardType,
-    newCardCloseDay,
-    setNewCardCloseDay,
-    newCardDueDay,
-    setNewCardDueDay,
-    newCardLimit,
-    setNewCardLimit,
-    newCardColor,
-    setNewCardColor,
-    newCardInitialDebt,
-    setNewCardInitialDebt,
-    handleCreateCard,
-    // Analítica / proyecciones
-    forecastHorizon,
-    setForecastHorizon,
-    isMoreMenuOpen,
-    setIsMoreMenuOpen,
-    // Transacciones
-    editingTransactionId,
     isExpenseModalOpen,
-    setIsExpenseModalOpen,
-    desc,
-    setDesc,
-    amount,
-    setAmount,
-    currency,
-    setCurrency,
-    exchangeRate,
-    setExchangeRate,
-    isFetchingTc,
-    tcInfo,
-    setHasUserManuallyEditedTc,
-    isSubmittingExpense,
-    isScanningReceipt,
-    scanReceiptError,
-    isParsingNaturalExpense,
-    modalNaturalText,
-    setModalNaturalText,
-    selectedCategoryId,
-    setSelectedCategoryId,
-    selectedMethodId,
-    setSelectedMethodId,
-    isRecurring,
-    setIsRecurring,
-    overrideDueDate,
-    setOverrideDueDate,
-    txDate,
-    setTxDate,
-    isRefundMode,
-    setIsRefundMode,
-    isInstallment,
-    setIsInstallment,
-    installmentsCount,
-    setInstallmentsCount,
-    hasInterest,
-    setHasInterest,
-    monthlyInstallmentAmount,
-    setMonthlyInstallmentAmount,
-    aiSuggestion,
-    setAiSuggestion,
-    currentMonthTransactions,
-    modalDueDateDetail,
-    modalCalculatedDueDate,
-    fetchSunatRate,
-    handleOpenCreateTransaction,
-    handleOpenEditTransaction,
-    handleScanReceiptFile,
-    handleParseNaturalExpense,
-    handleCreateTransaction,
-    promptDeleteTransaction,
-    // Ingresos
-    salaries,
-    currentOtherIncomes,
-    totalSalaryAmount,
-    isIncomeModalOpen,
-    setIsIncomeModalOpen,
-    isSalaryModalOpen,
-    setIsSalaryModalOpen,
-    incomeDesc,
-    setIncomeDesc,
-    incomeAmount,
-    setIncomeAmount,
-    incomeDate,
-    setIncomeDate,
-    salarySource,
-    setSalarySource,
-    salaryAmount,
-    setSalaryAmount,
-    salaryPayDay,
-    setSalaryPayDay,
-    handleAddExtraIncome,
-    handleSaveSalary,
-    // Abonos a tarjetas
-    cardPayments,
-    currentMonthCardPayments,
-    isPaymentModalOpen,
-    paymentSourceType,
-    setPaymentSourceType,
-    paymentCardId,
-    setPaymentCardId,
-    paymentAmount,
-    setPaymentAmount,
-    paymentDate,
-    setPaymentDate,
-    editingCardPaymentIndex,
-    showAllHistoricalPayments,
-    setShowAllHistoricalPayments,
-    handleOpenCreateCardPayment,
-    handleOpenEditCardPayment,
-    handleMakeCardPayment,
-    handleClosePaymentModal,
-    handleDeleteCardPayment,
-    // Cuentas por cobrar
-    receivables,
-    isReceivableModalOpen,
-    setIsReceivableModalOpen,
+    isAdjustDebitModalOpen,
+    isEditCardModalOpen,
     isCollectModalOpen,
-    setIsCollectModalOpen,
     collectingRec,
     collectingDebtorGroup,
-    collectAmountInput,
-    setCollectAmountInput,
-    expandedDebtors,
-    receivablesFilter,
-    setReceivablesFilter,
-    debtorName,
-    setDebtorName,
-    loanDesc,
-    setLoanDesc,
-    loanAmount,
-    setLoanAmount,
-    loanCurrency,
-    setLoanCurrency,
-    loanExchangeRate,
-    setLoanExchangeRate,
-    loanDate,
-    setLoanDate,
-    isFetchingLoanTc,
-    loanTcInfo,
-    setHasUserManuallyEditedLoanTc,
-    fetchLoanSunatRate,
-    debtorGroups,
-    filteredDebtorGroups,
-    totalReceivablesRemaining,
-    totalReceivablesRemainingUsd,
-    handleOpenCollectModal,
-    handleOpenGroupCollectModal,
-    handleCascadeCollect,
-    handleSaveCollect,
-    handleOpenAddLoanForDebtor,
-    toggleDebtorExpanded,
-    handleCreateReceivable,
-    // Mis deudas
-    payables,
+    isIncomeModalOpen,
+    isCardModalOpen,
+    isPaymentModalOpen,
+    isReceivableModalOpen,
     isPayableModalOpen,
-    setIsPayableModalOpen,
     isPayablePaymentModalOpen,
-    setIsPayablePaymentModalOpen,
     payingPayable,
-    payableCreditorName,
-    setPayableCreditorName,
-    payableDesc,
-    setPayableDesc,
-    payableAmount,
-    setPayableAmount,
-    payableDueDate,
-    setPayableDueDate,
-    payableIsCreditedToDebit,
-    setPayableIsCreditedToDebit,
-    payablePaymentAmount,
-    setPayablePaymentAmount,
-    payablePaymentDate,
-    setPayablePaymentDate,
-    payablePaymentNotes,
-    setPayablePaymentNotes,
-    payableCurrency,
-    setPayableCurrency,
-    payableExchangeRate,
-    setPayableExchangeRate,
-    payableIssueDate,
-    setPayableIssueDate,
-    isFetchingPayableTc,
-    payableTcInfo,
-    setHasUserManuallyEditedPayableTc,
-    fetchPayableSunatRate,
-    expandedCreditors,
-    payablesFilter,
-    setPayablesFilter,
     payingCreditorGroup,
-    creditorGroups,
-    filteredCreditorGroups,
-    totalPayablesRemaining,
-    totalPayablesRemainingUsd,
-    handleOpenCreatePayable,
-    handleCreatePayable,
-    handleOpenAddLoanForCreditor,
-    toggleCreditorExpanded,
-    handleOpenGroupPayModal,
-    handleCascadePay,
-    handleOpenPayPayable,
-    handlePayPayable,
-    handleDeletePayable,
-    // Conciliación bancaria
-    isParsingStatement,
-    reconciliationSummary,
-    setReconciliationSummary,
-    reconciliationFilter,
-    setReconciliationFilter,
-    statementFileName,
-    setStatementFileName,
-    handleStatementFileUpload,
-    handleLoadDemoStatement,
-    handleImportStatementItem,
-    handleImportAllUnmatched,
-    // Cálculos derivados
-    debitStats,
-    prevMonthClosingBalance,
-    monthlyComparison,
-    diagnostic,
-    cardAdvisor,
-    cardDebtSummary,
-    categoryBreakdown,
-    fixedExpensesTotal,
-    forecastData,
-    aiAnomalies,
-    monthlyHistoricalFlow,
-    combinedMovements,
-    monthMovementsTotal,
-    todayDividerIndex,
-    // Helpers de formato / resolución
-    resolvePaymentMethod,
-    formatDisplayDate,
-    formatSoles,
-    renderTodayDividerRow,
-    renderTodayDividerMobile
+    isSalaryModalOpen,
+    itemToDelete
   } = useFinance();
 
   return (
     <div className="dashboard-container">
       {/* 1. HEADER MODULAR CON CONTEXTO TEMPORAL GLOBAL */}
-      <Header
-        isCurrentActiveMonth={isCurrentActiveMonth}
-        isPastMonth={isPastMonth}
-        isFutureMonth={isFutureMonth}
-        currentMonth={currentMonth}
-        currentYear={currentYear}
-        monthNames={monthNames}
-        monthPickerRef={monthPickerRef}
-        isMonthDropdownOpen={isMonthDropdownOpen}
-        setIsMonthDropdownOpen={setIsMonthDropdownOpen}
-        handleGoToCurrentMonth={handleGoToCurrentMonth}
-        handlePrevMonth={handlePrevMonth}
-        handleNextMonth={handleNextMonth}
-        handleSelectMonth={handleSelectMonth}
-        currentDebitBalance={isCurrentActiveMonth ? debitStats.currentDebitBalanceToday : debitStats.projectedDebitBalanceMonthEnd}
-        handleOpenCreateTransaction={handleOpenCreateTransaction}
-        theme={theme}
-        toggleTheme={toggleTheme}
-        currentUser={currentUser}
-        handleLogout={handleLogout}
-        formatSoles={formatSoles}
-      />
+      <Header />
 
       {/* 2. NAVEGACIÓN DESKTOP CON TABS Y URL DEEP LINKING */}
-      <NavigationTabs
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        salariesCount={salaries.length}
-        otherIncomesCount={currentOtherIncomes.length}
-        movementsCount={monthMovementsTotal}
-        cardsCount={paymentMethods.length}
-        pendingReceivablesCount={receivables.filter(r => r.remainingAmount > 0).length}
-        pendingPayablesCount={payables.filter(p => p.remainingAmount > 0).length}
-      />
+      <NavigationTabs />
 
       {/* =========================================================================
           CONTENIDO DINÁMICO SEGÚN PESTAÑA MODULAR
@@ -419,302 +93,43 @@ export function DashboardContent() {
           ========================================================================= */}
 
       {/* MODAL 1: REGISTRAR GASTO */}
-      {isExpenseModalOpen && (
-        <ExpenseModal
-          onClose={() => setIsExpenseModalOpen(false)}
-          onSubmit={handleCreateTransaction}
-          editingTransactionId={editingTransactionId}
-          isRefundMode={isRefundMode}
-          setIsRefundMode={setIsRefundMode}
-          isInstallment={isInstallment}
-          setIsInstallment={setIsInstallment}
-          modalNaturalText={modalNaturalText}
-          setModalNaturalText={setModalNaturalText}
-          isParsingNaturalExpense={isParsingNaturalExpense}
-          handleParseNaturalExpense={handleParseNaturalExpense}
-          handleScanReceiptFile={handleScanReceiptFile}
-          isScanningReceipt={isScanningReceipt}
-          scanReceiptError={scanReceiptError}
-          desc={desc}
-          setDesc={setDesc}
-          aiSuggestion={aiSuggestion}
-          setAiSuggestion={setAiSuggestion}
-          selectedCategoryId={selectedCategoryId}
-          setSelectedCategoryId={setSelectedCategoryId}
-          isRecurring={isRecurring}
-          setIsRecurring={setIsRecurring}
-          amount={amount}
-          setAmount={setAmount}
-          currency={currency}
-          setCurrency={setCurrency}
-          exchangeRate={exchangeRate}
-          setExchangeRate={setExchangeRate}
-          tcInfo={tcInfo}
-          isFetchingTc={isFetchingTc}
-          setHasUserManuallyEditedTc={setHasUserManuallyEditedTc}
-          fetchSunatRate={fetchSunatRate}
-          selectedMethodId={selectedMethodId}
-          setSelectedMethodId={setSelectedMethodId}
-          paymentMethods={paymentMethods}
-          categories={categories}
-          txDate={txDate}
-          setTxDate={setTxDate}
-          installmentsCount={installmentsCount}
-          setInstallmentsCount={setInstallmentsCount}
-          hasInterest={hasInterest}
-          setHasInterest={setHasInterest}
-          monthlyInstallmentAmount={monthlyInstallmentAmount}
-          setMonthlyInstallmentAmount={setMonthlyInstallmentAmount}
-          overrideDueDate={overrideDueDate}
-          setOverrideDueDate={setOverrideDueDate}
-          modalCalculatedDueDate={modalCalculatedDueDate}
-          modalDueDateDetail={modalDueDateDetail}
-          isSubmittingExpense={isSubmittingExpense}
-          formatDisplayDate={formatDisplayDate}
-          formatSoles={formatSoles}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isExpenseModalOpen && <ExpenseModal />}
 
       {/* MODAL 2: AJUSTAR SALDO DÉBITO INICIAL */}
-      {isAdjustDebitModalOpen && (
-        <AdjustDebitModal
-          onClose={() => setIsAdjustDebitModalOpen(false)}
-          onSubmit={handleAdjustDebit}
-          monthNames={monthNames}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-          prevMonthClosingBalance={prevMonthClosingBalance}
-          tempDebitBalance={tempDebitBalance}
-          setTempDebitBalance={setTempDebitBalance}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-          formatSoles={formatSoles}
-        />
-      )}
+      {isAdjustDebitModalOpen && <AdjustDebitModal />}
 
       {/* MODAL: EDITAR TARJETA / MEDIO DE PAGO */}
-      {isEditCardModalOpen && (
-        <EditCardModal
-          onClose={() => setIsEditCardModalOpen(false)}
-          onSubmit={handleSaveEditCard}
-          editCardName={editCardName}
-          setEditCardName={setEditCardName}
-          editCardColor={editCardColor}
-          setEditCardColor={setEditCardColor}
-          editCardLimit={editCardLimit}
-          setEditCardLimit={setEditCardLimit}
-          editCardInitialDebt={editCardInitialDebt}
-          setEditCardInitialDebt={setEditCardInitialDebt}
-          editCardCloseDay={editCardCloseDay}
-          setEditCardCloseDay={setEditCardCloseDay}
-          editCardDueDay={editCardDueDay}
-          setEditCardDueDay={setEditCardDueDay}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isEditCardModalOpen && <EditCardModal />}
 
       {/* MODAL: REGISTRAR ABONO O COBRO PARCIAL A PRÉSTAMO */}
-      {isCollectModalOpen && (collectingRec || collectingDebtorGroup) && (
-        <CollectModal
-          onClose={() => setIsCollectModalOpen(false)}
-          onSubmit={handleSaveCollect}
-          collectingRec={collectingRec}
-          collectingDebtorGroup={collectingDebtorGroup}
-          collectAmountInput={collectAmountInput}
-          setCollectAmountInput={setCollectAmountInput}
-          formatSoles={formatSoles}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isCollectModalOpen && (collectingRec || collectingDebtorGroup) && <CollectModal />}
 
       {/* MODAL 3: REGISTRAR INGRESO EXTRA A DÉBITO */}
-      {isIncomeModalOpen && (
-        <IncomeModal
-          onClose={() => setIsIncomeModalOpen(false)}
-          onSubmit={handleAddExtraIncome}
-          incomeDesc={incomeDesc}
-          setIncomeDesc={setIncomeDesc}
-          incomeDate={incomeDate}
-          setIncomeDate={setIncomeDate}
-          incomeAmount={incomeAmount}
-          setIncomeAmount={setIncomeAmount}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isIncomeModalOpen && <IncomeModal />}
 
       {/* MODAL 4: NUEVA TARJETA PERSONALIZADA */}
-      {isCardModalOpen && (
-        <CardModal
-          onClose={() => setIsCardModalOpen(false)}
-          onSubmit={handleCreateCard}
-          newCardName={newCardName}
-          setNewCardName={setNewCardName}
-          newCardType={newCardType}
-          setNewCardType={setNewCardType}
-          newCardColor={newCardColor}
-          setNewCardColor={setNewCardColor}
-          newCardLimit={newCardLimit}
-          setNewCardLimit={setNewCardLimit}
-          newCardCloseDay={newCardCloseDay}
-          setNewCardCloseDay={setNewCardCloseDay}
-          newCardDueDay={newCardDueDay}
-          setNewCardDueDay={setNewCardDueDay}
-          newCardInitialDebt={newCardInitialDebt}
-          setNewCardInitialDebt={setNewCardInitialDebt}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isCardModalOpen && <CardModal />}
 
       {/* MODAL 5: REGISTRAR O MODIFICAR ABONO / PAGO A TARJETA */}
-      {isPaymentModalOpen && (
-        <PaymentModal
-          onClose={handleClosePaymentModal}
-          onSubmit={handleMakeCardPayment}
-          isEditing={editingCardPaymentIndex !== null}
-          paymentMethods={paymentMethods}
-          paymentCardId={paymentCardId}
-          setPaymentCardId={setPaymentCardId}
-          paymentSourceType={paymentSourceType}
-          setPaymentSourceType={setPaymentSourceType}
-          paymentAmount={paymentAmount}
-          setPaymentAmount={setPaymentAmount}
-          paymentDate={paymentDate}
-          setPaymentDate={setPaymentDate}
-          formatSoles={formatSoles}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isPaymentModalOpen && <PaymentModal />}
 
       {/* MODAL 6: NUEVA CUENTA POR COBRAR */}
-      {isReceivableModalOpen && (
-        <ReceivableModal
-          onClose={() => setIsReceivableModalOpen(false)}
-          onSubmit={handleCreateReceivable}
-          debtorName={debtorName}
-          setDebtorName={setDebtorName}
-          loanDesc={loanDesc}
-          setLoanDesc={setLoanDesc}
-          loanAmount={loanAmount}
-          setLoanAmount={setLoanAmount}
-          loanCurrency={loanCurrency}
-          setLoanCurrency={setLoanCurrency}
-          loanDate={loanDate}
-          setLoanDate={setLoanDate}
-          loanExchangeRate={loanExchangeRate}
-          setLoanExchangeRate={setLoanExchangeRate}
-          loanTcInfo={loanTcInfo}
-          isFetchingLoanTc={isFetchingLoanTc}
-          setHasUserManuallyEditedLoanTc={setHasUserManuallyEditedLoanTc}
-          fetchLoanSunatRate={fetchLoanSunatRate}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isReceivableModalOpen && <ReceivableModal />}
 
       {/* MODAL 6B: REGISTRAR DEUDA MÍA (DINERO PRESTADO) */}
-      {isPayableModalOpen && (
-        <PayableModal
-          onClose={() => setIsPayableModalOpen(false)}
-          onSubmit={handleCreatePayable}
-          payableCreditorName={payableCreditorName}
-          setPayableCreditorName={setPayableCreditorName}
-          payableDesc={payableDesc}
-          setPayableDesc={setPayableDesc}
-          payableAmount={payableAmount}
-          setPayableAmount={setPayableAmount}
-          payableCurrency={payableCurrency}
-          setPayableCurrency={setPayableCurrency}
-          payableIssueDate={payableIssueDate}
-          setPayableIssueDate={setPayableIssueDate}
-          payableExchangeRate={payableExchangeRate}
-          setPayableExchangeRate={setPayableExchangeRate}
-          payableTcInfo={payableTcInfo}
-          isFetchingPayableTc={isFetchingPayableTc}
-          setHasUserManuallyEditedPayableTc={setHasUserManuallyEditedPayableTc}
-          payableDueDate={payableDueDate}
-          setPayableDueDate={setPayableDueDate}
-          payableIsCreditedToDebit={payableIsCreditedToDebit}
-          setPayableIsCreditedToDebit={setPayableIsCreditedToDebit}
-          fetchPayableSunatRate={fetchPayableSunatRate}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isPayableModalOpen && <PayableModal />}
 
       {/* MODAL 6C: REGISTRAR PAGO / AMORTIZACIÓN DE DEUDA MÍA */}
-      {isPayablePaymentModalOpen && (payingPayable || payingCreditorGroup) && (
-        <PayablePaymentModal
-          onClose={() => setIsPayablePaymentModalOpen(false)}
-          onSubmit={handlePayPayable}
-          payingPayable={payingPayable}
-          payingCreditorGroup={payingCreditorGroup}
-          payablePaymentAmount={payablePaymentAmount}
-          setPayablePaymentAmount={setPayablePaymentAmount}
-          payablePaymentDate={payablePaymentDate}
-          setPayablePaymentDate={setPayablePaymentDate}
-          payablePaymentNotes={payablePaymentNotes}
-          setPayablePaymentNotes={setPayablePaymentNotes}
-          formatSoles={formatSoles}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isPayablePaymentModalOpen && (payingPayable || payingCreditorGroup) && <PayablePaymentModal />}
 
       {/* 11. MODAL: CONFIGURAR SUELDO / NÓMINA */}
-      {isSalaryModalOpen && (
-        <SalaryModal
-          onClose={() => setIsSalaryModalOpen(false)}
-          onSubmit={handleSaveSalary}
-          salarySource={salarySource}
-          setSalarySource={setSalarySource}
-          salaryAmount={salaryAmount}
-          setSalaryAmount={setSalaryAmount}
-          salaryPayDay={salaryPayDay}
-          setSalaryPayDay={setSalaryPayDay}
-          monthNames={monthNames}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-        />
-      )}
+      {isSalaryModalOpen && <SalaryModal />}
 
       {/* 3.6 MODAL DE CONFIRMACIÓN DE ELIMINACIÓN SEGURA */}
-      {itemToDelete && (
-        <DeleteConfirmModal
-          item={itemToDelete}
-          onClose={() => setItemToDelete(null)}
-          onConfirm={handleConfirmDelete}
-          handleBackdropMouseDown={handleBackdropMouseDown}
-          handleBackdropClick={handleBackdropClick}
-          formatDisplayDate={formatDisplayDate}
-          formatSoles={formatSoles}
-        />
-      )}
+      {itemToDelete && <DeleteConfirmModal />}
 
       {/* 4. NAVEGACIÓN MÓVIL MODULAR */}
-      <MobileNav
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        isMoreMenuOpen={isMoreMenuOpen}
-        setIsMoreMenuOpen={setIsMoreMenuOpen}
-        pendingReceivablesCount={receivables.filter(r => r.remainingAmount > 0).length}
-        pendingPayablesCount={payables.filter(p => p.remainingAmount > 0).length}
-        initialDebitForMonth={initialDebitForMonth}
-        setTempDebitBalance={setTempDebitBalance}
-        setIsAdjustDebitModalOpen={setIsAdjustDebitModalOpen}
-        currentUser={currentUser}
-        handleLogout={handleLogout}
-        handleBackdropMouseDown={handleBackdropMouseDown}
-        handleBackdropClick={handleBackdropClick}
-      />
+      <MobileNav />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { CustomSelect } from '@/components/CustomSelect';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import { CurrencyCode } from '@/types';
 import { ExchangeRateResult } from '@/services/exchangeRate.service';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface PayableModalProps {
   onClose: () => void;
@@ -34,32 +35,35 @@ interface PayableModalProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const PayableModal: React.FC<PayableModalProps> = ({
-  onClose,
-  onSubmit,
-  payableCreditorName,
-  setPayableCreditorName,
-  payableDesc,
-  setPayableDesc,
-  payableAmount,
-  setPayableAmount,
-  payableCurrency,
-  setPayableCurrency,
-  payableIssueDate,
-  setPayableIssueDate,
-  payableExchangeRate,
-  setPayableExchangeRate,
-  payableTcInfo,
-  isFetchingPayableTc,
-  setHasUserManuallyEditedPayableTc,
-  payableDueDate,
-  setPayableDueDate,
-  payableIsCreditedToDebit,
-  setPayableIsCreditedToDebit,
-  fetchPayableSunatRate,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const PayableModal: React.FC = () => {
+  const {
+    setIsPayableModalOpen,
+    handleCreatePayable,
+    payableCreditorName,
+    setPayableCreditorName,
+    payableDesc,
+    setPayableDesc,
+    payableAmount,
+    setPayableAmount,
+    payableCurrency,
+    setPayableCurrency,
+    payableIssueDate,
+    setPayableIssueDate,
+    payableExchangeRate,
+    setPayableExchangeRate,
+    payableTcInfo,
+    isFetchingPayableTc,
+    setHasUserManuallyEditedPayableTc,
+    payableDueDate,
+    setPayableDueDate,
+    payableIsCreditedToDebit,
+    setPayableIsCreditedToDebit,
+    fetchPayableSunatRate,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const onClose = () => setIsPayableModalOpen(false);
+  const onSubmit = handleCreatePayable;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

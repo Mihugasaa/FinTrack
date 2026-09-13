@@ -12,6 +12,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { UserProfile } from '@/services/auth.service';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface HeaderProps {
   isCurrentActiveMonth: boolean;
@@ -36,27 +37,31 @@ interface HeaderProps {
   formatSoles: (amount: number) => string;
 }
 
-export const Header: React.FC<HeaderProps> = ({
-  isCurrentActiveMonth,
-  isPastMonth,
-  currentMonth,
-  currentYear,
-  monthNames,
-  monthPickerRef,
-  isMonthDropdownOpen,
-  setIsMonthDropdownOpen,
-  handleGoToCurrentMonth,
-  handlePrevMonth,
-  handleNextMonth,
-  handleSelectMonth,
-  currentDebitBalance,
-  handleOpenCreateTransaction,
-  theme,
-  toggleTheme,
-  currentUser,
-  handleLogout,
-  formatSoles
-}) => {
+export const Header: React.FC = () => {
+  const {
+    isCurrentActiveMonth,
+    isPastMonth,
+    currentMonth,
+    currentYear,
+    monthNames,
+    monthPickerRef,
+    isMonthDropdownOpen,
+    setIsMonthDropdownOpen,
+    handleGoToCurrentMonth,
+    handlePrevMonth,
+    handleNextMonth,
+    handleSelectMonth,
+    debitStats,
+    handleOpenCreateTransaction,
+    theme,
+    toggleTheme,
+    currentUser,
+    handleLogout,
+    formatSoles
+  } = useFinance();
+  const currentDebitBalance = isCurrentActiveMonth
+    ? debitStats.currentDebitBalanceToday
+    : debitStats.projectedDebitBalanceMonthEnd;
   return (
     <header className="dashboard-header">
       {/* Grupo Izquierdo: Logotipo y Contexto Temporal Global */}

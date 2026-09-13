@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertTriangle, X, Repeat, Trash2 } from 'lucide-react';
+import { useFinance } from '@/contexts/FinanceContext';
 
 /** Registro que el usuario está por eliminar (gasto, ingreso o préstamo). */
 export interface DeleteConfirmItem {
@@ -27,15 +28,20 @@ interface DeleteConfirmModalProps {
   formatSoles: (v: number) => string;
 }
 
-export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
-  item,
-  onClose,
-  onConfirm,
-  handleBackdropMouseDown,
-  handleBackdropClick,
-  formatDisplayDate,
-  formatSoles
-}) => {
+export const DeleteConfirmModal: React.FC = () => {
+  const {
+    itemToDelete,
+    setItemToDelete,
+    handleConfirmDelete,
+    handleBackdropMouseDown,
+    handleBackdropClick,
+    formatDisplayDate,
+    formatSoles
+  } = useFinance();
+  if (!itemToDelete) return null;
+  const item = itemToDelete;
+  const onClose = () => setItemToDelete(null);
+  const onConfirm = handleConfirmDelete;
   return (
     <div className="modal-overlay" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div

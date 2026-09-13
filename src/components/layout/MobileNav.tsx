@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ActiveTab } from '@/hooks/useTabNavigation';
 import { UserProfile } from '@/services/auth.service';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface MobileNavProps {
   activeTab: ActiveTab;
@@ -33,21 +34,24 @@ interface MobileNavProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const MobileNav: React.FC<MobileNavProps> = ({
-  activeTab,
-  onSelectTab,
-  isMoreMenuOpen,
-  setIsMoreMenuOpen,
-  pendingReceivablesCount,
-  pendingPayablesCount,
-  initialDebitForMonth,
-  setTempDebitBalance,
-  setIsAdjustDebitModalOpen,
-  currentUser,
-  handleLogout,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const MobileNav: React.FC = () => {
+  const {
+    activeTab,
+    setActiveTab: onSelectTab,
+    isMoreMenuOpen,
+    setIsMoreMenuOpen,
+    receivables,
+    payables,
+    initialDebitForMonth,
+    setTempDebitBalance,
+    setIsAdjustDebitModalOpen,
+    currentUser,
+    handleLogout,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const pendingReceivablesCount = receivables.filter(r => r.remainingAmount > 0).length;
+  const pendingPayablesCount = payables.filter(p => p.remainingAmount > 0).length;
   const totalPendingLoans = pendingReceivablesCount + pendingPayablesCount;
 
   return (

@@ -6,6 +6,7 @@ import { CustomSelect } from '@/components/CustomSelect';
 import { FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import { CurrencyCode } from '@/types';
 import { ExchangeRateResult } from '@/services/exchangeRate.service';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface ReceivableModalProps {
   onClose: () => void;
@@ -30,28 +31,31 @@ interface ReceivableModalProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const ReceivableModal: React.FC<ReceivableModalProps> = ({
-  onClose,
-  onSubmit,
-  debtorName,
-  setDebtorName,
-  loanDesc,
-  setLoanDesc,
-  loanAmount,
-  setLoanAmount,
-  loanCurrency,
-  setLoanCurrency,
-  loanDate,
-  setLoanDate,
-  loanExchangeRate,
-  setLoanExchangeRate,
-  loanTcInfo,
-  isFetchingLoanTc,
-  setHasUserManuallyEditedLoanTc,
-  fetchLoanSunatRate,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const ReceivableModal: React.FC = () => {
+  const {
+    setIsReceivableModalOpen,
+    handleCreateReceivable,
+    debtorName,
+    setDebtorName,
+    loanDesc,
+    setLoanDesc,
+    loanAmount,
+    setLoanAmount,
+    loanCurrency,
+    setLoanCurrency,
+    loanDate,
+    setLoanDate,
+    loanExchangeRate,
+    setLoanExchangeRate,
+    loanTcInfo,
+    isFetchingLoanTc,
+    setHasUserManuallyEditedLoanTc,
+    fetchLoanSunatRate,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const onClose = () => setIsReceivableModalOpen(false);
+  const onSubmit = handleCreateReceivable;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

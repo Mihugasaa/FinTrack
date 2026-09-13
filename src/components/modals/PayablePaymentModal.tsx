@@ -4,6 +4,7 @@ import React from 'react';
 import { Coins, X } from 'lucide-react';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 import { Payable, CreditorGroup } from '@/types';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface PayablePaymentModalProps {
   onClose: () => void;
@@ -21,21 +22,24 @@ interface PayablePaymentModalProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const PayablePaymentModal: React.FC<PayablePaymentModalProps> = ({
-  onClose,
-  onSubmit,
-  payingPayable,
-  payingCreditorGroup,
-  payablePaymentAmount,
-  setPayablePaymentAmount,
-  payablePaymentDate,
-  setPayablePaymentDate,
-  payablePaymentNotes,
-  setPayablePaymentNotes,
-  formatSoles,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const PayablePaymentModal: React.FC = () => {
+  const {
+    setIsPayablePaymentModalOpen,
+    handlePayPayable,
+    payingPayable,
+    payingCreditorGroup,
+    payablePaymentAmount,
+    setPayablePaymentAmount,
+    payablePaymentDate,
+    setPayablePaymentDate,
+    payablePaymentNotes,
+    setPayablePaymentNotes,
+    formatSoles,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const onClose = () => setIsPayablePaymentModalOpen(false);
+  const onSubmit = handlePayPayable;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

@@ -12,6 +12,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { ActiveTab } from '@/hooks/useTabNavigation';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface NavigationTabsProps {
   activeTab: ActiveTab;
@@ -24,16 +25,22 @@ interface NavigationTabsProps {
   pendingPayablesCount: number;
 }
 
-export const NavigationTabs: React.FC<NavigationTabsProps> = ({
-  activeTab,
-  onSelectTab,
-  salariesCount,
-  otherIncomesCount,
-  movementsCount,
-  cardsCount,
-  pendingReceivablesCount,
-  pendingPayablesCount
-}) => {
+export const NavigationTabs: React.FC = () => {
+  const {
+    activeTab,
+    setActiveTab: onSelectTab,
+    salaries,
+    currentOtherIncomes,
+    monthMovementsTotal: movementsCount,
+    paymentMethods,
+    receivables,
+    payables
+  } = useFinance();
+  const salariesCount = salaries.length;
+  const otherIncomesCount = currentOtherIncomes.length;
+  const cardsCount = paymentMethods.length;
+  const pendingReceivablesCount = receivables.filter(r => r.remainingAmount > 0).length;
+  const pendingPayablesCount = payables.filter(p => p.remainingAmount > 0).length;
   const totalIncomesCount = salariesCount + otherIncomesCount;
   const totalPendingLoans = pendingReceivablesCount + pendingPayablesCount;
 

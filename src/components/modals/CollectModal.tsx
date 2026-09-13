@@ -3,6 +3,7 @@
 import React from 'react';
 import { Coins, X } from 'lucide-react';
 import { Receivable } from '@/types';
+import { useFinance } from '@/contexts/FinanceContext';
 
 export interface CollectingDebtorGroup {
   debtorName: string;
@@ -22,17 +23,20 @@ interface CollectModalProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const CollectModal: React.FC<CollectModalProps> = ({
-  onClose,
-  onSubmit,
-  collectingRec,
-  collectingDebtorGroup,
-  collectAmountInput,
-  setCollectAmountInput,
-  formatSoles,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const CollectModal: React.FC = () => {
+  const {
+    setIsCollectModalOpen,
+    handleSaveCollect,
+    collectingRec,
+    collectingDebtorGroup,
+    collectAmountInput,
+    setCollectAmountInput,
+    formatSoles,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const onClose = () => setIsCollectModalOpen(false);
+  const onSubmit = handleSaveCollect;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

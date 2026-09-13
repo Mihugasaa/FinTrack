@@ -4,6 +4,7 @@ import React from 'react';
 import { X, CreditCard, Wallet, Check } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { CARD_COLOR_PRESETS } from '@/lib/constants';
+import { useFinance } from '@/contexts/FinanceContext';
 
 interface CardModalProps {
   onClose: () => void;
@@ -26,26 +27,29 @@ interface CardModalProps {
   handleBackdropClick: (closeFn: () => void) => (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const CardModal: React.FC<CardModalProps> = ({
-  onClose,
-  onSubmit,
-  newCardName,
-  setNewCardName,
-  newCardType,
-  setNewCardType,
-  newCardColor,
-  setNewCardColor,
-  newCardLimit,
-  setNewCardLimit,
-  newCardCloseDay,
-  setNewCardCloseDay,
-  newCardDueDay,
-  setNewCardDueDay,
-  newCardInitialDebt,
-  setNewCardInitialDebt,
-  handleBackdropMouseDown,
-  handleBackdropClick
-}) => {
+export const CardModal: React.FC = () => {
+  const {
+    setIsCardModalOpen,
+    handleCreateCard,
+    newCardName,
+    setNewCardName,
+    newCardType,
+    setNewCardType,
+    newCardColor,
+    setNewCardColor,
+    newCardLimit,
+    setNewCardLimit,
+    newCardCloseDay,
+    setNewCardCloseDay,
+    newCardDueDay,
+    setNewCardDueDay,
+    newCardInitialDebt,
+    setNewCardInitialDebt,
+    handleBackdropMouseDown,
+    handleBackdropClick
+  } = useFinance();
+  const onClose = () => setIsCardModalOpen(false);
+  const onSubmit = handleCreateCard;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

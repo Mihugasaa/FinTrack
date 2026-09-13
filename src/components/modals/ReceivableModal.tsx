@@ -5,7 +5,6 @@ import { X, Banknote, DollarSign, Sparkles, Repeat } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import { CurrencyCode } from '@/types';
-import { ExchangeRateResult } from '@/services/exchangeRate.service';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const ReceivableModal: React.FC = () => {

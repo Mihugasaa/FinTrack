@@ -13,7 +13,6 @@ import {
   X,
   Activity
 } from 'lucide-react';
-import { AIAnomaly, CashflowForecastMonth, LiquidityDiagnostic } from '@/types';
 
 interface CFODiagnosisData {
   healthScore: number;

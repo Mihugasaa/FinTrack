@@ -21,7 +21,7 @@ import {
   X,
   Check
 } from 'lucide-react';
-import { Receivable, Payable, CreditorGroup } from '@/types';
+import { Receivable } from '@/types';
 
 interface DebtorGroup {
   key: string;

@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { CheckCheck, Sparkles, UploadCloud, Plus } from 'lucide-react';
-import { ReconciliationSummary, ReconciliationItem, PaymentMethod } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const ReconciliationTab: React.FC = () => {

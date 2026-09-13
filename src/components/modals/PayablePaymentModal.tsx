@@ -3,7 +3,6 @@
 import React from 'react';
 import { Coins, X } from 'lucide-react';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
-import { Payable, CreditorGroup } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const PayablePaymentModal: React.FC = () => {

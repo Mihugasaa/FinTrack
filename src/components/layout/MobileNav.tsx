@@ -14,8 +14,6 @@ import {
   CheckCheck,
   LogOut
 } from 'lucide-react';
-import { ActiveTab } from '@/hooks/useTabNavigation';
-import { UserProfile } from '@/services/auth.service';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const MobileNav: React.FC = () => {
@@ -26,9 +24,6 @@ export const MobileNav: React.FC = () => {
     setIsMoreMenuOpen,
     receivables,
     payables,
-    initialDebitForMonth,
-    setTempDebitBalance,
-    setIsAdjustDebitModalOpen,
     currentUser,
     handleLogout,
     handleBackdropMouseDown,

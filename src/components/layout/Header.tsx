@@ -11,7 +11,6 @@ import {
   Moon,
   LogOut
 } from 'lucide-react';
-import { UserProfile } from '@/services/auth.service';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const Header: React.FC = () => {

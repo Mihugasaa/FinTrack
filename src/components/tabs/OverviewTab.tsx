@@ -5,16 +5,12 @@ import {
   Sparkles,
   ArrowDownLeft,
   ArrowUpRight,
-  CheckCircle2,
-  AlertCircle,
   Repeat,
   Pencil,
   Trash2,
   Tag
 } from 'lucide-react';
 import { SupabaseDataService } from '@/services/supabaseData.service';
-import { Transaction, PaymentMethod, Category, OtherIncome } from '@/types';
-import { ActiveTab } from '@/hooks/useTabNavigation';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const OverviewTab: React.FC = () => {
@@ -36,7 +32,6 @@ export const OverviewTab: React.FC = () => {
     prevMonthClosingBalance,
     setInitialDebitBalances,
     diagnostic,
-    fixedExpensesTotal,
     currentMonthTransactions,
     categoryBreakdown,
     monthlyComparison,

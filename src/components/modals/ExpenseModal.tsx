@@ -4,17 +4,8 @@ import React from 'react';
 import { X, CreditCard, TrendingUp, Sparkles, Camera, Banknote, DollarSign, Repeat, Wallet, Tag } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { AIIntelligenceService } from '@/services/aiIntelligence.service';
-import { ExchangeRateResult } from '@/services/exchangeRate.service';
-import { DueDateDetail } from '@/lib/calculations';
-import { CurrencyCode, PaymentMethod, Category } from '@/types';
+import { CurrencyCode } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
-
-interface AiSuggestion {
-  categoryId: string;
-  categoryName: string;
-  confidence: number;
-  isFixedSuggestion: boolean;
-}
 
 export const ExpenseModal: React.FC = () => {
   const {

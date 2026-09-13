@@ -9,7 +9,6 @@ import {
   Trash2,
   PieChart
 } from 'lucide-react';
-import { SalaryIncome, OtherIncome } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const IncomesTab: React.FC = () => {

@@ -19,7 +19,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
-import { Transaction, PaymentMethod, Category, CardPayment, SalaryIncome, OtherIncome, Payable } from '@/types';
 
 export const TransactionsTab: React.FC = () => {
   const {

@@ -6,10 +6,8 @@ import {
   Pencil,
   Landmark,
   CreditCard,
-  Trash2,
-  Calendar
+  Trash2
 } from 'lucide-react';
-import { PaymentMethod, CardPayment } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const CardsTab: React.FC = () => {

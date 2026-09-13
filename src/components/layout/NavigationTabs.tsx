@@ -11,7 +11,6 @@ import {
   CheckCheck,
   Calendar
 } from 'lucide-react';
-import { ActiveTab } from '@/hooks/useTabNavigation';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const NavigationTabs: React.FC = () => {

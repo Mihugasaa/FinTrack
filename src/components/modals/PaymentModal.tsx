@@ -3,7 +3,6 @@
 import React from 'react';
 import { X, CreditCard, Banknote, TrendingUp, DollarSign } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
-import { PaymentMethod } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 
 type PaymentSourceType = 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT';

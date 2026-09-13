@@ -196,6 +196,59 @@ export class SupabaseDataService {
     }
   }
 
+  // GET: Historial COMPLETO de transacciones (sin filtro de mes).
+  // Alimenta las vistas consolidadas (Anual / Analítica), donde el flujo mensual
+  // debe derivarse de todos los movimientos reales y no solo del mes visible.
+  public static async getAllTransactions(): Promise<Transaction[] | null> {
+    const sb = supabase;
+    if (!sb || !isSupabaseConfigured) return null;
+
+    try {
+      const { data, error } = await this.executeWithRetry<any[]>(
+        () => sb
+          .from('transactions')
+          .select('*')
+          .order('date', { ascending: false }),
+        'getAllTransactions'
+      );
+
+      if (error || !data) {
+        if (error) this.logSupabaseError('getAllTransactions', error.message);
+        return null;
+      }
+
+      return data.map((row: any) => {
+        let pmId = row.payment_method_id || '';
+        if (!pmId && row.notes) {
+          const m = row.notes.match(/\[pmId:([^\]]+)\]/);
+          if (m && m[1]) pmId = m[1];
+        }
+
+        const isRefund = !!(row as any).is_refund ||
+          (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
+
+        return {
+          id: row.id,
+          date: row.date,
+          description: row.description,
+          categoryId: row.category_id || '',
+          paymentMethodId: pmId,
+          currency: row.currency || 'PEN',
+          originalAmount: parseFloat(row.original_amount),
+          exchangeRate: parseFloat(row.exchange_rate || '1.0'),
+          amountPen: parseFloat(row.amount_pen),
+          paymentDueDate: row.payment_due_date,
+          isFixedSubscription: !!row.is_fixed_subscription,
+          isRefund: isRefund,
+          notes: row.notes
+        };
+      });
+    } catch (e) {
+      this.logSupabaseError('getAllTransactions (catch)', e);
+      return null;
+    }
+  }
+
   // POST: Crear una nueva transacción
   public static async createTransaction(tx: Transaction): Promise<boolean> {
     if (!supabase || !isSupabaseConfigured) return false;
@@ -777,6 +830,49 @@ export class SupabaseDataService {
     }
   }
 
+  // GET: Historial COMPLETO de otros ingresos, agrupado por mes (YYYY-MM).
+  // Permite que el flujo consolidado use los ingresos extra reales de cada mes,
+  // no solo los del mes visible.
+  public static async getAllOtherIncomes(): Promise<Record<string, OtherIncome[]> | null> {
+    const sb = supabase;
+    if (!sb || !isSupabaseConfigured) return null;
+
+    try {
+      const { data, error } = await this.executeWithRetry<any[]>(
+        () => sb
+          .from('other_incomes')
+          .select('*')
+          .order('received_date', { ascending: false }),
+        'getAllOtherIncomes'
+      );
+
+      if (error) {
+        this.logSupabaseError('getAllOtherIncomes', error.message);
+        return null;
+      }
+
+      if (!data) return {};
+
+      const grouped: Record<string, OtherIncome[]> = {};
+      data.forEach((row: any) => {
+        const receivedDate: string = row.received_date;
+        const monthKey = (receivedDate || '').slice(0, 7);
+        if (!monthKey) return;
+        const inc: OtherIncome = {
+          id: row.id,
+          description: row.description,
+          amount: parseFloat(row.amount),
+          receivedDate
+        };
+        (grouped[monthKey] = grouped[monthKey] || []).push(inc);
+      });
+      return grouped;
+    } catch (e) {
+      this.logSupabaseError('getAllOtherIncomes (catch)', e);
+      return null;
+    }
+  }
+
   // POST: Crear otro ingreso
   public static async createOtherIncome(inc: OtherIncome, dateStr?: string): Promise<boolean> {
     if (!supabase || !isSupabaseConfigured) return false;
@@ -1004,6 +1100,42 @@ export class SupabaseDataService {
       });
     } catch (e) {
       this.logSupabaseError('getCardPayments (catch)', e);
+      return null;
+    }
+  }
+
+  // GET: Historial COMPLETO de abonos a tarjetas (sin filtro de mes).
+  // Con esto el resumen de deuda "a la fecha" y las vistas consolidadas cubren
+  // todos los pagos reales, no solo los del mes visitado.
+  public static async getAllCardPayments(): Promise<{ id?: string; paymentMethodId: string; amountPaid: number; paymentDate: string; sourceType?: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' }[] | null> {
+    const sb = supabase;
+    if (!sb || !isSupabaseConfigured) return null;
+
+    try {
+      const { data, error } = await this.executeWithRetry<any[]>(
+        () => sb
+          .from('card_payments')
+          .select('*'),
+        'getAllCardPayments'
+      );
+
+      if (error || !data) return null;
+
+      return data.map((row: any) => {
+        let st: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' = 'DEBIT_ACCOUNT';
+        if ((row as any).source_type) {
+          st = (row as any).source_type;
+        }
+        return {
+          id: row.id,
+          paymentMethodId: row.payment_method_id,
+          amountPaid: parseFloat(row.amount_paid),
+          paymentDate: row.payment_date,
+          sourceType: st
+        };
+      });
+    } catch (e) {
+      this.logSupabaseError('getAllCardPayments (catch)', e);
       return null;
     }
   }

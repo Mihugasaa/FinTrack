@@ -105,6 +105,15 @@ export const AnalyticsTab: React.FC = () => {
     ? validMonths.reduce((acc, curr) => acc + curr.savings, 0) / validMonths.length
     : 0;
 
+  // Escala dinámica del gráfico de barras: el pico real de ingreso/salida con
+  // un pequeño margen. Las líneas guía se etiquetan a partir de esa escala.
+  const flowScaleMax = Math.max(
+    1,
+    ...monthlyHistoricalFlow.map(m => Math.max(m.inVal, m.outVal))
+  ) * 1.05;
+  const flowGridlines = [1, 0.75, 0.5, 0.25].map(f => flowScaleMax * f);
+  const fmtCompact = (v: number) => (v >= 1000 ? `S/ ${(v / 1000).toFixed(1)}k` : `S/ ${Math.round(v)}`);
+
   // 2. Punto crítico de liquidez (mes con menor saldo final proyectado en el horizonte)
   const criticalMonth = forecastData.length > 0
     ? [...forecastData].sort((a, b) => a.projectedEndingBalance - b.projectedEndingBalance)[0]
@@ -373,29 +382,28 @@ export const AnalyticsTab: React.FC = () => {
               <TrendingUp size={16} color="var(--accent-brand)" />
               Evolución Mensual: Ingresos vs Salidas Reales
             </span>
-            <span className="badge badge-brand" title="Consolidado financiero del año 2026">Consolidado 2026</span>
+            <span className="badge badge-brand" title={`Consolidado financiero del año ${currentYear}`}>Consolidado {currentYear}</span>
           </div>
 
           <div className="chart-canvas-area">
-            {/* Líneas Guía Horizontales con Escala de Montos */}
+            {/* Líneas Guía Horizontales con Escala de Montos (derivada de datos) */}
             <div className="chart-gridlines">
-              <div className="chart-gridline-row"><span className="chart-gridline-label">S/ 4k</span></div>
-              <div className="chart-gridline-row"><span className="chart-gridline-label">S/ 3k</span></div>
-              <div className="chart-gridline-row"><span className="chart-gridline-label">S/ 2k</span></div>
-              <div className="chart-gridline-row"><span className="chart-gridline-label">S/ 1k</span></div>
+              {flowGridlines.map((v, i) => (
+                <div key={i} className="chart-gridline-row"><span className="chart-gridline-label">{fmtCompact(v)}</span></div>
+              ))}
               <div className="chart-gridline-row baseline"><span className="chart-gridline-label">S/ 0</span></div>
             </div>
 
             <div className="chart-bars-container">
               {monthlyHistoricalFlow.map(m => {
-                const maxH = 4300;
+                const maxH = flowScaleMax;
                 const inH = Math.min(100, Math.round((m.inVal / maxH) * 100));
                 const outH = Math.min(100, Math.round((m.outVal / maxH) * 100));
                 const savH = Math.max(5, Math.min(100, Math.round((Math.abs(m.savings) / maxH) * 100)));
 
                 return (
                   <div key={m.key} className="chart-bar-column">
-                    <div className="chart-bar-track" title={`${m.label} 2026: Ingresos S/ ${m.inVal.toFixed(2)} | Salidas S/ ${m.outVal.toFixed(2)} | Margen S/ ${m.savings.toFixed(2)}`}>
+                    <div className="chart-bar-track" title={`${m.label}: Ingresos S/ ${m.inVal.toFixed(2)} | Salidas S/ ${m.outVal.toFixed(2)} | Margen S/ ${m.savings.toFixed(2)}`}>
                       <div className="chart-bar-group">
                         <div
                           className="chart-bar-item chart-bar-income"
@@ -414,7 +422,7 @@ export const AnalyticsTab: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <span className="chart-bar-label" title={`Mes de ${m.label} 2026`}>{m.label.slice(0, 3)}</span>
+                    <span className="chart-bar-label" title={`Mes de ${m.label}`}>{m.label.slice(0, 3)}</span>
                   </div>
                 );
               })}

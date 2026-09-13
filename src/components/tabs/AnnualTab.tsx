@@ -3,24 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
 
-export interface AnnualHistoricalFlowItem {
-  key: string;
-  label: string;
-  inVal: number;
-  outVal: number;
-  savings: number;
-}
-
-export interface AnnualCategoryItem {
-  category: {
-    id: string;
-    name: string;
-    color: string;
-    icon?: string;
-  };
-  total: number;
-}
-
 interface MonthDetailRecord {
   id: string;
   name: string;
@@ -35,110 +17,36 @@ interface MonthDetailRecord {
   cardType: 'green' | 'red' | 'blue';
 }
 
-const DEFAULT_MONTHS_DATA: MonthDetailRecord[] = [
-  {
-    id: '2026-08',
-    name: 'Agosto 2026',
-    isProjected: false,
-    income: 2126.49,
-    consumedExpenses: 5230.04,
-    cashOut: 266.50,
-    surplus: -3103.55,
-    savingsRatePct: -146,
-    statusText: 'Holgado',
-    statusType: 'green',
-    cardType: 'green'
-  },
-  {
-    id: '2026-09',
-    name: 'Septiembre 2026',
-    isProjected: false,
-    income: 2229.99,
-    consumedExpenses: 895.86,
-    cashOut: 4140.19,
-    surplus: 1334.13,
-    savingsRatePct: 60,
-    statusText: 'Ajustado por Pagos TC',
-    statusType: 'red',
-    cardType: 'red'
-  },
-  {
-    id: '2026-10',
-    name: 'Octubre 2026',
-    isProjected: true,
-    income: 2126.49,
-    consumedExpenses: 293.86,
-    cashOut: 1812.21,
-    surplus: 1832.63,
-    savingsRatePct: 86,
-    statusText: 'En Meta',
-    statusType: 'blue',
-    cardType: 'blue'
-  },
-  {
-    id: '2026-11',
-    name: 'Noviembre 2026',
-    isProjected: true,
-    income: 2126.49,
-    consumedExpenses: 293.86,
-    cashOut: 293.86,
-    surplus: 1832.63,
-    savingsRatePct: 86,
-    statusText: 'En Meta',
-    statusType: 'blue',
-    cardType: 'blue'
-  },
-  {
-    id: '2026-12',
-    name: 'Diciembre 2026',
-    isProjected: true,
-    income: 2126.49,
-    consumedExpenses: 293.86,
-    cashOut: 293.86,
-    surplus: 1832.63,
-    savingsRatePct: 86,
-    statusText: 'En Meta',
-    statusType: 'blue',
-    cardType: 'blue'
-  }
-];
-
-const DEFAULT_CATEGORIES = [
-  { name: 'Compras & Shopping', total: 2624.84, pct: 38.0, color: '#3b82f6' },
-  { name: 'Comida & Restaurantes', total: 1312.42, pct: 19.0, color: '#8b5cf6' },
-  { name: 'Suscripciones Streaming', total: 1036.12, pct: 15.0, color: '#f59e0b' },
-  { name: 'Transporte Urbano', total: 828.90, pct: 12.0, color: '#10b981' },
-  { name: 'Otros Consumos', total: 1105.20, pct: 16.0, color: '#64748b' }
-];
-
 export const AnnualTab: React.FC = () => {
-  const { monthlyHistoricalFlow, categoryBreakdown, formatSoles } = useFinance();
+  const {
+    monthlyHistoricalFlow,
+    annualCategoryBreakdown,
+    cardDebtSummary,
+    currentYear,
+    formatSoles
+  } = useFinance();
   const [filterMode, setFilterMode] = useState<'all' | 'closed'>('all');
   const [visualTab, setVisualTab] = useState<'flow' | 'categories'>('flow');
 
-  // Meses dinámicos alimentados por el flujo real del usuario
+  // Meses reales derivados del flujo consolidado del usuario.
   const activeMonthsData = useMemo<MonthDetailRecord[]>(() => {
-    if (monthlyHistoricalFlow && monthlyHistoricalFlow.length > 0) {
-      return monthlyHistoricalFlow.map(f => {
-        const isProj = f.key > '2026-09';
-        const savingsPct = f.inVal > 0 ? Math.round((f.savings / f.inVal) * 100) : 0;
-        const isPositive = f.savings >= 0;
-        return {
-          id: f.key,
-          name: f.label,
-          isProjected: isProj,
-          income: f.inVal,
-          consumedExpenses: f.outVal,
-          cashOut: f.outVal,
-          surplus: f.savings,
-          savingsRatePct: savingsPct,
-          statusText: isPositive ? 'Superávit' : 'Ajustado',
-          statusType: isPositive ? 'green' : 'red',
-          cardType: isPositive ? 'green' : 'red'
-        };
-      });
-    }
-    return DEFAULT_MONTHS_DATA;
+    return monthlyHistoricalFlow.map(f => {
+      const savingsPct = f.inVal > 0 ? Math.round((f.savings / f.inVal) * 100) : 0;
+      const isPositive = f.savings >= 0;
+      return {
+        id: f.key,
+        name: f.label,
+        isProjected: f.isProjected,
+        income: f.inVal,
+        consumedExpenses: f.consumed,
+        cashOut: f.outVal,
+        surplus: f.savings,
+        savingsRatePct: savingsPct,
+        statusText: isPositive ? 'Superávit' : 'Ajustado',
+        statusType: isPositive ? 'green' : 'red',
+        cardType: isPositive ? 'green' : 'red'
+      };
+    });
   }, [monthlyHistoricalFlow]);
 
   // Filtrado de meses
@@ -148,6 +56,8 @@ export const AnnualTab: React.FC = () => {
     }
     return activeMonthsData;
   }, [filterMode, activeMonthsData]);
+
+  const closedCount = useMemo(() => activeMonthsData.filter(m => !m.isProjected).length, [activeMonthsData]);
 
   // Totales dinámicos según filtro
   const totals = useMemo(() => {
@@ -166,26 +76,46 @@ export const AnnualTab: React.FC = () => {
     };
   }, [displayedMonths]);
 
+  // Hitos reales del periodo mostrado (récord de ahorro, mayor salida y colchón).
+  const highlights = useMemo(() => {
+    if (displayedMonths.length === 0) {
+      return { bestSaving: null as MonthDetailRecord | null, biggestOut: null as MonthDetailRecord | null };
+    }
+    const bestSaving = displayedMonths.reduce((best, m) => (m.surplus > best.surplus ? m : best), displayedMonths[0]);
+    const biggestOut = displayedMonths.reduce((top, m) => (m.cashOut > top.cashOut ? m : top), displayedMonths[0]);
+    return { bestSaving, biggestOut };
+  }, [displayedMonths]);
+
   // Macro KPIs Dinámicos
   const heroSavingsRate = Number(totals.savingsRate.toFixed(1));
   const heroSurplus = totals.surplus;
   const totalAnnualIncome = totals.income;
   const totalAnnualCashOut = totals.cashOut;
-  const totalCoveredCardDebt = Number((totals.cashOut * 0.7).toFixed(2));
+  const cashOutCommittedPct = totalAnnualIncome > 0 ? (totalAnnualCashOut / totalAnnualIncome) * 100 : 0;
 
-  // Donut slices
+  // Deuda de tarjetas gestionada a la fecha, derivada del resumen real por tarjeta.
+  const cardStats = useMemo(() => {
+    const obligations = cardDebtSummary.reduce((acc, c) => acc + (c.consumedToDate || 0) + (c.initialDebt || 0), 0);
+    const paid = cardDebtSummary.reduce((acc, c) => acc + (c.paidToDate || 0), 0);
+    const liquidatedPct = obligations > 0 ? Math.min(100, (paid / obligations) * 100) : 0;
+    return { paid, liquidatedPct };
+  }, [cardDebtSummary]);
+
+  // Donut de categorías del año (consumos devengados reales del año visible).
   const categoryList = useMemo(() => {
-    if (categoryBreakdown && categoryBreakdown.length > 0) {
-      const sum = categoryBreakdown.reduce((acc, c) => acc + c.total, 0);
-      return categoryBreakdown.slice(0, 5).map(c => ({
-        name: c.category.name,
-        total: c.total,
-        pct: sum > 0 ? (c.total / sum) * 100 : 0,
-        color: c.category.color || '#3b82f6'
-      }));
-    }
-    return DEFAULT_CATEGORIES;
-  }, [categoryBreakdown]);
+    const sum = annualCategoryBreakdown.reduce((acc, c) => acc + c.total, 0);
+    return annualCategoryBreakdown.slice(0, 5).map(c => ({
+      name: c.category.name,
+      total: c.total,
+      pct: sum > 0 ? (c.total / sum) * 100 : 0,
+      color: c.category.color || '#3b82f6'
+    }));
+  }, [annualCategoryBreakdown]);
+
+  const annualCategoryTotal = useMemo(
+    () => annualCategoryBreakdown.reduce((acc, c) => acc + c.total, 0),
+    [annualCategoryBreakdown]
+  );
 
   // SVG Donut calculation
   const donutCircumference = 238.76;
@@ -203,21 +133,14 @@ export const AnnualTab: React.FC = () => {
     });
   }, [categoryList]);
 
-  // Datos para gráfico de barras de flujo
-  const flowItems = useMemo(() => {
-    if (monthlyHistoricalFlow && monthlyHistoricalFlow.length > 0) {
-      return monthlyHistoricalFlow;
-    }
-    return [
-      { key: '2026-08', label: 'Ago 2026', inVal: 2126.49, outVal: 266.50, savings: 1859.99 },
-      { key: '2026-09', label: 'Sep 2026', inVal: 2229.99, outVal: 4140.19, savings: -1910.20 },
-      { key: '2026-10', label: 'Oct 2026', inVal: 2126.49, outVal: 1812.21, savings: 314.28 },
-      { key: '2026-11', label: 'Nov 2026', inVal: 2126.49, outVal: 293.86, savings: 1832.63 },
-      { key: '2026-12', label: 'Dic 2026', inVal: 2126.49, outVal: 293.86, savings: 1832.63 }
-    ];
-  }, [monthlyHistoricalFlow]);
+  // Datos para gráfico de barras de flujo (mismo flujo real consolidado).
+  const flowItems = monthlyHistoricalFlow;
 
-  const maxFlowVal = 4200;
+  // Escala del gráfico: el mayor de ingreso o salida entre los meses, con margen.
+  const maxFlowVal = useMemo(() => {
+    const peak = flowItems.reduce((max, m) => Math.max(max, m.inVal, m.outVal), 0);
+    return peak > 0 ? peak * 1.1 : 1;
+  }, [flowItems]);
 
   return (
     <section className="annual-summary-panel clean-card panel-body">
@@ -225,9 +148,9 @@ export const AnnualTab: React.FC = () => {
       <div className="annual-header">
         <div className="annual-title-group">
           <div className="annual-title-row">
-            <h2 className="annual-title">Consolidado y Salud Financiera 2026</h2>
+            <h2 className="annual-title">Consolidado y Salud Financiera {currentYear}</h2>
             <span className="annual-chip-audit">
-              {filterMode === 'closed' ? '2 Periodos Auditados' : '5 Periodos Auditados'}
+              {displayedMonths.length} {displayedMonths.length === 1 ? 'Periodo Auditado' : 'Periodos Auditados'}
             </span>
           </div>
           <p className="annual-subtitle">
@@ -241,7 +164,7 @@ export const AnnualTab: React.FC = () => {
             className={`segmented-tab-btn ${filterMode === 'all' ? 'active' : ''}`}
             onClick={() => setFilterMode('all')}
           >
-            <span>Consolidado 2026</span>
+            <span>Consolidado {currentYear}</span>
           </button>
           <button
             type="button"
@@ -290,14 +213,14 @@ export const AnnualTab: React.FC = () => {
         <div className="annual-kpi-box box-border-blue">
           <div className="kpi-lbl">Salida Real en Caja</div>
           <div className="kpi-num tabular-nums">{formatSoles(totalAnnualCashOut)}</div>
-          <div className="kpi-sub">63.4% del ingreso comprometido</div>
+          <div className="kpi-sub">{cashOutCommittedPct.toFixed(1)}% del ingreso comprometido</div>
         </div>
 
         {/* Card 4: Deuda TC Cubierta */}
         <div className="annual-kpi-box box-border-purple">
           <div className="kpi-lbl">Deuda TC Gestionada</div>
-          <div className="kpi-num tabular-nums">{formatSoles(totalCoveredCardDebt)}</div>
-          <div className="kpi-sub">97.2% de consumos liquidados</div>
+          <div className="kpi-num tabular-nums">{formatSoles(cardStats.paid)}</div>
+          <div className="kpi-sub">{cardStats.liquidatedPct.toFixed(1)}% de consumos liquidados</div>
         </div>
       </div>
 
@@ -363,29 +286,39 @@ export const AnnualTab: React.FC = () => {
             })}
           </div>
 
-          {/* Fila de 3 Hitos Integrada */}
+          {/* Fila de 3 Hitos Integrada (derivados del flujo real) */}
           <div className="annual-highlights-strip">
             <div className="highlight-item">
               <div className="highlight-emoji">🏆</div>
               <div>
                 <div className="highlight-label">Récord de Ahorro</div>
-                <div className="highlight-val tabular-nums">Agosto • +S/ 1,859.99</div>
+                <div className="highlight-val tabular-nums">
+                  {highlights.bestSaving
+                    ? `${highlights.bestSaving.name} • ${highlights.bestSaving.surplus >= 0 ? '+' : ''}${formatSoles(highlights.bestSaving.surplus)}`
+                    : 'Sin datos'}
+                </div>
               </div>
             </div>
 
             <div className="highlight-item">
               <div className="highlight-emoji">💳</div>
               <div>
-                <div className="highlight-label">Mayor Pago de Deuda</div>
-                <div className="highlight-val tabular-nums">Septiembre • S/ 4,140.19</div>
+                <div className="highlight-label">Mayor Salida de Caja</div>
+                <div className="highlight-val tabular-nums">
+                  {highlights.biggestOut
+                    ? `${highlights.biggestOut.name} • ${formatSoles(highlights.biggestOut.cashOut)}`
+                    : 'Sin datos'}
+                </div>
               </div>
             </div>
 
             <div className="highlight-item">
               <div className="highlight-emoji">🎯</div>
               <div>
-                <div className="highlight-label">Colchón a Cierre 2026</div>
-                <div className="highlight-val tabular-nums">+S/ 3,929.33 en Cuenta</div>
+                <div className="highlight-label">Colchón Acumulado {currentYear}</div>
+                <div className="highlight-val tabular-nums">
+                  {totals.surplus >= 0 ? '+' : ''}{formatSoles(totals.surplus)} en Cuenta
+                </div>
               </div>
             </div>
           </div>
@@ -419,16 +352,23 @@ export const AnnualTab: React.FC = () => {
                     Total Anual
                   </div>
                   <div className="tabular-nums" style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    S/ 6.9k
+                    {annualCategoryTotal >= 1000
+                      ? `S/ ${(annualCategoryTotal / 1000).toFixed(1)}k`
+                      : formatSoles(annualCategoryTotal)}
                   </div>
                 </div>
               </div>
               <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '10px' }}>
-                Consumos devengados 2026
+                Consumos devengados {currentYear}
               </span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {categoryList.length === 0 && (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '24px 0' }}>
+                  Aún no hay consumos registrados este año.
+                </p>
+              )}
               {categoryList.map((cat, idx) => (
                 <div
                   key={idx}
@@ -530,7 +470,7 @@ export const AnnualTab: React.FC = () => {
             <tfoot>
               <tr style={{ borderTop: '2px solid var(--border-medium)', background: 'var(--bg-subtle)', fontWeight: 800 }}>
                 <td>
-                  {filterMode === 'closed' ? 'TOTAL CERRADOS 2026' : 'TOTAL ANUAL CONSOLIDADO'}
+                  {filterMode === 'closed' ? `TOTAL CERRADOS ${currentYear}` : 'TOTAL ANUAL CONSOLIDADO'}
                 </td>
                 <td className="tabular-nums text-right font-bold" style={{ color: 'var(--accent-success)' }}>
                   {formatSoles(totals.income)}

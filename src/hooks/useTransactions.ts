@@ -142,7 +142,16 @@ export function useTransactions({
   }, [paymentMethods, selectedMethodId]);
 
   const currentMonthTransactions = useMemo(() => {
-    return transactions.filter(t => t.date.startsWith(monthKey));
+    // Orden determinista (fecha desc, luego descripción e id): mantiene estable el
+    // orden de gastos del mismo día entre meses, sin depender del orden en que la
+    // nube devuelve las filas.
+    return transactions
+      .filter(t => t.date.startsWith(monthKey))
+      .sort((a, b) =>
+        b.date.localeCompare(a.date) ||
+        (a.description || '').localeCompare(b.description || '') ||
+        (a.id || '').localeCompare(b.id || '')
+      );
   }, [transactions, monthKey]);
 
   const modalDueDateDetail = useMemo(() => {

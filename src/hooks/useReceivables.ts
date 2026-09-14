@@ -112,6 +112,16 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
       g.isFullyPaid = g.totalRemaining <= 0;
       g.paidPercentage = g.totalOriginal > 0 ? Math.min(100, Math.round((g.totalPaid / g.totalOriginal) * 100)) : 0;
       return g;
+    })
+    // Orden determinista de las fichas: el préstamo con actividad más reciente
+    // primero (coincide con el prepend al crear) y desempate por nombre. Evita que
+    // al refrescar cambie el orden respecto a lo recién agregado.
+    .sort((a, b) => {
+      const aLatest = a.items[a.items.length - 1];
+      const bLatest = b.items[b.items.length - 1];
+      const aDate = (aLatest?.createdAt || aLatest?.loanDate || '').slice(0, 10);
+      const bDate = (bLatest?.createdAt || bLatest?.loanDate || '').slice(0, 10);
+      return bDate.localeCompare(aDate) || a.debtorName.localeCompare(b.debtorName);
     });
   }, [receivables]);
 

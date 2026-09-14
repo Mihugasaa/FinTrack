@@ -22,6 +22,7 @@ export const OverviewTab: React.FC = () => {
     currentMonth,
     currentYear,
     monthKey,
+    currentDateStr,
     now,
     debitStats,
     initialDebitForMonth,
@@ -45,6 +46,17 @@ export const OverviewTab: React.FC = () => {
     formatDisplayDate,
     formatSoles
   } = useFinance();
+
+  // Últimos movimientos "a la fecha": en el mes en curso solo mostramos gastos con
+  // fecha hasta hoy (no los programados a futuro dentro del mismo mes). En meses
+  // pasados/futuros se muestra el mes completo. Ya vienen ordenados por fecha desc.
+  const recentTransactions = React.useMemo(() => {
+    const list = isCurrentActiveMonth
+      ? currentMonthTransactions.filter(t => t.date <= currentDateStr)
+      : currentMonthTransactions;
+    return list.slice(0, 5);
+  }, [currentMonthTransactions, isCurrentActiveMonth, currentDateStr]);
+
   return (
     <div>
       {/* 3. HERO MASTER: MI DINERO EN DÉBITO (ARMONÍA ZEN Y FOCO EN LIQUIDEZ) */}
@@ -302,7 +314,7 @@ export const OverviewTab: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {currentMonthTransactions.slice(0, 5).map(t => {
+                {recentTransactions.map(t => {
                   const pm = resolvePaymentMethod(t, paymentMethods);
                   return (
                     <tr key={t.id} className={t.isFixedSubscription ? 'row-fixed-expense' : ''}>
@@ -364,7 +376,7 @@ export const OverviewTab: React.FC = () => {
 
           {/* Vista Móvil: Feed de Tarjetas Táctiles */}
           <div className="mobile-only mobile-tx-feed" style={{ marginTop: '8px' }}>
-            {currentMonthTransactions.slice(0, 5).map(t => {
+            {recentTransactions.map(t => {
               const cat = categories.find(c => c.id === t.categoryId);
               const pm = resolvePaymentMethod(t, paymentMethods);
               const isDeferred = pm?.type === 'credit';

@@ -64,7 +64,9 @@ function useFinanceController() {
       if (methods && methods.length > 0) {
         setPaymentMethods(prev => methods.map(m => {
           const known = prev.find(p => p.id === m.id);
-          return { ...m, initialDebt: known?.initialDebt ?? m.initialDebt ?? 0 };
+          // El valor de la nube (ya persistido) manda; caemos al local solo si la
+          // columna aún no existe en la BD y la nube no lo trajo.
+          return { ...m, initialDebt: m.initialDebt ?? known?.initialDebt ?? 0 };
         }));
       } else if (methods && methods.length === 0) {
         // Brand-new account: seed the generic starter methods in the cloud.
@@ -111,6 +113,9 @@ function useFinanceController() {
 
   // 4. Saldo Débito Inicial configurable por el usuario (Dinero con el que arranca)
   const [initialDebitBalances, setInitialDebitBalances] = useState<Record<string, number>>({});
+  // Sueldo base real por mes (YYYY-MM). Se llena de una sola vez con el historial
+  // de periodos; lo usan las vistas consolidadas y el simulador sin visitar el mes.
+  const [monthlySalaries, setMonthlySalaries] = useState<Record<string, number>>({});
 
   // 5. Estados de Datos Interactivos
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(initialPaymentMethods);
@@ -187,7 +192,8 @@ function useFinanceController() {
 
 
   // Estados Fase 4: Analítica, Conciliación Bancaria y Sugerencias de IA
-  const [forecastHorizon, setForecastHorizon] = useState<3 | 6>(6);
+  // Por defecto 3 meses para no saturar la vista de Analítica con datos.
+  const [forecastHorizon, setForecastHorizon] = useState<3 | 6>(3);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
   const monthKey = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
@@ -544,16 +550,38 @@ function useFinanceController() {
         });
       }
     });
+
+    // Periodos mensuales completos: saldo inicial y sueldo base de TODOS los meses.
+    // Con esto las barras de ingreso de la evolución y el ancla de saldo inicial del
+    // simulador reflejan cada mes sin necesidad de navegar hasta él. Las ediciones
+    // locales del usuario (prev) prevalecen sobre lo recién traído.
+    SupabaseDataService.getAllMonthlyPeriods().then(periods => {
+      if (!periods) return;
+      setInitialDebitBalances(prev => {
+        const fromCloud: Record<string, number> = {};
+        Object.entries(periods).forEach(([k, v]) => {
+          if (v.initialDebitBalance > 0) fromCloud[k] = v.initialDebitBalance;
+        });
+        return { ...fromCloud, ...prev };
+      });
+      setMonthlySalaries(prev => {
+        const fromCloud: Record<string, number> = {};
+        Object.entries(periods).forEach(([k, v]) => {
+          if (v.baseSalary > 0) fromCloud[k] = v.baseSalary;
+        });
+        return { ...fromCloud, ...prev };
+      });
+    });
   }, [currentUser, setTransactions, setExtraIncomes, setCardPayments]);
 
-  const budget = {
+  const budget = useMemo(() => ({
     year: currentYear,
     month: currentMonth,
     baseSalary: totalSalaryAmount,
     salaries,
     initialDebitBalance: initialDebitForMonth,
     otherIncomes: currentOtherIncomes
-  };
+  }), [currentYear, currentMonth, totalSalaryAmount, salaries, initialDebitForMonth, currentOtherIncomes]);
 
   // Conciliación bancaria (estado del estado de cuenta e importación de faltantes)
   const {
@@ -638,7 +666,10 @@ function useFinanceController() {
     return {
       monthKey: pKey,
       monthName: MONTH_NAMES[pMonth],
-      amount: stats.projectedDebitBalanceMonthEnd
+      // Redondear a 2 decimales en el origen: evita arrastrar ruido binario de
+      // punto flotante (p. ej. 3019.3799999999997) a los consumidores que copian
+      // este valor tal cual al saldo inicial (botón "Traer cierre" / modal Editar).
+      amount: Math.round(stats.projectedDebitBalanceMonthEnd * 100) / 100
     };
   }, [currentYear, currentMonth, initialDebitBalances, transactions, extraIncomes, cardPayments, paymentMethods, salaries, receivables, payables]);
 
@@ -705,7 +736,7 @@ function useFinanceController() {
   }, [budget, currentMonthTransactions, receivables, transactions]);
 
   // Asesor de tarjeta para el día 15
-  const todayRef = new Date(currentYear, currentMonth - 1, 15);
+  const todayRef = useMemo(() => new Date(currentYear, currentMonth - 1, 15), [currentYear, currentMonth]);
   const cardAdvisor = useMemo(() => {
     return getBestCardRecommendation(paymentMethods, todayRef);
   }, [paymentMethods, todayRef]);
@@ -791,9 +822,11 @@ function useFinanceController() {
       variableSum > 0 ? variableSum : 750,
       forecastHorizon,
       transactions,
-      creditCardIds
+      creditCardIds,
+      extraIncomes,
+      initialDebitBalances
     );
-  }, [currentYear, currentMonth, debitStats.projectedDebitBalanceMonthEnd, salaries, transactions, currentMonthTransactions, monthKey, forecastHorizon, paymentMethods]);
+  }, [currentYear, currentMonth, debitStats.projectedDebitBalanceMonthEnd, salaries, transactions, currentMonthTransactions, monthKey, forecastHorizon, paymentMethods, extraIncomes, initialDebitBalances]);
 
   // Detección Inteligente de Anomalías y Cobros Duplicados (IA & NLP)
   const aiAnomalies = useMemo(() => {
@@ -807,7 +840,7 @@ function useFinanceController() {
   // es decir diagnostic.realCashOutflow generalizado a todo el historial cargado.
   // El ingreso combina el sueldo recurrente con los ingresos extra reales del mes.
   const monthlyHistoricalFlow = useMemo(() => {
-    const baseSalary = salaries.reduce((acc, s) => acc + s.amount, 0);
+    const currentSalary = salaries.reduce((acc, s) => acc + s.amount, 0);
 
     // "Hoy" real: los meses posteriores al mes en curso se marcan como proyectados.
     const nowRef = new Date();
@@ -852,7 +885,9 @@ function useFinanceController() {
     for (let m = firstMonth; m <= lastMonth; m++) {
       const key = `${currentYear}-${m.toString().padStart(2, '0')}`;
       const extraTotal = (extraIncomes[key] || []).reduce((acc, curr) => acc + curr.amount, 0);
-      const inVal = Number((baseSalary + extraTotal).toFixed(2));
+      // Sueldo real del mes (si se guardó uno propio); si no, el sueldo global vigente.
+      const monthSalary = monthlySalaries[key] || currentSalary;
+      const inVal = Number((monthSalary + extraTotal).toFixed(2));
       const outVal = Number((outByMonth.get(key) || 0).toFixed(2));
       const consumed = Number((consumedByMonth.get(key) || 0).toFixed(2));
       const savings = Number((inVal - outVal).toFixed(2));
@@ -868,7 +903,7 @@ function useFinanceController() {
       });
     }
     return items;
-  }, [salaries, extraIncomes, transactions, monthKey, currentYear]);
+  }, [salaries, monthlySalaries, extraIncomes, transactions, monthKey, currentYear]);
 
   // Filtro de transacciones (Búsqueda + Categoría + Tarjeta/Medio + Tipo Fijo/Variable)
   const filteredTransactions = useMemo(() => {
@@ -986,7 +1021,22 @@ function useFinanceController() {
       });
     }
 
-    return items.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime());
+    // Orden determinista: por fecha descendente y, ante empate (mismo día), por un
+    // texto/id estable. Sin este desempate, el orden de pagos recurrentes del mismo
+    // día variaba entre meses (dependía del orden de llegada desde la nube).
+    const tieKey = (m: UnifiedMovement): string => {
+      switch (m.kind) {
+        case 'transaction': return `${m.data.description} ${m.data.id}`;
+        case 'income': return `${m.data.description} ${m.data.id}`;
+        case 'payable_payment': return `${m.data.creditorName} ${m.data.description} ${m.data.id}`;
+        case 'card_payment': return `${m.data.paymentMethodId} ${m.data.id || m.index}`;
+      }
+    };
+    return items.sort((a, b) => {
+      const dateDiff = new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return tieKey(a).localeCompare(tieKey(b));
+    });
   }, [txTypeFilter, filteredTransactions, currentMonthCardPayments, paymentMethods, searchQuery, selectedCategory, selectedPaymentMethod, salaries, monthKey, currentOtherIncomes, payables]);
 
   // Total de movimientos del mes SIN filtros — fuente única para el badge de "Movimientos"
@@ -1097,7 +1147,7 @@ function useFinanceController() {
 
   const handleAdjustDebit = (e: React.FormEvent) => {
     e.preventDefault();
-    const newBal = parseFloat(tempDebitBalance || '0');
+    const newBal = Math.round((parseFloat(tempDebitBalance || '0') || 0) * 100) / 100;
     setInitialDebitBalances(prev => ({
       ...prev,
       [monthKey]: newBal

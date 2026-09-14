@@ -28,7 +28,6 @@ export const OverviewTab: React.FC = () => {
     initialDebitForMonth,
     totalSalaryAmount,
     currentOtherIncomes,
-    setTempDebitBalance,
     setIsAdjustDebitModalOpen,
     prevMonthClosingBalance,
     setInitialDebitBalances,
@@ -127,10 +126,7 @@ export const OverviewTab: React.FC = () => {
             </span>
             <button
               className="btn-adjust-link"
-              onClick={() => {
-                setTempDebitBalance(initialDebitForMonth.toString());
-                setIsAdjustDebitModalOpen(true);
-              }}
+              onClick={() => setIsAdjustDebitModalOpen(true)}
               title="Ajustar saldo inicial de este mes"
               style={{ marginLeft: '4px' }}
             >

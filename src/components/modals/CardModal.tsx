@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { X, CreditCard, Wallet, Check } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { CARD_COLOR_PRESETS } from '@/lib/constants';
@@ -9,26 +9,33 @@ import { useFinance } from '@/contexts/FinanceContext';
 export const CardModal: React.FC = () => {
   const {
     setIsCardModalOpen,
-    handleCreateCard,
-    newCardName,
-    setNewCardName,
-    newCardType,
-    setNewCardType,
-    newCardColor,
-    setNewCardColor,
-    newCardLimit,
-    setNewCardLimit,
-    newCardCloseDay,
-    setNewCardCloseDay,
-    newCardDueDay,
-    setNewCardDueDay,
-    newCardInitialDebt,
-    setNewCardInitialDebt,
+    createCard,
     handleBackdropMouseDown,
     handleBackdropClick
   } = useFinance();
+
+  // Estado del formulario local al modal: teclear aquí no re-renderiza el dashboard.
+  const [newCardName, setNewCardName] = useState('');
+  const [newCardType, setNewCardType] = useState<'credit' | 'debit'>('credit');
+  const [newCardCloseDay, setNewCardCloseDay] = useState('25');
+  const [newCardDueDay, setNewCardDueDay] = useState('18');
+  const [newCardLimit, setNewCardLimit] = useState('4000');
+  const [newCardColor, setNewCardColor] = useState('#6366f1');
+  const [newCardInitialDebt, setNewCardInitialDebt] = useState('');
+
   const onClose = () => setIsCardModalOpen(false);
-  const onSubmit = handleCreateCard;
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createCard({
+      name: newCardName,
+      type: newCardType,
+      closeDay: newCardCloseDay,
+      dueDay: newCardDueDay,
+      limit: newCardLimit,
+      color: newCardColor,
+      initialDebt: newCardInitialDebt
+    });
+  };
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

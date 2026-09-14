@@ -14,8 +14,6 @@ export const CardsTab: React.FC = () => {
   const {
     handleOpenCreateCardPayment,
     setIsCardModalOpen,
-    setTempDebitBalance,
-    initialDebitForMonth,
     setIsAdjustDebitModalOpen,
     debitStats,
     cardDebtSummary,
@@ -120,10 +118,7 @@ export const CardsTab: React.FC = () => {
             type="button"
             className="btn-secondary"
             style={{ padding: '7px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}
-            onClick={() => {
-              setTempDebitBalance(initialDebitForMonth.toString());
-              setIsAdjustDebitModalOpen(true);
-            }}
+            onClick={() => setIsAdjustDebitModalOpen(true)}
             title="Ajustar saldo inicial de cuenta débito"
           >
             <Pencil size={12} />

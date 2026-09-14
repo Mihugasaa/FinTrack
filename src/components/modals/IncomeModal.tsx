@@ -1,24 +1,30 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const IncomeModal: React.FC = () => {
   const {
     setIsIncomeModalOpen,
-    handleAddExtraIncome,
-    incomeDesc,
-    setIncomeDesc,
-    incomeDate,
-    setIncomeDate,
-    incomeAmount,
-    setIncomeAmount,
+    addExtraIncome,
     handleBackdropMouseDown,
     handleBackdropClick
   } = useFinance();
+
+  // Estado del formulario local al modal: teclear aquí no re-renderiza el dashboard.
+  const [incomeDesc, setIncomeDesc] = useState('');
+  const [incomeAmount, setIncomeAmount] = useState('');
+  const [incomeDate, setIncomeDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+  });
+
   const onClose = () => setIsIncomeModalOpen(false);
-  const onSubmit = handleAddExtraIncome;
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    addExtraIncome(incomeDesc, incomeAmount, incomeDate);
+  };
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

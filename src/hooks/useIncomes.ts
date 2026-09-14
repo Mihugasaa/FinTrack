@@ -24,14 +24,6 @@ export function useIncomes({ monthKey, currentYear, currentMonth }: UseIncomesDe
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
 
-  // Form Ingreso Extra
-  const [incomeDesc, setIncomeDesc] = useState('');
-  const [incomeAmount, setIncomeAmount] = useState('');
-  const [incomeDate, setIncomeDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-  });
-
   // Form Configurar Sueldo
   const [salarySource, setSalarySource] = useState('Empleo Principal (Nómina)');
   const [salaryAmount, setSalaryAmount] = useState('2126.49');
@@ -40,18 +32,19 @@ export function useIncomes({ monthKey, currentYear, currentMonth }: UseIncomesDe
   const currentOtherIncomes = extraIncomes[monthKey] || [];
   const totalSalaryAmount = salaries.reduce((acc, curr) => acc + curr.amount, 0);
 
-  const handleAddExtraIncome = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!incomeDesc || !incomeAmount) return;
+  // Registra un ingreso extra. El estado del formulario vive local en IncomeModal
+  // (así teclear no re-renderiza el dashboard); aquí solo recibimos el payload.
+  const addExtraIncome = (desc: string, amount: string, date?: string) => {
+    if (!desc || !amount) return;
 
-    const date = incomeDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-15`;
-    const targetMonthKey = date.slice(0, 7);
+    const finalDate = date || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-15`;
+    const targetMonthKey = finalDate.slice(0, 7);
 
     const newInc: OtherIncome = {
       id: `oi-${Date.now()}`,
-      description: incomeDesc,
-      amount: parseFloat(incomeAmount),
-      receivedDate: date
+      description: desc,
+      amount: parseFloat(amount),
+      receivedDate: finalDate
     };
 
     setExtraIncomes(prev => ({
@@ -60,11 +53,9 @@ export function useIncomes({ monthKey, currentYear, currentMonth }: UseIncomesDe
     }));
 
     // POST a Supabase en la nube con fecha exacta
-    SupabaseDataService.createOtherIncome(newInc, date);
+    SupabaseDataService.createOtherIncome(newInc, finalDate);
 
     setIsIncomeModalOpen(false);
-    setIncomeDesc('');
-    setIncomeAmount('');
   };
 
   // Acredita a débito un ingreso por un préstamo recibido: se coloca al frente
@@ -116,19 +107,13 @@ export function useIncomes({ monthKey, currentYear, currentMonth }: UseIncomesDe
     setIsIncomeModalOpen,
     isSalaryModalOpen,
     setIsSalaryModalOpen,
-    incomeDesc,
-    setIncomeDesc,
-    incomeAmount,
-    setIncomeAmount,
-    incomeDate,
-    setIncomeDate,
     salarySource,
     setSalarySource,
     salaryAmount,
     setSalaryAmount,
     salaryPayDay,
     setSalaryPayDay,
-    handleAddExtraIncome,
+    addExtraIncome,
     creditLoanIncome,
     deleteExtraIncome,
     handleSaveSalary

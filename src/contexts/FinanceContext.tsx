@@ -178,18 +178,9 @@ function useFinanceController() {
   const [editCardInitialDebt, setEditCardInitialDebt] = useState('');
 
 
-  // Form Ajustar Saldo Débito
-  const [tempDebitBalance, setTempDebitBalance] = useState('0');
+  // El formulario de Ajustar Saldo Débito vive local en AdjustDebitModal (ver adjustDebit).
 
-  // Form Nueva Tarjeta
-  const [newCardName, setNewCardName] = useState('');
-  const [newCardType, setNewCardType] = useState<'credit' | 'debit'>('credit');
-  const [newCardCloseDay, setNewCardCloseDay] = useState('25');
-  const [newCardDueDay, setNewCardDueDay] = useState('18');
-  const [newCardLimit, setNewCardLimit] = useState('4000');
-  const [newCardColor, setNewCardColor] = useState('#6366f1');
-  const [newCardInitialDebt, setNewCardInitialDebt] = useState('');
-
+  // El formulario de Nueva Tarjeta vive local en CardModal (ver createCard).
 
   // Estados Fase 4: Analítica, Conciliación Bancaria y Sugerencias de IA
   // Por defecto 3 meses para no saturar la vista de Analítica con datos.
@@ -291,19 +282,13 @@ function useFinanceController() {
     setIsIncomeModalOpen,
     isSalaryModalOpen,
     setIsSalaryModalOpen,
-    incomeDesc,
-    setIncomeDesc,
-    incomeAmount,
-    setIncomeAmount,
-    incomeDate,
-    setIncomeDate,
     salarySource,
     setSalarySource,
     salaryAmount,
     setSalaryAmount,
     salaryPayDay,
     setSalaryPayDay,
-    handleAddExtraIncome,
+    addExtraIncome,
     creditLoanIncome,
     deleteExtraIncome,
     handleSaveSalary
@@ -1145,9 +1130,9 @@ function useFinanceController() {
     }
   };
 
-  const handleAdjustDebit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newBal = Math.round((parseFloat(tempDebitBalance || '0') || 0) * 100) / 100;
+  // Ajusta el saldo débito inicial del mes. El input vive local en AdjustDebitModal.
+  const adjustDebit = (value: string) => {
+    const newBal = Math.round((parseFloat(value || '0') || 0) * 100) / 100;
     setInitialDebitBalances(prev => ({
       ...prev,
       [monthKey]: newBal
@@ -1157,29 +1142,35 @@ function useFinanceController() {
     setIsAdjustDebitModalOpen(false);
   };
 
-  const handleCreateCard = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCardName) return;
+  // Crea una tarjeta/medio de pago. El estado del formulario vive local en CardModal.
+  const createCard = (data: {
+    name: string;
+    type: 'credit' | 'debit';
+    closeDay: string;
+    dueDay: string;
+    limit: string;
+    color: string;
+    initialDebt: string;
+  }) => {
+    if (!data.name) return;
 
     const newCard: PaymentMethod = {
       id: generateUUID(),
-      name: newCardName,
-      type: newCardType,
-      billingCloseDay: newCardType === 'credit' ? parseInt(newCardCloseDay, 10) : undefined,
-      paymentDueDay: newCardType === 'credit' ? parseInt(newCardDueDay, 10) : undefined,
-      color: newCardColor,
-      icon: newCardType === 'credit' ? 'CreditCard' : 'Banknote',
+      name: data.name,
+      type: data.type,
+      billingCloseDay: data.type === 'credit' ? parseInt(data.closeDay, 10) : undefined,
+      paymentDueDay: data.type === 'credit' ? parseInt(data.dueDay, 10) : undefined,
+      color: data.color,
+      icon: data.type === 'credit' ? 'CreditCard' : 'Banknote',
       isActive: true,
-      creditLimit: parseFloat(newCardLimit || '0'),
-      initialDebt: newCardInitialDebt ? parseFloat(newCardInitialDebt) : 0
+      creditLimit: parseFloat(data.limit || '0'),
+      initialDebt: data.initialDebt ? parseFloat(data.initialDebt) : 0
     };
 
-    setPaymentMethods([...paymentMethods, newCard]);
+    setPaymentMethods(prev => [...prev, newCard]);
     // POST a Supabase en la nube
     SupabaseDataService.createPaymentMethod(newCard);
     setIsCardModalOpen(false);
-    setNewCardName('');
-    setNewCardInitialDebt('');
   };
 
   const renderTodayDividerRow = (keySuffix: string | number) => (
@@ -1248,9 +1239,7 @@ function useFinanceController() {
     initialDebitBalances,
     setInitialDebitBalances,
     initialDebitForMonth,
-    tempDebitBalance,
-    setTempDebitBalance,
-    handleAdjustDebit,
+    adjustDebit,
 
     // Medios de pago y categorías
     paymentMethods,
@@ -1310,21 +1299,7 @@ function useFinanceController() {
     handleSaveEditCard,
 
     // Crear tarjeta
-    newCardName,
-    setNewCardName,
-    newCardType,
-    setNewCardType,
-    newCardCloseDay,
-    setNewCardCloseDay,
-    newCardDueDay,
-    setNewCardDueDay,
-    newCardLimit,
-    setNewCardLimit,
-    newCardColor,
-    setNewCardColor,
-    newCardInitialDebt,
-    setNewCardInitialDebt,
-    handleCreateCard,
+    createCard,
 
     // Analítica / proyecciones
     forecastHorizon,
@@ -1403,19 +1378,13 @@ function useFinanceController() {
     setIsIncomeModalOpen,
     isSalaryModalOpen,
     setIsSalaryModalOpen,
-    incomeDesc,
-    setIncomeDesc,
-    incomeAmount,
-    setIncomeAmount,
-    incomeDate,
-    setIncomeDate,
     salarySource,
     setSalarySource,
     salaryAmount,
     setSalaryAmount,
     salaryPayDay,
     setSalaryPayDay,
-    handleAddExtraIncome,
+    addExtraIncome,
     creditLoanIncome,
     deleteExtraIncome,
     handleSaveSalary,

@@ -1,25 +1,33 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const AdjustDebitModal: React.FC = () => {
   const {
     setIsAdjustDebitModalOpen,
-    handleAdjustDebit,
+    adjustDebit,
     monthNames,
     currentMonth,
     currentYear,
     prevMonthClosingBalance,
-    tempDebitBalance,
-    setTempDebitBalance,
+    initialDebitForMonth,
     handleBackdropMouseDown,
     handleBackdropClick,
     formatSoles
   } = useFinance();
+
+  // Estado local del formulario: se siembra con el saldo base actual del mes.
+  const [tempDebitBalance, setTempDebitBalance] = useState(
+    () => (initialDebitForMonth ? initialDebitForMonth.toString() : '0')
+  );
+
   const onClose = () => setIsAdjustDebitModalOpen(false);
-  const onSubmit = handleAdjustDebit;
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    adjustDebit(tempDebitBalance);
+  };
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>

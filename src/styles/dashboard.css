@@ -5091,7 +5091,14 @@
   box-shadow: 0 20px 40px -4px rgba(0, 0, 0, 0.25), 0 8px 16px -4px rgba(0, 0, 0, 0.1);
   padding: 16px;
   width: 320px;
+  max-width: min(320px, calc(100vw - 32px));
   animation: customSelectFadeIn 0.14s ease-out;
+}
+
+/* Flip hacia arriba cuando no hay espacio suficiente debajo (modales altos). */
+.custom-date-picker-popover.open-up {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 
 .date-picker-header {
@@ -5588,17 +5595,32 @@
 }
 
 /* Cuadrícula Armónica de Cards de Deudores y Acreedores (2 Columnas Equilibradas) */
+/* Masonry de dos columnas INDEPENDIENTES: al expandir una ficha, solo se mueven
+   las de su misma columna (no las de al lado). Split por mitades para que en móvil,
+   al apilarse, el orden natural se conserve. */
 .loans-harmonious-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
   gap: 18px;
   width: 100%;
-  align-items: start;
+  align-items: flex-start;
+}
+
+.loans-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 @media (max-width: 900px) {
   .loans-harmonious-grid {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .loans-col {
+    flex: none;
+    width: 100%;
     gap: 14px;
   }
 }

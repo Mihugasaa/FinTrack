@@ -6,7 +6,8 @@
  * 3. Motor predictivo de proyección de flujo de caja a 3 y 6 meses (Cashflow Forecasting).
  */
 
-import { Category, Transaction, SalaryIncome, AIAnomaly, CashflowForecastMonth } from '@/types';
+import { Category, Transaction, SalaryIncome, AIAnomaly, CashflowForecastMonth, Payable, Receivable } from '@/types';
+import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 
 // Catálogo semántico de comercios y patrones
 const MERCHANT_PATTERNS: { keywords: string[]; categoryKeyword: string; isFixedDefault?: boolean }[] = [
@@ -101,6 +102,114 @@ export class AIIntelligenceService {
     }
 
     return null;
+  }
+
+  /**
+   * Parser LOCAL de gasto en lenguaje natural (sin IA): resuelve el caso común de
+   * forma instantánea. Extrae monto, moneda, fecha relativa, categoría —reusando
+   * `predictCategory`— y medio de pago. Devuelve `confidence`; el llamador decide
+   * si con eso basta o cae al parser con IA como respaldo.
+   */
+  public static parseExpenseLocally(
+    text: string,
+    currentDate: string,
+    categories: Category[],
+    paymentMethods: { id: string; name: string; type: string }[]
+  ): {
+    description: string;
+    amount: number;
+    currency: 'PEN' | 'USD';
+    date: string;
+    categoryId: string | null;
+    categoryName: string | null;
+    paymentMethodId: string | null;
+    isFixed: boolean;
+    confidence: number;
+  } | null {
+    if (!text || !text.trim()) return null;
+    const raw = text.trim();
+    const lower = raw.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+    // Moneda: $, dólar o usd → USD; por defecto PEN.
+    const currency: 'PEN' | 'USD' = /\$|dolar|usd/.test(lower) ? 'USD' : 'PEN';
+
+    // Monto: preferimos un número adyacente a símbolo/moneda; si no, el primer número.
+    let amount = 0;
+    const adj = lower.match(/(?:s\/\.?\s*|\$\s*)(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(?:soles|sol|dolares|dolar|usd)/);
+    if (adj) {
+      amount = parseFloat((adj[1] || adj[2] || '0').replace(',', '.'));
+    } else {
+      const first = lower.match(/\d+(?:[.,]\d+)?/);
+      if (first) amount = parseFloat(first[0].replace(',', '.'));
+    }
+
+    // Fecha relativa respecto a currentDate.
+    let date = currentDate;
+    const base = new Date(`${currentDate}T12:00:00`);
+    const toStr = (d: Date) => `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+    if (/\banteayer\b/.test(lower)) { const d = new Date(base); d.setDate(d.getDate() - 2); date = toStr(d); }
+    else if (/\bayer\b/.test(lower)) { const d = new Date(base); d.setDate(d.getDate() - 1); date = toStr(d); }
+    else if (/\bhoy\b/.test(lower)) { date = currentDate; }
+    else {
+      const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+      const idx = days.findIndex(d => new RegExp(`\\b${d}\\b`).test(lower));
+      if (idx >= 0) {
+        const d = new Date(base);
+        let diff = (d.getDay() - idx + 7) % 7;
+        if (diff === 0) diff = 7; // el día de semana más reciente ya pasado
+        d.setDate(d.getDate() - diff);
+        date = toStr(d);
+      }
+    }
+
+    // Categoría reusando el catálogo de comercios.
+    const pred = this.predictCategory(raw, categories);
+
+    // Medio de pago por coincidencia de nombre o pista de banco/tipo.
+    let paymentMethodId: string | null = null;
+    for (const pm of paymentMethods) {
+      const pmName = pm.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      if (pmName && lower.includes(pmName)) { paymentMethodId = pm.id; break; }
+    }
+    if (!paymentMethodId) {
+      const hints = ['bcp', 'bbva', 'interbank', 'scotiabank', 'yape', 'plin', 'efectivo', 'debito', 'credito'];
+      const hint = hints.find(h => lower.includes(h));
+      if (hint) {
+        const match = paymentMethods.find(pm =>
+          pm.name.toLowerCase().includes(hint) ||
+          (hint === 'credito' && pm.type === 'credit') ||
+          (hint === 'debito' && pm.type === 'debit') ||
+          (hint === 'efectivo' && pm.type === 'cash')
+        );
+        if (match) paymentMethodId = match.id;
+      }
+    }
+
+    // Descripción: quitamos tokens de monto/moneda/fecha y verbos de relleno.
+    let desc = raw
+      .replace(/s\/\.?\s*\d+(?:[.,]\d+)?/gi, '')
+      .replace(/\$\s*\d+(?:[.,]\d+)?/gi, '')
+      .replace(/\d+(?:[.,]\d+)?\s*(?:soles|sol|dolares|dolar|usd)/gi, '')
+      .replace(/\b(hoy|ayer|anteayer|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/gi, '')
+      .replace(/\b(gast[eé]|pagu[eé]|compr[eé]|gasto de|pago de|en)\b/gi, ' ')
+      .replace(/\d+(?:[.,]\d+)?/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!desc) desc = pred?.categoryName || raw;
+
+    const confidence = amount > 0 ? (pred ? 0.85 : 0.6) : 0.2;
+
+    return {
+      description: desc.charAt(0).toUpperCase() + desc.slice(1),
+      amount,
+      currency,
+      date,
+      categoryId: pred?.categoryId || null,
+      categoryName: pred?.categoryName || null,
+      paymentMethodId,
+      isFixed: pred?.isFixedSuggestion || false,
+      confidence
+    };
   }
 
   /**
@@ -225,7 +334,11 @@ export class AIIntelligenceService {
     extraIncomesByMonth: Record<string, { amount: number }[]> = {},
     // Saldo inicial anticipado por mes (YYYY-MM). Si el usuario fijó a mano el saldo
     // de arranque de un mes futuro, se usa como ancla en lugar del arrastre calculado.
-    initialBalanceOverrides: Record<string, number> = {}
+    initialBalanceOverrides: Record<string, number> = {},
+    // Deudas propias y cobranzas de terceros con fecha de vencimiento: las que caen
+    // en un mes futuro se proyectan como salida/entrada programada de caja.
+    payables: Payable[] = [],
+    receivables: Receivable[] = []
   ): CashflowForecastMonth[] {
     const forecast: CashflowForecastMonth[] = [];
     const monthNames = [
@@ -276,10 +389,29 @@ export class AIIntelligenceService {
 
       const fixedExpenses = debitFixed + projectedCardOutflows;
       const projectedVariableExpenses = historicalMonthlyVariableAvg > 0 ? historicalMonthlyVariableAvg : 800.00;
-      const totalProjectedOutflow = fixedExpenses + projectedVariableExpenses;
 
-      // Dinero disponible antes de gastos del mes = saldo anterior + ingresos
-      const totalAvailable = projectedInitial + expectedIncome;
+      // 3. Deudas propias que vencen este mes (salida programada de caja).
+      const scheduledDebtDue = payables
+        .filter(p => (p.dueDate || '').startsWith(targetYM) && p.status !== 'PAID')
+        .reduce((acc, p) => {
+          const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
+          const pen = p.currency === 'USD' ? rem * (p.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
+          return acc + Math.max(0, pen);
+        }, 0);
+
+      // 4. Cobranzas esperadas de terceros que vencen este mes (entrada programada).
+      const scheduledReceivableDue = receivables
+        .filter(r => (r.dueDate || '').startsWith(targetYM) && r.status !== 'paid')
+        .reduce((acc, r) => {
+          const rem = r.remainingAmount ?? 0;
+          const pen = r.currency === 'USD' ? rem * (r.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
+          return acc + Math.max(0, pen);
+        }, 0);
+
+      const totalProjectedOutflow = fixedExpenses + projectedVariableExpenses + scheduledDebtDue;
+
+      // Dinero disponible antes de gastos del mes = saldo anterior + ingresos + cobranzas programadas
+      const totalAvailable = projectedInitial + expectedIncome + scheduledReceivableDue;
       const projectedEndingBalance = totalAvailable - totalProjectedOutflow;
       const liquidityMargin = projectedEndingBalance;
       const isDeficitRisk = liquidityMargin < 0;
@@ -296,7 +428,9 @@ export class AIIntelligenceService {
         totalProjectedOutflow: Math.round(totalProjectedOutflow * 100) / 100,
         projectedEndingBalance: Math.round(projectedEndingBalance * 100) / 100,
         liquidityMargin: Math.round(liquidityMargin * 100) / 100,
-        isDeficitRisk
+        isDeficitRisk,
+        scheduledDebtDue: Math.round(scheduledDebtDue * 100) / 100,
+        scheduledReceivableDue: Math.round(scheduledReceivableDue * 100) / 100
       });
 
       // El saldo final proyectado se convierte en el saldo inicial del siguiente mes

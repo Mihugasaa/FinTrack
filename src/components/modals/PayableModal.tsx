@@ -3,6 +3,7 @@
 import React from 'react';
 import { X, Banknote, DollarSign, Sparkles, Repeat } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import { CurrencyCode } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
@@ -11,6 +12,8 @@ export const PayableModal: React.FC = () => {
   const {
     setIsPayableModalOpen,
     handleCreatePayable,
+    editingPayableId,
+    setEditingPayableId,
     payableCreditorName,
     setPayableCreditorName,
     payableDesc,
@@ -34,14 +37,18 @@ export const PayableModal: React.FC = () => {
     handleBackdropMouseDown,
     handleBackdropClick
   } = useFinance();
-  const onClose = () => setIsPayableModalOpen(false);
+  const onClose = () => {
+    setIsPayableModalOpen(false);
+    setEditingPayableId(null);
+  };
   const onSubmit = handleCreatePayable;
+  const isEditing = !!editingPayableId;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-drag-handle" />
         <div className="modal-title-row">
-          <span className="text-h2 font-bold">Registrar Deuda Mía</span>
+          <span className="text-h2 font-bold">{isEditing ? 'Editar Deuda Mía' : 'Registrar Deuda Mía'}</span>
           <button id="btn-close-payable-modal" className="month-nav-btn modal-close-btn" onClick={onClose}>
             <X size={16} />
           </button>
@@ -112,14 +119,10 @@ export const PayableModal: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">Fecha en que te prestaron el dinero</label>
-            <input
+            <CustomDatePicker
               id="input-payable-issue-date"
-              type="date"
-              className="form-input"
-              required
               value={payableIssueDate}
-              onChange={e => {
-                const newDate = e.target.value;
+              onChange={(newDate) => {
                 setPayableIssueDate(newDate);
                 if (payableCurrency === 'USD') {
                   fetchPayableSunatRate(newDate, true);
@@ -220,12 +223,11 @@ export const PayableModal: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">Fecha Límite de Devolución • Opcional</label>
-            <input
+            <CustomDatePicker
               id="input-payable-due-date"
-              type="date"
-              className="form-input"
               value={payableDueDate}
-              onChange={e => setPayableDueDate(e.target.value)}
+              onChange={setPayableDueDate}
+              placeholder="Sin fecha límite..."
             />
           </div>
 
@@ -279,7 +281,7 @@ export const PayableModal: React.FC = () => {
               Cancelar
             </button>
             <button id="btn-submit-payable" type="submit" className="btn-primary">
-              Guardar Deuda
+              {isEditing ? 'Actualizar Deuda' : 'Guardar Deuda'}
             </button>
           </div>
         </form>

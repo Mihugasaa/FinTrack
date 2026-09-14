@@ -18,6 +18,12 @@ interface CFODiagnosticRequest {
   topCategories?: { category: string; amount: number; percentage: number }[];
   pendingReceivablesTotal?: number;
   pendingPayablesTotal?: number;
+  // Diagnóstico determinista calculado en el cliente. La IA lo EXPLICA y prioriza,
+  // no lo recalcula.
+  healthScore?: number;
+  healthLevel?: string;
+  components?: { label: string; points: number; max: number; detail: string }[];
+  trend?: { avgPriorSavings: number; currentSavings: number; improving: boolean };
 }
 
 export async function POST(req: NextRequest) {
@@ -36,7 +42,11 @@ export async function POST(req: NextRequest) {
       savingsRatePercentage = 0,
       topCategories = [],
       pendingReceivablesTotal = 0,
-      pendingPayablesTotal = 0
+      pendingPayablesTotal = 0,
+      healthScore,
+      healthLevel,
+      components = [],
+      trend
     } = body;
 
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -48,35 +58,58 @@ export async function POST(req: NextRequest) {
       ? topCategories.map(c => `${c.category}: S/ ${c.amount.toFixed(2)} • ${c.percentage}%`).join('\n')
       : 'Sin distribución de categorías disponible';
 
-    const prompt = `Actúa como un Director Financiero Personal (CFO Copilot) de élite para una persona en Perú.
-Tu objetivo es analizar los números financieros consolidados del mes y proveer un diagnóstico ejecutivo, nítido, sin tecnicismos innecesarios ni texto de relleno, enfocado en solvencia, fugas y maximización de patrimonio.
+    const componentsStr = components.length > 0
+      ? components.map(c => `${c.label}: ${c.points}/${c.max} pts • ${c.detail}`).join('\n')
+      : 'Sin desglose de componentes disponible';
 
-DATOS FINANCIEROS DEL PERIODO (${monthName} ${year}):
-- Ingresos Totales: S/ ${totalIncome.toFixed(2)} (Sueldo Base: S/ ${baseSalary.toFixed(2)} + Ingresos Extra: S/ ${extraIncomesTotal.toFixed(2)})
+    const trendStr = trend
+      ? `Ahorro del mes S/ ${trend.currentSavings.toFixed(2)} vs promedio previo S/ ${trend.avgPriorSavings.toFixed(2)} • ${trend.improving ? 'mejorando' : 'empeorando'}`
+      : 'Sin tendencia disponible';
+
+    const prompt = `Actúa como un Director Financiero Personal (CFO Copilot) de élite para una persona en Perú.
+El puntaje de salud financiera YA fue calculado de forma determinista por el sistema. Tu trabajo NO es recalcularlo ni cuestionarlo, sino EXPLICARLO en lenguaje claro y priorizar la acción de mayor impacto. Sé nítido, sin tecnicismos innecesarios ni relleno.
+
+DIAGNÓSTICO YA CALCULADO (${monthName} ${year}):
+- Salud Financiera: ${healthScore ?? 'N/D'}/100 • Nivel: ${healthLevel ?? 'N/D'}
+- Desglose del puntaje:
+${componentsStr}
+- Tendencia: ${trendStr}
+
+DATOS FINANCIEROS DEL PERIODO:
+- Ingresos Totales: S/ ${totalIncome.toFixed(2)} • Sueldo Base S/ ${baseSalary.toFixed(2)} + Extra S/ ${extraIncomesTotal.toFixed(2)}
 - Gastos Consumidos del Mes: S/ ${totalConsumedExpenses.toFixed(2)}
-- Salida Real de Caja / Vencimientos a Pagar este Mes: S/ ${realCashOutflow.toFixed(2)}
+- Salida Real de Caja este Mes: S/ ${realCashOutflow.toFixed(2)}
 - Margen de Liquidez: S/ ${liquidityMargin.toFixed(2)} • Estado: ${liquidityStatus}
 - Tasa de Ahorro: ${savingsRatePercentage.toFixed(1)}%
-- Cuentas por Cobrar Pendientes (Dinero que te deben): S/ ${pendingReceivablesTotal.toFixed(2)}
-- Deudas Pendientes con Terceros (Dinero que debes): S/ ${pendingPayablesTotal.toFixed(2)}
+- Cuentas por Cobrar Pendientes: S/ ${pendingReceivablesTotal.toFixed(2)}
+- Deudas Pendientes con Terceros: S/ ${pendingPayablesTotal.toFixed(2)}
 
 CATEGORÍAS DE MAYOR CONSUMO:
 ${categoriesStr}
 
-Genera un informe ejecutivo estructurado en un JSON EXACTO con estos campos:
+Genera un informe ejecutivo en un JSON EXACTO con estos campos:
 {
-  "healthScore": 85,
-  "healthLevel": "Excelente | Saludable | Alerta | Crítico",
-  "liquidityInsight": "Evaluación breve y directa de la salud del flujo de caja y capacidad de cobertura.",
-  "spendingLeakInsight": "Detección precisa de la mayor fuga o rubro de riesgo según las categorías.",
-  "actionableRecommendation": "Acción inmediata de alto impacto que el usuario debe ejecutar esta semana."
+  "liquidityInsight": "Explica en lenguaje simple qué significa el margen y el nivel de salud para su capacidad de cubrir el mes.",
+  "spendingLeakInsight": "Señala la mayor fuga o rubro de riesgo según las categorías y el desglose del puntaje.",
+  "actionableRecommendation": "La ÚNICA acción de mayor impacto que debe ejecutar esta semana, coherente con el componente más débil del puntaje."
 }
 
 REGLAS DE ORO:
-1. "healthScore": Calificación entera de 1 a 100 basada en margen positivo, tasa de ahorro (>20% excelente) y nivel de endeudamiento.
-2. "healthLevel": Una sola palabra entre "Excelente", "Saludable", "Alerta", "Crítico".
-3. CONCISIÓN EJECUTIVA: Cada insight debe tener máximo 2 oraciones contundentes. Cero redundancias.
-4. REGLA ESTRICTA DE DISEÑO FINTRACK: PROHIBIDO USAR PARÉNTESIS '(' O ')'. Si necesitas acotar o detallar, usa viñetas '•' o comas. Absolutamente ningún paréntesis.`;
+1. Coherencia: tus textos deben alinearse con el puntaje ${healthScore ?? ''} y su nivel ${healthLevel ?? ''}. No contradigas el número ya calculado.
+2. CONCISIÓN EJECUTIVA: cada insight máximo 2 oraciones contundentes. Cero redundancias.
+3. REGLA ESTRICTA DE DISEÑO FINTRACK: PROHIBIDO USAR PARÉNTESIS '(' O ')'. Si necesitas acotar, usa viñetas '•' o comas. Absolutamente ningún paréntesis.`;
+
+    // El puntaje es determinista y llega ya calculado desde el cliente. La IA solo
+    // aporta la narrativa; nunca sobreescribe el número. Si por retrocompatibilidad
+    // no llegara, caemos a una estimación simple.
+    const fallbackScore = liquidityMargin >= 0
+      ? Math.min(95, Math.round(50 + savingsRatePercentage))
+      : Math.max(25, Math.round(50 + (liquidityMargin / (totalIncome || 1)) * 50));
+    const resolvedScore = typeof healthScore === 'number'
+      ? Math.max(0, Math.min(100, Math.round(healthScore)))
+      : Math.max(10, Math.min(100, fallbackScore));
+    const resolvedLevel = (healthLevel && String(healthLevel).replace(/[()]/g, '').trim())
+      || (resolvedScore >= 80 ? 'Excelente' : resolvedScore >= 60 ? 'Saludable' : resolvedScore >= 40 ? 'Alerta' : 'Crítico');
 
     let diagnosticResult = null;
     let modelUsed: string | undefined;
@@ -108,10 +141,10 @@ REGLAS DE ORO:
           const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text;
           if (rawText) {
             const data = JSON.parse(rawText);
-            if (data && (data.liquidityInsight || data.healthScore !== undefined)) {
+            if (data && data.liquidityInsight) {
               diagnosticResult = {
-                healthScore: Math.min(100, Math.max(0, parseInt(data.healthScore, 10) || 75)),
-                healthLevel: String(data.healthLevel || 'Saludable').replace(/[()]/g, '').trim(),
+                healthScore: resolvedScore,
+                healthLevel: resolvedLevel,
                 liquidityInsight: String(data.liquidityInsight || '').replace(/[()]/g, '').trim(),
                 spendingLeakInsight: String(data.spendingLeakInsight || '').replace(/[()]/g, '').trim(),
                 actionableRecommendation: String(data.actionableRecommendation || '').replace(/[()]/g, '').trim()
@@ -129,12 +162,12 @@ REGLAS DE ORO:
     }
 
     if (!diagnosticResult) {
-      // Fallback algorítmico si la API externa no respondiese
+      // Fallback algorítmico de la NARRATIVA si la API externa no respondiese.
+      // El puntaje sigue siendo el determinista (resolvedScore/resolvedLevel).
       const isPositive = liquidityMargin >= 0;
-      const score = isPositive ? Math.min(95, Math.round(50 + savingsRatePercentage)) : Math.max(25, Math.round(50 + (liquidityMargin / (totalIncome || 1)) * 50));
       diagnosticResult = {
-        healthScore: Math.max(10, Math.min(100, score)),
-        healthLevel: score >= 80 ? 'Excelente' : score >= 60 ? 'Saludable' : score >= 40 ? 'Alerta' : 'Crítico',
+        healthScore: resolvedScore,
+        healthLevel: resolvedLevel,
         liquidityInsight: isPositive
           ? `Tu margen operativo de S/ ${liquidityMargin.toFixed(2)} respalda con solidez tus pagos del mes con una tasa de ahorro de ${savingsRatePercentage.toFixed(1)}%.`
           : `Presentas un desfase de liquidez de S/ ${Math.abs(liquidityMargin).toFixed(2)} frente a tus salidas de caja programadas.`,

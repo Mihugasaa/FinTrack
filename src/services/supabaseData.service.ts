@@ -628,6 +628,32 @@ export class SupabaseDataService {
     }
   }
 
+  // PUT: Editar los datos de un préstamo existente (no toca los abonos ya hechos)
+  public static async updateReceivable(r: Receivable): Promise<boolean> {
+    if (!supabase || !isSupabaseConfigured) return false;
+    if (!isUUID(r.id)) return false;
+
+    try {
+      const { error } = await supabase
+        .from('receivables')
+        .update({
+          debtor_name: r.debtorName,
+          description: r.description,
+          original_amount: r.originalAmount,
+          currency: r.currency || 'PEN',
+          exchange_rate: r.exchangeRate || 1.0,
+          amount_pen: r.amountPen || (r.currency === 'USD' ? r.originalAmount * (r.exchangeRate || 1) : r.originalAmount),
+          loan_date: r.loanDate || null,
+          due_date: r.dueDate || null
+        })
+        .eq('id', r.id);
+      return !error;
+    } catch (e) {
+      this.logSupabaseError('updateReceivable (catch)', e);
+      return false;
+    }
+  }
+
   // PUT: Registrar abono a préstamo
   public static async recordReceivablePayment(id: string, newPaidAmount: number, isFullyPaid: boolean): Promise<boolean> {
     if (!supabase || !isSupabaseConfigured) return false;
@@ -752,6 +778,37 @@ export class SupabaseDataService {
       return true;
     } catch (e) {
       this.logSupabaseError('createPayable (catch)', e);
+      return false;
+    }
+  }
+
+  // PUT: Editar los datos de una deuda existente (no toca los pagos ya realizados)
+  public static async updatePayable(p: Payable): Promise<boolean> {
+    if (!supabase || !isSupabaseConfigured) return false;
+    if (!isUUID(p.id)) return false;
+
+    try {
+      const origAmount = p.totalAmount || p.originalAmount;
+      const exRate = p.exchangeRate || 1.0;
+      const amtPen = p.amountPen || (p.currency === 'USD' ? origAmount * exRate : origAmount);
+
+      const { error } = await supabase
+        .from('payables')
+        .update({
+          creditor_name: p.creditorName,
+          description: p.description,
+          original_amount: origAmount,
+          currency: p.currency || 'PEN',
+          exchange_rate: exRate,
+          amount_pen: amtPen,
+          issue_date: p.issueDate || null,
+          due_date: p.dueDate || null,
+          is_credited_to_debit: !!p.isCreditedToDebit
+        })
+        .eq('id', p.id);
+      return !error;
+    } catch (e) {
+      this.logSupabaseError('updatePayable (catch)', e);
       return false;
     }
   }

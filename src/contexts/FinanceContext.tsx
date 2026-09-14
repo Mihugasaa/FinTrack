@@ -24,6 +24,9 @@ import {
   calculateMonthlyDiagnostic,
   calculateCardsDebtSummary,
   calculateCurrentDebitBalance,
+  computeMonthlyDebitChain,
+  getReceivableCollectionMonth,
+  computeFinancialHealthScore,
   formatDisplayDate,
   formatSoles
 } from '@/lib/calculations';
@@ -188,7 +191,8 @@ function useFinanceController() {
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
   const monthKey = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
-  const initialDebitForMonth = initialDebitBalances[monthKey] ?? 0;
+  // `initialDebitForMonth` se deriva de la cadena de saldos (arrastre automático
+  // del cierre del mes anterior). Se define más abajo, tras cargar hooks de datos.
 
   // Contexto temporal del mes visible (usado por hooks de datos y cálculos)
   const now = new Date();
@@ -326,6 +330,9 @@ function useFinanceController() {
     setReceivables,
     isReceivableModalOpen,
     setIsReceivableModalOpen,
+    editingReceivableId,
+    setEditingReceivableId,
+    handleOpenEditReceivable,
     isCollectModalOpen,
     setIsCollectModalOpen,
     collectingRec,
@@ -372,6 +379,9 @@ function useFinanceController() {
     setPayables,
     isPayableModalOpen,
     setIsPayableModalOpen,
+    editingPayableId,
+    setEditingPayableId,
+    handleOpenEditPayable,
     isPayablePaymentModalOpen,
     setIsPayablePaymentModalOpen,
     payingPayable,
@@ -559,6 +569,41 @@ function useFinanceController() {
     });
   }, [currentUser, setTransactions, setExtraIncomes, setCardPayments]);
 
+  // ==============================================================================
+  // CADENA DE SALDOS DE DÉBITO (ARRASTRE AUTOMÁTICO MES A MES)
+  // El saldo inicial de cada mes se arrastra del cierre proyectado del mes anterior.
+  // `initialDebitBalances` guarda SOLO overrides explícitos del usuario, que anclan
+  // ese mes y cortan el recálculo hacia atrás. El resto se deriva.
+  // ==============================================================================
+  const primaryPayDay = salaries[0]?.payDay ?? 30;
+  const debitChain = useMemo(() => computeMonthlyDebitChain({
+    overrides: initialDebitBalances,
+    transactions,
+    extraIncomes,
+    cardPayments,
+    receivables,
+    payables,
+    paymentMethods,
+    monthlySalaries,
+    currentSalaryTotal: totalSalaryAmount,
+    primaryPayDay,
+    extraKeys: [monthKey]
+  }), [initialDebitBalances, transactions, extraIncomes, cardPayments, receivables, payables, paymentMethods, monthlySalaries, totalSalaryAmount, primaryPayDay, monthKey]);
+
+  // Saldo inicial efectivo del mes visible: override explícito → arrastre → 0.
+  const initialDebitForMonth = (monthKey in initialDebitBalances)
+    ? initialDebitBalances[monthKey]
+    : (debitChain[monthKey]?.initial ?? 0);
+  // ¿El saldo inicial es automático (arrastrado) y no un override manual?
+  const isInitialDebitAuto = !(monthKey in initialDebitBalances) && debitChain[monthKey] != null;
+
+  // Cobranzas atribuidas al mes visible (para no duplicar cobros ya arrastrados en
+  // el saldo inicial: cada cobro se cuenta una vez, en su mes de atribución).
+  const monthReceivables = useMemo(
+    () => receivables.filter(r => getReceivableCollectionMonth(r) === monthKey),
+    [receivables, monthKey]
+  );
+
   const budget = useMemo(() => ({
     year: currentYear,
     month: currentMonth,
@@ -598,20 +643,40 @@ function useFinanceController() {
       .filter(p => p.paymentDate.startsWith(monthKey) && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT')
       .reduce((acc, curr) => acc + curr.amountPaid, 0);
 
-    return calculateCurrentDebitBalance(
+    const base = calculateCurrentDebitBalance(
       initialDebitForMonth,
       salaries,
       currentOtherIncomes,
-      receivables,
+      monthReceivables,
       currentMonthTransactions,
       debitMethodIds,
       cardPaymentsThisMonthTotal,
       currentDateStr,
       payables
     );
-  }, [initialDebitForMonth, salaries, currentOtherIncomes, receivables, currentMonthTransactions, paymentMethods, cardPayments, monthKey, currentDateStr, payables]);
 
-  // Cálculo del saldo de cierre del mes anterior para sugerir en saldo inicial (sin saturar la vista)
+    // Deudas propias que vencen en el mes visible y aún no se pagan: se restan del
+    // saldo PROYECTADO a fin de mes (es un compromiso que saldrás), no del saldo de
+    // hoy (ese dinero sigue en cuenta hasta que efectivamente pagues). Se usa el
+    // saldo pendiente, así lo ya abonado no se descuenta dos veces.
+    const scheduledDebtDueThisMonth = payables
+      .filter(p => (p.dueDate || '').startsWith(monthKey) && p.status !== 'PAID')
+      .reduce((acc, p) => {
+        const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
+        const pen = p.currency === 'USD' ? rem * (p.exchangeRate || 1) : rem;
+        return acc + Math.max(0, pen);
+      }, 0);
+
+    return {
+      ...base,
+      projectedDebitBalanceMonthEnd: Math.round((base.projectedDebitBalanceMonthEnd - scheduledDebtDueThisMonth) * 100) / 100,
+      scheduledDebtDueThisMonth: Math.round(scheduledDebtDueThisMonth * 100) / 100
+    };
+  }, [initialDebitForMonth, salaries, currentOtherIncomes, monthReceivables, currentMonthTransactions, paymentMethods, cardPayments, monthKey, currentDateStr, payables]);
+
+  // Saldo de cierre del mes anterior, tomado de la cadena de saldos (mismo cálculo
+  // que alimenta el arrastre automático). Sirve al modal "Ajustar Saldo" como
+  // referencia cuando el usuario quiere fijar un override manual. Ya viene redondeado.
   const prevMonthClosingBalance = useMemo(() => {
     let pYear = currentYear;
     let pMonth = currentMonth - 1;
@@ -620,43 +685,14 @@ function useFinanceController() {
       pYear -= 1;
     }
     const pKey = `${pYear}-${pMonth.toString().padStart(2, '0')}`;
-
-    const prevInitial = initialDebitBalances[pKey] ?? 0;
-    const prevTxs = transactions.filter(t => t.date.startsWith(pKey));
-    const prevIncomes = extraIncomes[pKey] || [];
-    const prevCardPayments = cardPayments.filter(p => p.paymentDate.startsWith(pKey));
-
-    // Si el mes anterior no tiene saldo inicial ni movimientos registrados, no sugerir nada
-    if (prevInitial === 0 && prevTxs.length === 0 && prevIncomes.length === 0 && prevCardPayments.length === 0) {
-      return null;
-    }
-
-    const debitMethodIds = paymentMethods.filter(p => p.type === 'debit' || p.type === 'cash').map(p => p.id);
-    const cardPaymentsTotal = prevCardPayments
-      .filter(p => p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT')
-      .reduce((acc, curr) => acc + curr.amountPaid, 0);
-
-    const stats = calculateCurrentDebitBalance(
-      prevInitial,
-      salaries,
-      prevIncomes,
-      receivables,
-      prevTxs,
-      debitMethodIds,
-      cardPaymentsTotal,
-      `${pKey}-31`,
-      payables
-    );
-
+    const link = debitChain[pKey];
+    if (!link) return null;
     return {
       monthKey: pKey,
       monthName: MONTH_NAMES[pMonth],
-      // Redondear a 2 decimales en el origen: evita arrastrar ruido binario de
-      // punto flotante (p. ej. 3019.3799999999997) a los consumidores que copian
-      // este valor tal cual al saldo inicial (botón "Traer cierre" / modal Editar).
-      amount: Math.round(stats.projectedDebitBalanceMonthEnd * 100) / 100
+      amount: link.closing
     };
-  }, [currentYear, currentMonth, initialDebitBalances, transactions, extraIncomes, cardPayments, paymentMethods, salaries, receivables, payables]);
+  }, [currentYear, currentMonth, debitChain]);
 
   // Comparativa real dinámica de gasto entre el mes actual y el mes anterior para el panel del Dashboard
   const monthlyComparison = useMemo(() => {
@@ -715,10 +751,10 @@ function useFinanceController() {
     return calculateMonthlyDiagnostic(
       budget,
       currentMonthTransactions,
-      receivables,
+      monthReceivables,
       transactions
     );
-  }, [budget, currentMonthTransactions, receivables, transactions]);
+  }, [budget, currentMonthTransactions, monthReceivables, transactions]);
 
   // Asesor de tarjeta para el día 15
   const todayRef = useMemo(() => new Date(currentYear, currentMonth - 1, 15), [currentYear, currentMonth]);
@@ -737,6 +773,101 @@ function useFinanceController() {
       currentMonth
     );
   }, [paymentMethods, currentMonthTransactions, transactions, cardPayments, currentYear, currentMonth]);
+
+  // Plan de pagos de tarjeta FORWARD-LOOKING (independiente del mes visible): para
+  // cada tarjeta calcula su PRÓXIMO pago real —fecha de vencimiento ya ajustada a
+  // día hábil (viene en t.paymentDueDate) y monto de ese estado de cuenta—, más la
+  // utilización total. Agrupa por mes de vencimiento y asigna los abonos en FIFO
+  // (paga lo más antiguo primero). Así el usuario ve "cuándo y cuánto pagar" sin
+  // navegar entre meses.
+  const cardPaymentPlan = useMemo(() => {
+    const nowRef = new Date();
+    const todayStr = `${nowRef.getFullYear()}-${(nowRef.getMonth() + 1).toString().padStart(2, '0')}-${nowRef.getDate().toString().padStart(2, '0')}`;
+    const creditCards = paymentMethods.filter(p => p.type === 'credit' && p.isActive);
+
+    return creditCards.map(card => {
+      const cardTxs = transactions.filter(t => {
+        const resolved = resolvePaymentMethod(t, paymentMethods);
+        return resolved?.id === card.id || t.paymentMethodId === card.id;
+      });
+
+      // Monto facturado por mes de vencimiento + fecha de vencimiento representativa.
+      const dueByMonth = new Map<string, number>();
+      const dateByMonth = new Map<string, string>();
+      cardTxs.forEach(t => {
+        const net = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
+        const dd = t.paymentDueDate || t.date || '';
+        const mk = dd.slice(0, 7);
+        if (!mk) return;
+        dueByMonth.set(mk, (dueByMonth.get(mk) || 0) + net);
+        const prev = dateByMonth.get(mk);
+        if (!prev || dd > prev) dateByMonth.set(mk, dd);
+      });
+
+      const totalPaid = cardPayments
+        .filter(p => p.paymentMethodId === card.id && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT')
+        .reduce((acc, p) => acc + p.amountPaid, 0);
+
+      // Cubetas ordenadas: deuda arrastrada (initialDebt) primero, luego por mes.
+      const initial = card.initialDebt || 0;
+      const buckets: { key: string; dueDate: string; unpaid: number }[] = [];
+      if (initial > 0) buckets.push({ key: 'initial', dueDate: todayStr, unpaid: initial });
+      Array.from(dueByMonth.keys()).sort().forEach(mk => {
+        const billed = Math.max(0, dueByMonth.get(mk) || 0);
+        if (billed > 0.005) buckets.push({ key: mk, dueDate: dateByMonth.get(mk) || `${mk}-15`, unpaid: billed });
+      });
+
+      // FIFO: los abonos cancelan primero lo más antiguo.
+      let remaining = totalPaid;
+      for (const b of buckets) {
+        const applied = Math.min(b.unpaid, remaining);
+        b.unpaid -= applied;
+        remaining -= applied;
+        if (remaining <= 0) break;
+      }
+
+      const totalUnpaid = buckets.reduce((acc, b) => acc + b.unpaid, 0);
+      const next = buckets.find(b => b.unpaid > 0.005) || null;
+      const limit = card.creditLimit || 0;
+
+      // Próxima fecha de CORTE (distinta al vencimiento). El buró reporta tu saldo el
+      // día del corte, así que bajar el saldo antes de esa fecha mejora tu utilización
+      // reportada. Si hoy ya pasó el día de corte, el próximo corte es el mes siguiente.
+      const closeDay = card.billingCloseDay || 0;
+      let nextCloseDate: string | null = null;
+      let scorePayByDate: string | null = null;
+      if (closeDay > 0) {
+        let cy = nowRef.getFullYear();
+        let cm = nowRef.getMonth(); // 0-indexado
+        if (nowRef.getDate() > closeDay) {
+          cm += 1;
+          if (cm > 11) { cm = 0; cy += 1; }
+        }
+        const clampedDay = Math.min(closeDay, new Date(cy, cm + 1, 0).getDate());
+        nextCloseDate = `${cy}-${(cm + 1).toString().padStart(2, '0')}-${clampedDay.toString().padStart(2, '0')}`;
+        // Sugerencia: abonar ~2 días antes del corte para que el pago alcance a procesar.
+        const sd = new Date(cy, cm, clampedDay, 12, 0, 0);
+        sd.setDate(sd.getDate() - 2);
+        scorePayByDate = `${sd.getFullYear()}-${(sd.getMonth() + 1).toString().padStart(2, '0')}-${sd.getDate().toString().padStart(2, '0')}`;
+      }
+
+      return {
+        cardId: card.id,
+        cardName: card.name,
+        cardColor: card.color,
+        billingCloseDay: card.billingCloseDay || 0,
+        paymentDueDay: card.paymentDueDay || 0,
+        limit,
+        totalUnpaid: Math.round(totalUnpaid * 100) / 100,
+        utilizationPct: limit > 0 ? Math.min(100, (totalUnpaid / limit) * 100) : 0,
+        nextDueDate: next ? next.dueDate : null,
+        nextDueAmount: next ? Math.round(next.unpaid * 100) / 100 : 0,
+        isOverdue: next ? next.dueDate < todayStr : false,
+        nextCloseDate,
+        scorePayByDate
+      };
+    });
+  }, [paymentMethods, transactions, cardPayments]);
 
   // Agrupación y Consolidación de Cuentas por Cobrar por Persona (Ficha de Deudor)
   // Agrupación y Consolidación de Mis Deudas por Acreedor (Ficha de Acreedor)
@@ -809,9 +940,11 @@ function useFinanceController() {
       transactions,
       creditCardIds,
       extraIncomes,
-      initialDebitBalances
+      initialDebitBalances,
+      payables,
+      receivables
     );
-  }, [currentYear, currentMonth, debitStats.projectedDebitBalanceMonthEnd, salaries, transactions, currentMonthTransactions, monthKey, forecastHorizon, paymentMethods, extraIncomes, initialDebitBalances]);
+  }, [currentYear, currentMonth, debitStats.projectedDebitBalanceMonthEnd, salaries, transactions, currentMonthTransactions, monthKey, forecastHorizon, paymentMethods, extraIncomes, initialDebitBalances, payables, receivables]);
 
   // Detección Inteligente de Anomalías y Cobros Duplicados (IA & NLP)
   const aiAnomalies = useMemo(() => {
@@ -890,6 +1023,25 @@ function useFinanceController() {
     return items;
   }, [salaries, monthlySalaries, extraIncomes, transactions, monthKey, currentYear]);
 
+  // Score de Salud Financiera DETERMINISTA (0-100). Se calcula en código para ser
+  // reproducible; la IA solo lo explica/prioriza después. Reutiliza el diagnóstico
+  // de liquidez, la deuda de tarjetas y la evolución histórica ya derivados.
+  const financialHealth = useMemo(() => {
+    const currentFlow = monthlyHistoricalFlow.find(m => m.key === monthKey);
+    const totalIncome = currentFlow?.inVal || (diagnostic.totalAvailable - initialDebitForMonth - debitStats.collectedFromDebtors) || totalSalaryAmount;
+    const cardObligations = cardDebtSummary.reduce((acc, c) => acc + (c.consumedToDate || 0) + (c.initialDebt || 0), 0);
+    const cardPaid = cardDebtSummary.reduce((acc, c) => acc + (c.paidToDate || 0), 0);
+    return computeFinancialHealthScore({
+      totalIncome,
+      liquidityMargin: diagnostic.liquidityMargin,
+      savingsRatePercentage: diagnostic.savingsRatePercentage,
+      cardObligations,
+      cardPaid,
+      historicalFlow: monthlyHistoricalFlow,
+      currentMonthKey: monthKey
+    });
+  }, [monthlyHistoricalFlow, monthKey, diagnostic, cardDebtSummary, initialDebitForMonth, debitStats.collectedFromDebtors, totalSalaryAmount]);
+
   // Filtro de transacciones (Búsqueda + Categoría + Tarjeta/Medio + Tipo Fijo/Variable)
   const filteredTransactions = useMemo(() => {
     return currentMonthTransactions.filter(t => {
@@ -912,7 +1064,8 @@ function useFinanceController() {
     | { kind: 'transaction'; data: Transaction; sortDate: string }
     | { kind: 'card_payment'; data: CardPayment; index: number; sortDate: string }
     | { kind: 'income'; data: { id: string; description: string; amount: number; date: string; type: 'salary' | 'extra' }; sortDate: string }
-    | { kind: 'payable_payment'; data: { id: string; payableId: string; creditorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string }; sortDate: string };
+    | { kind: 'payable_payment'; data: { id: string; payableId: string; creditorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string }; sortDate: string }
+    | { kind: 'scheduled_payable'; data: { id: string; payableId: string; creditorName: string; description: string; amountPen: number; currency?: 'PEN' | 'USD'; remaining: number; dueDate: string }; sortDate: string };
 
   const combinedMovements = useMemo<UnifiedMovement[]>(() => {
     const items: UnifiedMovement[] = [];
@@ -1004,6 +1157,33 @@ function useFinanceController() {
           }
         });
       });
+
+      // Vencimientos programados de mis deudas (dueDate en el mes visible, con saldo
+      // pendiente): se listan como "programado" para tenerlos en el radar, sin ser
+      // aún un movimiento real. sortDate = fecha de vencimiento.
+      payables.forEach(p => {
+        if (!p.dueDate || !p.dueDate.startsWith(monthKey) || p.status === 'PAID') return;
+        const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
+        if (rem <= 0) return;
+        const remPen = p.currency === 'USD' ? rem * (p.exchangeRate || 1) : rem;
+        const searchMatches = !searchQuery || `deuda ${p.creditorName} ${p.description} programado vencimiento`.toLowerCase().includes(searchQuery.toLowerCase());
+        if (searchMatches && selectedCategory === 'ALL' && selectedPaymentMethod === 'ALL') {
+          items.push({
+            kind: 'scheduled_payable',
+            data: {
+              id: `sched-${p.id}`,
+              payableId: p.id,
+              creditorName: p.creditorName,
+              description: p.description,
+              amountPen: remPen,
+              currency: p.currency,
+              remaining: rem,
+              dueDate: p.dueDate
+            },
+            sortDate: p.dueDate
+          });
+        }
+      });
     }
 
     // Orden determinista: por fecha descendente y, ante empate (mismo día), por un
@@ -1011,15 +1191,20 @@ function useFinanceController() {
     // día variaba entre meses (dependía del orden de llegada desde la nube).
     const tieKey = (m: UnifiedMovement): string => {
       switch (m.kind) {
-        case 'transaction': return `${m.data.description} ${m.data.id}`;
-        case 'income': return `${m.data.description} ${m.data.id}`;
-        case 'payable_payment': return `${m.data.creditorName} ${m.data.description} ${m.data.id}`;
-        case 'card_payment': return `${m.data.paymentMethodId} ${m.data.id || m.index}`;
+        case 'transaction': return `${m.data.description} ${m.data.id}`;
+        case 'income': return `${m.data.description} ${m.data.id}`;
+        case 'payable_payment': return `${m.data.creditorName} ${m.data.description} ${m.data.id}`;
+        case 'card_payment': return `${m.data.paymentMethodId} ${m.data.id || m.index}`;
+        case 'scheduled_payable': return `${m.data.creditorName} ${m.data.id}`;
       }
     };
     return items.sort((a, b) => {
       const dateDiff = new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime();
       if (dateDiff !== 0) return dateDiff;
+      const caA = a.kind === 'transaction' ? ((a.data.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '') : '';
+      const caB = b.kind === 'transaction' ? ((b.data.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '') : '';
+      const createdDiff = caB.localeCompare(caA);
+      if (createdDiff !== 0) return createdDiff;
       return tieKey(a).localeCompare(tieKey(b));
     });
   }, [txTypeFilter, filteredTransactions, currentMonthCardPayments, paymentMethods, searchQuery, selectedCategory, selectedPaymentMethod, salaries, monthKey, currentOtherIncomes, payables]);
@@ -1130,7 +1315,8 @@ function useFinanceController() {
     }
   };
 
-  // Ajusta el saldo débito inicial del mes. El input vive local en AdjustDebitModal.
+  // Fija un override manual del saldo inicial del mes (ancla la cadena en este mes).
+  // El input vive local en AdjustDebitModal.
   const adjustDebit = (value: string) => {
     const newBal = Math.round((parseFloat(value || '0') || 0) * 100) / 100;
     setInitialDebitBalances(prev => ({
@@ -1139,6 +1325,20 @@ function useFinanceController() {
     }));
     // Sincronizar saldo de débito en Supabase
     SupabaseDataService.updateInitialDebitBalance(currentYear, currentMonth, newBal);
+    setIsAdjustDebitModalOpen(false);
+  };
+
+  // Restaura el arrastre automático: elimina el override manual del mes para que el
+  // saldo inicial vuelva a derivarse del cierre del mes anterior. Persistimos 0 en la
+  // nube (el cargador trata > 0 como override, así que 0 equivale a "sin override").
+  const clearDebitOverride = () => {
+    setInitialDebitBalances(prev => {
+      if (!(monthKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[monthKey];
+      return next;
+    });
+    SupabaseDataService.updateInitialDebitBalance(currentYear, currentMonth, 0);
     setIsAdjustDebitModalOpen(false);
   };
 
@@ -1239,7 +1439,9 @@ function useFinanceController() {
     initialDebitBalances,
     setInitialDebitBalances,
     initialDebitForMonth,
+    isInitialDebitAuto,
     adjustDebit,
+    clearDebitOverride,
 
     // Medios de pago y categorías
     paymentMethods,
@@ -1418,6 +1620,9 @@ function useFinanceController() {
     setReceivables,
     isReceivableModalOpen,
     setIsReceivableModalOpen,
+    editingReceivableId,
+    setEditingReceivableId,
+    handleOpenEditReceivable,
     isCollectModalOpen,
     setIsCollectModalOpen,
     collectingRec,
@@ -1462,6 +1667,9 @@ function useFinanceController() {
     setPayables,
     isPayableModalOpen,
     setIsPayableModalOpen,
+    editingPayableId,
+    setEditingPayableId,
+    handleOpenEditPayable,
     isPayablePaymentModalOpen,
     setIsPayablePaymentModalOpen,
     payingPayable,
@@ -1528,8 +1736,10 @@ function useFinanceController() {
     prevMonthClosingBalance,
     monthlyComparison,
     diagnostic,
+    financialHealth,
     cardAdvisor,
     cardDebtSummary,
+    cardPaymentPlan,
     categoryBreakdown,
     annualCategoryBreakdown,
     fixedExpensesTotal,

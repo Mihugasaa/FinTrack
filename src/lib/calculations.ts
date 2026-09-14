@@ -413,6 +413,140 @@ export function calculateCurrentDebitBalance(
 }
 
 /**
+ * Mes (YYYY-MM) al que se atribuye la cobranza de una cuenta por cobrar.
+ *
+ * Los `Receivable` no guardan la fecha en que se recibió el pago, solo el monto
+ * cobrado acumulado. Para que ese cobro se cuente UNA sola vez en el saldo de
+ * débito (y no se duplique en cada mes que se visita), lo atribuimos de forma
+ * determinista a un único mes: vencimiento pactado → creación → préstamo.
+ */
+export function getReceivableCollectionMonth(r: Receivable): string {
+  return (r.dueDate || r.createdAt || r.loanDate || '').slice(0, 7);
+}
+
+/**
+ * Cadena de saldos de débito mes a mes (running balance).
+ *
+ * El saldo inicial de cada mes se ARRASTRA automáticamente del cierre proyectado
+ * del mes anterior, salvo que exista un override explícito para ese mes (la clave
+ * está presente en `overrides`), que ancla el saldo y corta el arrastre aguas
+ * arriba. Cada eslabón reutiliza `calculateCurrentDebitBalance` con inputs ya
+ * acotados al mes, de modo que las cobranzas, abonos y payables se cuentan una
+ * sola vez a lo largo de toda la cadena.
+ *
+ * Devuelve, por cada mes del rango con actividad, `{ initial, closing }`.
+ */
+export function computeMonthlyDebitChain(params: {
+  overrides: Record<string, number>;
+  transactions: Transaction[];
+  extraIncomes: Record<string, OtherIncome[]>;
+  cardPayments: { paymentMethodId: string; amountPaid: number; paymentDate: string; sourceType?: string }[];
+  receivables: Receivable[];
+  payables: Payable[];
+  paymentMethods: PaymentMethod[];
+  monthlySalaries: Record<string, number>;
+  currentSalaryTotal: number;
+  primaryPayDay?: number;
+  extraKeys?: string[];
+}): Record<string, { initial: number; closing: number }> {
+  const {
+    overrides,
+    transactions,
+    extraIncomes,
+    cardPayments,
+    receivables,
+    payables,
+    paymentMethods,
+    monthlySalaries,
+    currentSalaryTotal,
+    primaryPayDay = 30,
+    extraKeys = []
+  } = params;
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const isMonthKey = (k: string) => /^\d{4}-\d{2}$/.test(k);
+  const pushTo = <T,>(m: Map<string, T[]>, k: string, v: T) => {
+    const arr = m.get(k);
+    if (arr) arr.push(v); else m.set(k, [v]);
+  };
+
+  const debitMethodIds = paymentMethods.filter(p => p.type === 'debit' || p.type === 'cash').map(p => p.id);
+
+  // Índices por mes: evita recorrer todo el historial en cada eslabón de la cadena.
+  const txByMonth = new Map<string, Transaction[]>();
+  transactions.forEach(t => {
+    const k = (t.date || '').slice(0, 7);
+    if (isMonthKey(k)) pushTo(txByMonth, k, t);
+  });
+
+  const cardByMonth = new Map<string, number>();
+  cardPayments.forEach(p => {
+    if (p.sourceType === 'MERCHANT_REFUND' || p.sourceType === 'BANK_CREDIT') return;
+    const k = (p.paymentDate || '').slice(0, 7);
+    if (isMonthKey(k)) cardByMonth.set(k, (cardByMonth.get(k) || 0) + p.amountPaid);
+  });
+
+  const recByMonth = new Map<string, Receivable[]>();
+  receivables.forEach(r => {
+    if (!r.paidAmount) return; // sin cobro no aporta caja
+    const k = getReceivableCollectionMonth(r);
+    if (isMonthKey(k)) pushTo(recByMonth, k, r);
+  });
+
+  // Universo de meses relevantes: overrides, gastos (por fecha y por vencimiento),
+  // ingresos extra, abonos a tarjeta, cobranzas y los meses extra solicitados
+  // (mes visible / mes en curso) para que el rango cubra la vista actual.
+  const keys = new Set<string>();
+  Object.keys(overrides).forEach(k => { if (isMonthKey(k)) keys.add(k); });
+  txByMonth.forEach((_, k) => keys.add(k));
+  transactions.forEach(t => { const k = (t.paymentDueDate || '').slice(0, 7); if (isMonthKey(k)) keys.add(k); });
+  Object.keys(extraIncomes).forEach(k => { if (isMonthKey(k)) keys.add(k); });
+  cardByMonth.forEach((_, k) => keys.add(k));
+  recByMonth.forEach((_, k) => keys.add(k));
+  extraKeys.forEach(k => { if (isMonthKey(k)) keys.add(k); });
+
+  if (keys.size === 0) return {};
+
+  const sorted = Array.from(keys).sort();
+  let [y, m] = sorted[0].split('-').map(Number);
+  const [ey, em] = sorted[sorted.length - 1].split('-').map(Number);
+
+  const out: Record<string, { initial: number; closing: number }> = {};
+  let carry = 0;
+  let guard = 0;
+  while ((y < ey || (y === ey && m <= em)) && guard < 600) {
+    guard++;
+    const key = `${y}-${m.toString().padStart(2, '0')}`;
+    const hasOverride = Object.prototype.hasOwnProperty.call(overrides, key);
+    const initial = hasOverride ? overrides[key] : carry;
+
+    const salaryAmt = monthlySalaries[key] || currentSalaryTotal;
+    const salariesArr = [{ id: 'chain-salary', source: 'salary', amount: salaryAmt, payDay: primaryPayDay }];
+
+    const res = calculateCurrentDebitBalance(
+      initial,
+      salariesArr,
+      extraIncomes[key] || [],
+      recByMonth.get(key) || [],
+      txByMonth.get(key) || [],
+      debitMethodIds,
+      cardByMonth.get(key) || 0,
+      `${key}-31`,
+      payables
+    );
+
+    const closing = round2(res.projectedDebitBalanceMonthEnd);
+    out[key] = { initial: round2(initial), closing };
+    carry = closing;
+
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+
+  return out;
+}
+
+/**
  * Diagnóstico de Liquidez Mensual ("¿Puedo cubrir este mes?")
  */
 export function calculateMonthlyDiagnostic(
@@ -463,6 +597,136 @@ export function calculateMonthlyDiagnostic(
     savingsRatePercentage,
     totalExpensesConsumed,
     simpleRemaining
+  };
+}
+
+/**
+ * Score de Salud Financiera DETERMINISTA y explicable (0-100).
+ *
+ * Se calcula íntegramente en código (sin IA) para que sea reproducible: los mismos
+ * datos siempre dan el mismo puntaje. La IA solo se usa después para redactar y
+ * priorizar en lenguaje natural, nunca para inventar el número.
+ *
+ * Ponderación: liquidez 35 · tasa de ahorro 30 · carga de deuda TC 20 · tendencia 15.
+ */
+export type HealthLevel = 'Excelente' | 'Saludable' | 'Alerta' | 'Crítico';
+
+export interface HealthScoreComponent {
+  key: string;
+  label: string;
+  points: number;   // puntos obtenidos
+  max: number;      // puntos posibles
+  detail: string;   // explicación breve del porqué
+}
+
+export interface FinancialHealthResult {
+  score: number;
+  level: HealthLevel;
+  components: HealthScoreComponent[];
+  trend: { avgPriorSavings: number; currentSavings: number; improving: boolean };
+}
+
+export function computeFinancialHealthScore(params: {
+  totalIncome: number;
+  liquidityMargin: number;
+  savingsRatePercentage: number;
+  cardObligations: number;   // consumo + deuda inicial acumulados a la fecha
+  cardPaid: number;          // pagado a la fecha
+  historicalFlow: { key: string; savings: number; isProjected: boolean }[];
+  currentMonthKey: string;
+}): FinancialHealthResult {
+  const {
+    totalIncome,
+    liquidityMargin,
+    savingsRatePercentage,
+    cardObligations,
+    cardPaid,
+    historicalFlow,
+    currentMonthKey
+  } = params;
+
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+  const income = totalIncome > 0 ? totalIncome : 1;
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+
+  // 1. Liquidez (35): margen del mes relativo al ingreso. -20% → 0 pts, +20% → 35 pts.
+  const marginRatio = liquidityMargin / income;
+  const liquidityPts = clamp01((marginRatio + 0.2) / 0.4) * 35;
+
+  // 2. Tasa de ahorro (30): meta 20%. 0% → 0 pts, ≥20% → 30 pts.
+  const savingsPts = clamp01(savingsRatePercentage / 20) * 30;
+
+  // 3. Carga de deuda TC (20): deuda neta pendiente relativa al ingreso mensual.
+  const netDebt = Math.max(0, cardObligations - cardPaid);
+  const debtBurden = netDebt / income;
+  const debtPts = clamp01(1 - debtBurden) * 20;
+
+  // 4. Tendencia (15): ahorro del mes vs promedio de meses cerrados anteriores.
+  const priorClosed = historicalFlow.filter(m => !m.isProjected && m.key < currentMonthKey);
+  const avgPriorSavings = priorClosed.length > 0
+    ? priorClosed.reduce((acc, m) => acc + m.savings, 0) / priorClosed.length
+    : 0;
+  const currentSavings = historicalFlow.find(m => m.key === currentMonthKey)?.savings ?? 0;
+  let trendPts: number;
+  if (priorClosed.length === 0) {
+    trendPts = 7.5; // sin histórico suficiente: neutral
+  } else {
+    const trendRatio = (currentSavings - avgPriorSavings) / income;
+    trendPts = clamp01(0.5 + trendRatio * 2) * 15;
+  }
+
+  const rawScore = liquidityPts + savingsPts + debtPts + trendPts;
+  const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+  const level: HealthLevel = score >= 80 ? 'Excelente' : score >= 60 ? 'Saludable' : score >= 40 ? 'Alerta' : 'Crítico';
+
+  const components: HealthScoreComponent[] = [
+    {
+      key: 'liquidity',
+      label: 'Liquidez del mes',
+      points: round1(liquidityPts),
+      max: 35,
+      detail: liquidityMargin >= 0
+        ? `Margen positivo de ${(marginRatio * 100).toFixed(0)}% sobre tus ingresos.`
+        : `Déficit de ${Math.abs(marginRatio * 100).toFixed(0)}% frente a tus ingresos.`
+    },
+    {
+      key: 'savings',
+      label: 'Tasa de ahorro',
+      points: round1(savingsPts),
+      max: 30,
+      detail: `Ahorras ${savingsRatePercentage.toFixed(1)}% del ingreso • meta 20%.`
+    },
+    {
+      key: 'debt',
+      label: 'Carga de deuda TC',
+      points: round1(debtPts),
+      max: 20,
+      detail: netDebt > 0
+        ? `Deuda neta pendiente equivale a ${(debtBurden * 100).toFixed(0)}% de un mes de ingreso.`
+        : 'Sin deuda de tarjeta pendiente.'
+    },
+    {
+      key: 'trend',
+      label: 'Tendencia',
+      points: round1(trendPts),
+      max: 15,
+      detail: priorClosed.length === 0
+        ? 'Aún no hay meses cerrados previos para comparar.'
+        : currentSavings >= avgPriorSavings
+        ? 'Tu ahorro mejora respecto a meses anteriores.'
+        : 'Tu ahorro cae respecto a meses anteriores.'
+    }
+  ];
+
+  return {
+    score,
+    level,
+    components,
+    trend: {
+      avgPriorSavings: round1(avgPriorSavings),
+      currentSavings: round1(currentSavings),
+      improving: currentSavings >= avgPriorSavings
+    }
   };
 }
 

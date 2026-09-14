@@ -17,6 +17,7 @@ export const CardsTab: React.FC = () => {
     setIsAdjustDebitModalOpen,
     debitStats,
     cardDebtSummary,
+    cardPaymentPlan,
     paymentMethods,
     handleOpenEditCard,
     showAllHistoricalPayments,
@@ -244,7 +245,7 @@ export const CardsTab: React.FC = () => {
               className={`tab-pill ${activeSubTab === 'schedule' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('schedule')}
             >
-              📅 Cronograma de Vencimientos
+              📅 Planificador de Pagos
             </button>
           </div>
 
@@ -378,122 +379,109 @@ export const CardsTab: React.FC = () => {
           <div>
             <div style={{ marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
-                Fechas bancarias de pago y cierre exigibles en {monthNames[currentMonth]} para mantener 0% de intereses
+                Cuánto y cuándo pagar cada tarjeta. El próximo pago aparece aunque estés viendo otro mes.
               </p>
               <span className="badge badge-warning" style={{ fontSize: '0.8rem', padding: '5px 10px' }}>
-                Total a Pagar en {monthNames[currentMonth]}:{' '}
+                Total a pagar pronto:{' '}
                 <strong className="tabular-nums" style={{ whiteSpace: 'nowrap' }}>
-                  {formatSoles(cardDebtSummary.reduce((acc, c) => acc + (c.hasPositiveBalance ? 0 : c.netDueInSelectedMonth), 0))}
+                  {formatSoles(cardPaymentPlan.reduce((acc, c) => acc + c.nextDueAmount, 0))}
                 </strong>
               </span>
             </div>
 
-            <div className="schedule-list">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {cardPaymentPlan.length === 0 && (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '24px 0' }}>
+                  No tienes tarjetas de crédito registradas.
+                </p>
+              )}
               {(() => {
-                interface ScheduleEvent {
-                  id: string;
-                  type: 'due' | 'close';
-                  day: number;
-                  card: typeof cardDebtSummary[0];
-                }
-                const events: ScheduleEvent[] = [];
-                cardDebtSummary.forEach(card => {
-                  if (card.paymentDueDay) {
-                    events.push({
-                      id: `${card.paymentMethodId}-due`,
-                      type: 'due',
-                      day: card.paymentDueDay,
-                      card
-                    });
-                  }
-                  if (card.billingCloseDay) {
-                    events.push({
-                      id: `${card.paymentMethodId}-close`,
-                      type: 'close',
-                      day: card.billingCloseDay,
-                      card
-                    });
-                  }
-                });
+                const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                const now = new Date();
+                const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
+                const rows = cardPaymentPlan.map(plan => {
+                  const summary = cardDebtSummary.find(c => c.paymentMethodId === plan.cardId);
+                  const util = (summary && summary.hasPositiveBalance) || plan.limit <= 0
+                    ? 0
+                    : plan.limit > 0 && summary
+                    ? Math.min(100, (summary.totalAccumulatedDebt / plan.limit) * 100)
+                    : plan.utilizationPct;
+                  const days = plan.nextDueDate ? Math.ceil((new Date(`${plan.nextDueDate}T12:00:00`).getTime() - todayMs) / 86400000) : null;
+                  const weekday = plan.nextDueDate ? WEEKDAYS[new Date(`${plan.nextDueDate}T12:00:00`).getDay()] : '';
+                  const hasDue = plan.nextDueAmount > 0.005;
+                  const urgency = hasDue ? (days ?? 999) : 9999;
+                  return { plan, summary, util, days, weekday, hasDue, urgency };
+                }).sort((a, b) => a.urgency - b.urgency);
 
-                events.sort((a, b) => {
-                  if (a.day !== b.day) return a.day - b.day;
-                  return a.type === 'due' ? -1 : 1;
-                });
+                return rows.map(r => {
+                  const { plan } = r;
+                  const overUtil = r.util > 30;
+                  const overdue = r.hasDue && r.days != null && r.days < 0;
+                  const countdownLabel = r.days == null ? '' : r.days < 0 ? `venció hace ${Math.abs(r.days)} d` : r.days === 0 ? 'vence hoy' : `en ${r.days} d`;
+                  const countdownColor = overdue ? 'var(--accent-danger)' : r.days != null && r.days <= 3 ? 'var(--accent-warning)' : 'var(--accent-info)';
+                  const statusBadge = !r.hasDue
+                    ? { cls: 'badge-success', txt: '✅ Al día' }
+                    : overdue
+                    ? { cls: 'badge-danger', txt: '⚠️ Vencido' }
+                    : { cls: 'badge-warning', txt: '⏳ Por pagar' };
 
-                return events.map(evt => {
-                  const card = evt.card;
-                  if (evt.type === 'due') {
-                    const hasPositive = card.hasPositiveBalance;
-                    const isPaid = card.isPaidThisMonth;
-                    const hasPendingDue = !hasPositive && !isPaid && card.netDueInSelectedMonth > 0;
-
-                    return (
-                      <div key={evt.id} className="schedule-item">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span
-                            className="schedule-date-badge"
-                            style={{ color: card.cardColor, background: `${card.cardColor}18` }}
-                          >
-                            Día {evt.day}
-                          </span>
-                          <div>
-                            <div className="font-semibold text-primary">{card.cardName} — Vencimiento de Pago</div>
-                            <div className="text-body-sm text-muted">
-                              {hasPositive
-                                ? '🟢 Saldo a favor en tarjeta: no requiere pago este ciclo'
-                                : isPaid
-                                ? `✅ Pagado este mes (Abonado: ${formatSoles(card.paidInSelectedMonth)})`
-                                : hasPendingDue
-                                ? `Pago sugerido para 0% interés: abonar antes de las 8:00 PM ${card.paidInSelectedMonth > 0 ? `(Abonado ${formatSoles(card.paidInSelectedMonth)} - Resta ${formatSoles(card.netDueInSelectedMonth)})` : ''}`
-                                : `Sin compras facturadas para pagar en ${monthNames[currentMonth]}`}
-                            </div>
-                          </div>
-                        </div>
-                        <div
-                          className="tabular-nums text-right font-bold"
-                          style={{
-                            fontSize: '1rem',
-                            whiteSpace: 'nowrap',
-                            color: hasPositive
-                              ? 'var(--accent-success)'
-                              : isPaid
-                              ? 'var(--accent-success)'
-                              : hasPendingDue
-                              ? 'var(--accent-danger)'
-                              : 'var(--text-muted)'
-                          }}
-                        >
-                          {hasPositive
-                            ? `+${formatSoles(card.creditBalanceAmount || 0)}`
-                            : isPaid
-                            ? formatSoles(0)
-                            : hasPendingDue
-                            ? formatSoles(card.netDueInSelectedMonth)
-                            : formatSoles(0)}
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // Corte de Ciclo
                   return (
-                    <div key={evt.id} className="schedule-item" style={{ background: 'var(--bg-app)', borderStyle: 'dashed' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span
-                          className="schedule-date-badge"
-                          style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
-                        >
-                          Día {evt.day}
-                        </span>
-                        <div>
-                          <div className="font-semibold text-secondary">{card.cardName} — Cierre de Facturación</div>
-                          <div className="text-body-sm text-muted">
-                            Compras posteriores al día {evt.day} de {monthNames[currentMonth]} se pagarán recién en el mes siguiente
-                          </div>
+                    <div key={plan.cardId} className="clean-card" style={{ borderLeft: `4px solid ${plan.cardColor}`, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {/* Cabecera: tarjeta + estado */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <CreditCard size={16} style={{ color: plan.cardColor }} />
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{plan.cardName}</span>
                         </div>
+                        <span className={`badge ${statusBadge.cls} nowrap`} style={{ fontSize: '0.72rem' }}>{statusBadge.txt}</span>
                       </div>
-                      <span className="badge badge-neutral">Corte de Ciclo</span>
+
+                      {/* Próximo pago REAL (forward-looking, cruza meses) */}
+                      {r.hasDue ? (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
+                          <span className="tabular-nums" style={{ fontWeight: 800, fontSize: '1.15rem', color: overdue ? 'var(--accent-danger)' : 'var(--accent-warning)' }}>
+                            {formatSoles(plan.nextDueAmount)}
+                          </span>
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                            vence <strong style={{ color: 'var(--text-primary)' }}>{r.weekday} {formatDisplayDate(plan.nextDueDate!)}</strong>
+                          </span>
+                          <span className="tabular-nums" style={{ color: countdownColor, fontWeight: 700, fontSize: '0.82rem' }}>• {countdownLabel}</span>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.85rem', color: 'var(--accent-success)', fontWeight: 600 }}>
+                          Sin pagos pendientes · estás al día.
+                        </div>
+                      )}
+
+                      {/* Coaching de historial crediticio con fechas concretas */}
+                      <div style={{ background: 'var(--bg-subtle)', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        <div>
+                          🗓️ Tu corte es el día {plan.billingCloseDay} y el pago vence el día {plan.paymentDueDay}.
+                        </div>
+                        <div>💳 Si pagas el total facturado antes del vencimiento, no generas intereses.</div>
+                        <div>
+                          📉 Como el banco reporta la deuda que tengas el día del corte, pagar antes del{' '}
+                          <strong>{plan.scorePayByDate ? formatDisplayDate(plan.scorePayByDate) : (plan.nextCloseDate ? formatDisplayDate(plan.nextCloseDate) : `día ${plan.billingCloseDay}`)}</strong> la deja más baja y ayuda a tu historial crediticio.
+                        </div>
+                        {overUtil && (
+                          <div style={{ color: 'var(--accent-warning)', fontWeight: 600 }}>
+                            ⚠️ Estás usando {r.util.toFixed(0)}% de tu línea. Trata de dejarlo bajo 30% para el día del corte.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Acción */}
+                      {r.hasDue && (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{ alignSelf: 'flex-start', padding: '6px 14px', fontSize: '0.8rem' }}
+                          onClick={handleOpenCreateCardPayment}
+                        >
+                          <Plus size={13} />
+                          <span>Registrar Pago</span>
+                        </button>
+                      )}
                     </div>
                   );
                 });

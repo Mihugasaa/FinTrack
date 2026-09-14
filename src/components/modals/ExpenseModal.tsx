@@ -3,6 +3,7 @@
 import React from 'react';
 import { X, CreditCard, TrendingUp, Sparkles, Camera, Banknote, DollarSign, Repeat, Wallet, Tag } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { AIIntelligenceService } from '@/services/aiIntelligence.service';
 import { CurrencyCode } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
@@ -426,13 +427,10 @@ export const ExpenseModal: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">{isRefundMode ? 'Fecha del Reembolso' : 'Fecha de Compra'}</label>
-            <input
+            <CustomDatePicker
               id="input-expense-date"
-              type="date"
-              className="form-input"
               value={txDate}
-              onChange={e => {
-                const newDate = e.target.value;
+              onChange={(newDate) => {
                 setTxDate(newDate);
                 if (currency === 'USD') {
                   fetchSunatRate(newDate, true);
@@ -613,11 +611,9 @@ export const ExpenseModal: React.FC = () => {
                     <label className="form-label" style={{ margin: 0, fontWeight: 600 }}>Fecha de Pago Real (Vencimiento Bancario)</label>
                     <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Diferido a Crédito</span>
                   </div>
-                  <input
-                    type="date"
-                    className="form-input"
+                  <CustomDatePicker
                     value={overrideDueDate || modalCalculatedDueDate}
-                    onChange={e => setOverrideDueDate(e.target.value)}
+                    onChange={setOverrideDueDate}
                     title="Puedes ajustar este día si el banco lo movió por ser fin de semana o feriado"
                   />
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>

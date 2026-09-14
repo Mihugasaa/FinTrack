@@ -8,6 +8,8 @@ export const AdjustDebitModal: React.FC = () => {
   const {
     setIsAdjustDebitModalOpen,
     adjustDebit,
+    clearDebitOverride,
+    isInitialDebitAuto,
     monthNames,
     currentMonth,
     currentYear,
@@ -41,8 +43,14 @@ export const AdjustDebitModal: React.FC = () => {
 
         <form onSubmit={onSubmit}>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-            Indica con cuánto dinero en cuenta o débito arrancaste el mes de <strong>{monthNames[currentMonth]} {currentYear}</strong>.
+<strong>{monthNames[currentMonth]} {currentYear}</strong> arranca con el saldo con que cerró el mes pasado. Escribe un monto aquí solo si quieres fijar otro valor a mano.
           </p>
+
+          {isInitialDebitAuto && (
+            <p style={{ fontSize: '0.75rem', color: 'var(--accent-info)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={13} /> Este mes está usando el saldo que viene del mes pasado.
+            </p>
+          )}
 
           {prevMonthClosingBalance && (
             <div style={{ marginBottom: '14px' }}>
@@ -87,6 +95,28 @@ export const AdjustDebitModal: React.FC = () => {
             />
           </div>
 
+          {!isInitialDebitAuto && (
+            <button
+              type="button"
+              onClick={clearDebitOverride}
+              style={{
+                width: '100%',
+                marginBottom: '12px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                background: 'transparent',
+                border: '1px dashed var(--border-default)',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontSize: '0.78rem',
+                fontWeight: 600
+              }}
+              title="Quitar el saldo manual y volver al arrastre automático del mes anterior"
+            >
+              ↳ Restaurar arrastre automático
+            </button>
+          )}
+
           <div className="modal-actions">
             <button
               type="button"
@@ -96,7 +126,7 @@ export const AdjustDebitModal: React.FC = () => {
               Cancelar
             </button>
             <button type="submit" className="btn-primary">
-              Actualizar Saldo
+              {isInitialDebitAuto ? 'Anclar Saldo' : 'Actualizar Saldo'}
             </button>
           </div>
         </form>

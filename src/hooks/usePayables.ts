@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { SupabaseDataService } from '@/services/supabaseData.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
+import { generateUUID } from '@/lib/utils';
 import { Payable, PayablePayment, CreditorGroup, OtherIncome, CurrencyCode } from '@/types';
 
 interface UsePayablesDeps {
@@ -25,6 +26,8 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
   const [payables, setPayables] = useState<Payable[]>([]);
 
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
+  // Id de la deuda en edición (null = alta nueva). Alterna el modal entre crear/editar.
+  const [editingPayableId, setEditingPayableId] = useState<string | null>(null);
   const [isPayablePaymentModalOpen, setIsPayablePaymentModalOpen] = useState(false);
   const [payingPayable, setPayingPayable] = useState<Payable | null>(null);
   const [payableCreditorName, setPayableCreditorName] = useState('');
@@ -185,6 +188,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
   }, [isPayableModalOpen, payableCurrency, payableIssueDate]);
 
   const handleOpenCreatePayable = () => {
+    setEditingPayableId(null);
     setPayableCreditorName('');
     setPayableDesc('');
     setPayableAmount('');
@@ -199,6 +203,22 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
     setIsPayableModalOpen(true);
   };
 
+  // Abre el modal en modo edición, sembrando los campos con la deuda elegida.
+  const handleOpenEditPayable = (payable: Payable) => {
+    setEditingPayableId(payable.id);
+    setPayableCreditorName(payable.creditorName);
+    setPayableDesc(payable.description && payable.description !== 'Préstamo personal' ? payable.description : '');
+    setPayableAmount((payable.originalAmount ?? payable.totalAmount ?? 0).toString());
+    setPayableDueDate(payable.dueDate || '');
+    setPayableCurrency(payable.currency || 'PEN');
+    setPayableExchangeRate(payable.exchangeRate ? payable.exchangeRate.toString() : FALLBACK_USD_PEN_RATE_STR);
+    setPayableTcInfo(null);
+    setHasUserManuallyEditedPayableTc(true);
+    setPayableIssueDate(payable.issueDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`);
+    setPayableIsCreditedToDebit(!!payable.isCreditedToDebit);
+    setIsPayableModalOpen(true);
+  };
+
   const handleCreatePayable = (e: React.FormEvent) => {
     e.preventDefault();
     if (!payableCreditorName || !payableAmount) return;
@@ -207,8 +227,47 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
     const tc = payableCurrency === 'USD' ? (parseFloat(payableExchangeRate) || FALLBACK_USD_PEN_RATE) : 1;
     const totalInPen = payableCurrency === 'USD' ? num * tc : num;
 
+    // Modo edición: actualiza la deuda conservando los pagos ya realizados. No
+    // re-dispara el abono a débito (eso es un efecto solo del alta).
+    if (editingPayableId) {
+      const existing = payables.find(p => p.id === editingPayableId);
+      if (existing) {
+        const paid = existing.paidAmount || 0;
+        const rem = Math.max(0, num - paid);
+        const updated: Payable = {
+          ...existing,
+          creditorName: payableCreditorName.trim(),
+          description: payableDesc.trim() || 'Préstamo personal',
+          totalAmount: num,
+          originalAmount: num,
+          remainingAmount: rem,
+          currency: payableCurrency,
+          exchangeRate: payableCurrency === 'USD' ? tc : undefined,
+          amountPen: totalInPen,
+          issueDate: payableIssueDate,
+          dueDate: payableDueDate || undefined,
+          isCreditedToDebit: payableIsCreditedToDebit,
+          status: rem <= 0 ? 'PAID' : (paid > 0 ? 'PARTIALLY_PAID' : 'PENDING')
+        };
+        setPayables(prev => prev.map(p => (p.id === editingPayableId ? updated : p)));
+        SupabaseDataService.updatePayable(updated);
+      }
+      setIsPayableModalOpen(false);
+      setEditingPayableId(null);
+      setPayableCreditorName('');
+      setPayableDesc('');
+      setPayableAmount('');
+      setPayableDueDate('');
+      setPayableCurrency('PEN');
+      setPayableExchangeRate(FALLBACK_USD_PEN_RATE_STR);
+      setPayableTcInfo(null);
+      setHasUserManuallyEditedPayableTc(false);
+      setPayableIsCreditedToDebit(false);
+      return;
+    }
+
     const newPayable: Payable = {
-      id: `pay-${Date.now()}`,
+      id: generateUUID(),
       creditorName: payableCreditorName.trim(),
       description: payableDesc.trim() || 'Préstamo personal',
       totalAmount: num,
@@ -255,6 +314,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
   };
 
   const handleOpenAddLoanForCreditor = (name: string) => {
+    setEditingPayableId(null);
     setPayableCreditorName(name);
     setPayableDesc('');
     setPayableAmount('');
@@ -413,6 +473,9 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
     setPayables,
     isPayableModalOpen,
     setIsPayableModalOpen,
+    editingPayableId,
+    setEditingPayableId,
+    handleOpenEditPayable,
     isPayablePaymentModalOpen,
     setIsPayablePaymentModalOpen,
     payingPayable,

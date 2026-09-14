@@ -11,33 +11,11 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  Pencil,
   AlertCircle,
   CheckCircle2,
-  Users,
-  MessageSquare,
-  Sparkles,
-  Copy,
-  ExternalLink,
-  X,
-  Check
+  Users
 } from 'lucide-react';
-import { Receivable } from '@/types';
-
-interface DebtorGroup {
-  key: string;
-  debtorName: string;
-  items: Receivable[];
-  totalOriginal: number;
-  totalPaid: number;
-  totalRemaining: number;
-  totalOriginalUsd?: number;
-  totalPaidUsd?: number;
-  totalRemainingUsd?: number;
-  hasUsd?: boolean;
-  isPureUsd?: boolean;
-  paidPercentage: number;
-  isFullyPaid: boolean;
-}
 
 export const ReceivablesTab: React.FC = () => {
   const {
@@ -63,6 +41,9 @@ export const ReceivablesTab: React.FC = () => {
     handleCascadeCollect,
     handleOpenAddLoanForDebtor,
     handleOpenCollectModal,
+    handleOpenEditReceivable,
+    setEditingReceivableId,
+    handleOpenEditPayable,
     setItemToDelete,
     handleOpenCreatePayable,
     payablesFilter,
@@ -79,48 +60,6 @@ export const ReceivablesTab: React.FC = () => {
     formatDisplayDate,
     formatSoles
   } = useFinance();
-  const [activeReminderGroup, setActiveReminderGroup] = React.useState<DebtorGroup | null>(null);
-  const [reminderOptions, setReminderOptions] = React.useState<Array<{ tone: string; badge: string; message: string }>>([]);
-  const [isGeneratingReminder, setIsGeneratingReminder] = React.useState(false);
-  const [copiedIndex, setCopiedIndex] = React.useState<number | null>(null);
-
-  const handleOpenReminderModal = async (group: DebtorGroup) => {
-    setActiveReminderGroup(group);
-    setIsGeneratingReminder(true);
-    setCopiedIndex(null);
-    setReminderOptions([]);
-
-    try {
-      const res = await fetch('/api/ai/generate-reminder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          debtorName: group.debtorName,
-          remainingAmount: group.totalRemaining,
-          currency: 'PEN',
-          concept: group.items.map(i => i.description).slice(0, 2).join(', '),
-          loanDate: group.items[0]?.createdAt
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.options)) {
-          setReminderOptions(data.options);
-        }
-      }
-    } catch (e) {
-      console.warn('Error al generar recordatorio:', e);
-    } finally {
-      setIsGeneratingReminder(false);
-    }
-  };
-
-  const handleCopyReminder = (text: string, index: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2500);
-  };
   // Cálculos consolidados para los 4 KPIs superiores
   const pendingReceivablesCount = receivables.filter(r => r.remainingAmount > 0).length;
   const activePayablesCount = payables.filter(p => (p.remainingAmount ?? (p.totalAmount ?? p.originalAmount)) > 0).length;
@@ -271,6 +210,7 @@ export const ReceivablesTab: React.FC = () => {
               id="btn-open-loan-modal"
               className="btn-primary"
               onClick={() => {
+                setEditingReceivableId(null);
                 setDebtorName('');
                 setLoanDesc('');
                 setLoanAmount('');
@@ -316,7 +256,7 @@ export const ReceivablesTab: React.FC = () => {
           {/* Cuadrícula Armónica de Fichas de Deudores */}
           <div className="loans-harmonious-grid">
             {filteredDebtorGroups.length === 0 ? (
-              <div className="clean-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+              <div className="clean-card" style={{ width: '100%', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
                 <Users size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
                 <p style={{ fontWeight: 600 }}>
                   {receivablesFilter === 'pending'
@@ -332,7 +272,9 @@ export const ReceivablesTab: React.FC = () => {
                 </p>
               </div>
             ) : (
-              filteredDebtorGroups.map(group => {
+              [filteredDebtorGroups.slice(0, Math.ceil(filteredDebtorGroups.length / 2)), filteredDebtorGroups.slice(Math.ceil(filteredDebtorGroups.length / 2))].map((colGroups, colIdx) => (
+                <div key={colIdx} className="loans-col">
+                  {colGroups.map(group => {
                 const isExpanded = expandedDebtors.has(group.key);
                 const initialLetter = group.debtorName ? group.debtorName.charAt(0).toUpperCase() : '?';
 
@@ -453,16 +395,6 @@ export const ReceivablesTab: React.FC = () => {
                             >
                               <span>Cobrar Todo</span>
                             </button>
-                            <button
-                              id={`btn-remind-${group.key}`}
-                              className="btn-secondary"
-                              style={{ padding: '6px 10px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-                              onClick={() => handleOpenReminderModal(group)}
-                              title="Generar recordatorio amable para WhatsApp con IA Gemini"
-                            >
-                              <MessageSquare size={13} style={{ color: '#25D366' }} />
-                              <span>Recordar</span>
-                            </button>
                           </>
                         )}
                         <button
@@ -498,7 +430,7 @@ export const ReceivablesTab: React.FC = () => {
                           {group.items.map(item => {
                             const itemPaid = item.remainingAmount <= 0;
                             return (
-                              <div key={item.id} className="breakdown-row">
+                              <div key={item.id} className="breakdown-row" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }}>
                                 <div style={{ flex: 1, minWidth: '160px' }}>
                                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-word', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }} title={item.description}>
                                     <span>{item.description}</span>
@@ -513,7 +445,7 @@ export const ReceivablesTab: React.FC = () => {
                                   </div>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                   <div style={{ textAlign: 'right' }} title={`Capital prestado: ${item.currency === 'USD' ? `$ ${item.originalAmount.toFixed(2)} USD • ${formatSoles(item.amountPen || (item.originalAmount * (item.exchangeRate || FALLBACK_USD_PEN_RATE)))}` : formatSoles(item.originalAmount)}`}>
                                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Prestado</span>
                                     {item.currency === 'USD' ? (
@@ -573,6 +505,13 @@ export const ReceivablesTab: React.FC = () => {
                                     )}
                                     <button
                                       className="btn-action-icon"
+                                      onClick={() => handleOpenEditReceivable(item)}
+                                      title="Editar los datos de este préstamo"
+                                    >
+                                      <Pencil size={13} />
+                                    </button>
+                                    <button
+                                      className="btn-action-icon"
                                       onClick={() => {
                                         setItemToDelete({
                                           id: item.id,
@@ -597,7 +536,9 @@ export const ReceivablesTab: React.FC = () => {
                     )}
                   </div>
                 );
-              })
+                  })}
+                </div>
+              ))
             )}
           </div>
         </>
@@ -611,7 +552,7 @@ export const ReceivablesTab: React.FC = () => {
             <div className="loans-info-banner-left">
               <AlertCircle size={16} color="var(--accent-warning)" />
               <span>
-                <strong>Trazabilidad sin Duplicidad:</strong> Las amortizaciones a tus acreedores se descuentan de tu saldo bancario como <em>Pago Deuda Mía</em> sin duplicar gastos. Saldo total pendiente: <strong>{formatSoles(totalPayablesRemaining)}{totalPayablesRemainingUsd > 0 ? ` • $ ${totalPayablesRemainingUsd.toFixed(2)} USD` : ''}</strong>.
+                <strong>Trazabilidad sin Duplicidad:</strong> Las amortizaciones a tus acreedores se descuentan de tu saldo bancario como <em>Pago Deuda Mía</em> sin duplicar gastos. Saldo total pendiente: <strong>{formatSoles(totalPayablesRemaining)}</strong>{totalPayablesRemainingUsd > 0 ? <> <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>· ya incluye $ {totalPayablesRemainingUsd.toFixed(2)} USD convertidos</span></> : ''}.
               </span>
             </div>
             <div className="loans-info-banner-right">
@@ -624,7 +565,7 @@ export const ReceivablesTab: React.FC = () => {
           {/* Cuadrícula Armónica de Fichas de Acreedores */}
           <div className="loans-harmonious-grid">
             {filteredCreditorGroups.length === 0 ? (
-              <div className="clean-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+              <div className="clean-card" style={{ width: '100%', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
                 <CheckCircle2 size={40} style={{ opacity: 0.3, marginBottom: '12px', color: 'var(--accent-success)' }} />
                 <p style={{ fontWeight: 600 }}>
                   {payablesFilter === 'pending'
@@ -640,7 +581,9 @@ export const ReceivablesTab: React.FC = () => {
                 </p>
               </div>
             ) : (
-              filteredCreditorGroups.map(group => {
+              [filteredCreditorGroups.slice(0, Math.ceil(filteredCreditorGroups.length / 2)), filteredCreditorGroups.slice(Math.ceil(filteredCreditorGroups.length / 2))].map((colGroups, colIdx) => (
+                <div key={colIdx} className="loans-col">
+                  {colGroups.map(group => {
                 const isExpanded = expandedCreditors.has(group.key);
                 const initialLetter = group.creditorName ? group.creditorName.charAt(0).toUpperCase() : '?';
 
@@ -815,9 +758,21 @@ export const ReceivablesTab: React.FC = () => {
                                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }} title={`Fecha: ${formatDisplayDate(item.createdAt || item.dueDate)}`}>
                                       Fecha: {formatDisplayDate(item.createdAt || item.dueDate)}
                                     </div>
+                                    {item.dueDate && !itemPaid && (() => {
+                                      const days = Math.ceil((new Date(`${item.dueDate}T12:00:00`).getTime() - Date.now()) / 86400000);
+                                      const overdue = days < 0;
+                                      const soon = days >= 0 && days <= 5;
+                                      const color = overdue ? 'var(--accent-danger)' : soon ? 'var(--accent-warning)' : 'var(--accent-info)';
+                                      const label = overdue ? `venció hace ${Math.abs(days)} d` : days === 0 ? 'vence hoy' : `vence en ${days} d`;
+                                      return (
+                                        <div style={{ fontSize: '0.72rem', color, fontWeight: 600, marginTop: '2px' }} title="Salida programada considerada en el flujo de caja">
+                                          📅 Pago programado: {formatDisplayDate(item.dueDate)} • {label}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
 
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                     <div style={{ textAlign: 'right' }} title={`Monto asumido: ${item.currency === 'USD' ? `$ ${itemTotal.toFixed(2)} USD • ${formatSoles(item.amountPen || (itemTotal * (item.exchangeRate || FALLBACK_USD_PEN_RATE)))}` : formatSoles(itemTotal)}`}>
                                       <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Monto</span>
                                       {item.currency === 'USD' ? (
@@ -878,6 +833,13 @@ export const ReceivablesTab: React.FC = () => {
                                       )}
                                       <button
                                         className="btn-action-icon"
+                                        onClick={() => handleOpenEditPayable(item)}
+                                        title="Editar los datos de esta deuda"
+                                      >
+                                        <Pencil size={13} />
+                                      </button>
+                                      <button
+                                        className="btn-action-icon"
                                         style={{ color: 'var(--accent-danger)' }}
                                         onClick={() => handleDeletePayable(item.id)}
                                         title="Eliminar este compromiso"
@@ -909,141 +871,14 @@ export const ReceivablesTab: React.FC = () => {
                     )}
                   </div>
                 );
-              })
+                  })}
+                </div>
+              ))
             )}
           </div>
         </>
       )}
 
-      {/* MODAL DE RECORDATORIO DE COBRO CON IA (WHATSAPP) */}
-      {activeReminderGroup && (
-        <div className="modal-backdrop" onClick={() => setActiveReminderGroup(null)}>
-          <div className="modal-box" style={{ maxWidth: '580px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-drag-handle" />
-            <div className="modal-title-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="text-h2 font-bold">Recordatorio con IA</span>
-                <span className="reconciliation-ai-chip">
-                  <Sparkles size={11} /> Gemini IA
-                </span>
-              </div>
-              <button
-                id="btn-close-reminder-modal"
-                className="month-nav-btn modal-close-btn"
-                onClick={() => setActiveReminderGroup(null)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <p style={{ margin: '0 0 6px 0', fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-                Mensajes cordiales y asertivos para coordinar la devolución con <strong>{activeReminderGroup.debtorName}</strong>.
-              </p>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '8px 12px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.8rem' }}>
-                <span>Saldo pendiente: <strong style={{ color: 'var(--accent-warning)' }}>{formatSoles(activeReminderGroup.totalRemaining)}</strong></span>
-                <span>•</span>
-                <span>{activeReminderGroup.items.length} {activeReminderGroup.items.length === 1 ? 'préstamo registrado' : 'préstamos registrados'}</span>
-              </div>
-            </div>
-
-            {isGeneratingReminder ? (
-              <div style={{ textAlign: 'center', padding: '36px 20px' }}>
-                <Sparkles size={32} color="var(--accent-brand)" style={{ animation: 'spin 2s linear infinite', marginBottom: '12px' }} />
-                <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
-                  Redactando opciones de mensajes con IA...
-                </p>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Ajustando tono empático, respetuoso y personalizado
-                </p>
-              </div>
-            ) : (
-              <div id="reminder-options-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
-                {reminderOptions.map((opt, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '14px',
-                      borderRadius: '10px',
-                      background: 'var(--bg-glass)',
-                      border: '1px solid var(--border-subtle)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '10px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                        {opt.tone}
-                      </span>
-                      <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
-                        {opt.badge}
-                      </span>
-                    </div>
-
-                    <div style={{
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      background: 'var(--bg-subtle)',
-                      fontSize: '0.84rem',
-                      lineHeight: '1.45',
-                      color: 'var(--text-secondary)',
-                      whiteSpace: 'pre-wrap',
-                      fontFamily: 'inherit'
-                    }}>
-                      {opt.message}
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        style={{ padding: '6px 12px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-                        onClick={() => handleCopyReminder(opt.message, idx)}
-                      >
-                        {copiedIndex === idx ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
-                        <span>{copiedIndex === idx ? '¡Copiado!' : 'Copiar Texto'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        style={{
-                          padding: '6px 14px',
-                          fontSize: '0.78rem',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          background: '#25D366',
-                          borderColor: '#25D366',
-                          color: '#ffffff'
-                        }}
-                        onClick={() => {
-                          const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(opt.message)}`;
-                          window.open(url, '_blank');
-                        }}
-                      >
-                        <ExternalLink size={13} />
-                        <span>Abrir en WhatsApp</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="modal-actions" style={{ marginTop: '16px' }}>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setActiveReminderGroup(null)}
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

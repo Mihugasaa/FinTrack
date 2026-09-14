@@ -14,12 +14,11 @@ import {
   Activity
 } from 'lucide-react';
 
-interface CFODiagnosisData {
-  healthScore: number;
-  healthLevel: string;
+interface CFONarrative {
   liquidityInsight: string;
   spendingLeakInsight: string;
   actionableRecommendation: string;
+  updatedAt: string; // ISO
 }
 
 export const AnalyticsTab: React.FC = () => {
@@ -38,20 +37,38 @@ export const AnalyticsTab: React.FC = () => {
     handleDismissAnomaly,
     formatSoles,
     diagnostic: liquidityDiagnostic,
+    financialHealth,
+    monthlyComparison,
     totalSalaryAmount,
     totalReceivablesRemaining,
     totalPayablesRemaining
   } = useFinance();
-  const [cfoDiagnosis, setCfoDiagnosis] = useState<CFODiagnosisData | null>(null);
+
+  const monthKey = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
+  const narrativeStorageKey = `cfo-narrative-${monthKey}`;
+
+  const [cfoNarrative, setCfoNarrative] = useState<CFONarrative | null>(null);
   const [isLoadingCfo, setIsLoadingCfo] = useState(false);
   const [cfoError, setCfoError] = useState<string | null>(null);
+
+  // La narrativa de IA se persiste por mes en localStorage para no re-consumir
+  // tokens ni recomputar en cada visita. El puntaje NO depende de esto: es
+  // determinista y siempre está disponible al instante desde `financialHealth`.
+  useEffect(() => {
+    setCfoError(null);
+    try {
+      const cached = localStorage.getItem(narrativeStorageKey);
+      setCfoNarrative(cached ? JSON.parse(cached) : null);
+    } catch {
+      setCfoNarrative(null);
+    }
+  }, [narrativeStorageKey]);
 
   const fetchCfoDiagnostic = async () => {
     setIsLoadingCfo(true);
     setCfoError(null);
     try {
-      const currentMonthKey = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
-      const currentMonthFlow = monthlyHistoricalFlow.find(m => m.key === currentMonthKey);
+      const currentMonthFlow = monthlyHistoricalFlow.find(m => m.key === monthKey);
       const extraTotal = currentMonthFlow
         ? Math.max(0, currentMonthFlow.inVal - (totalSalaryAmount || 0))
         : 0;
@@ -78,13 +95,25 @@ export const AnalyticsTab: React.FC = () => {
           savingsRatePercentage: liquidityDiagnostic?.savingsRatePercentage || 0,
           topCategories: topCats,
           pendingReceivablesTotal: totalReceivablesRemaining || 0,
-          pendingPayablesTotal: totalPayablesRemaining || 0
+          pendingPayablesTotal: totalPayablesRemaining || 0,
+          // Diagnóstico determinista: la IA lo explica, no lo recalcula.
+          healthScore: financialHealth.score,
+          healthLevel: financialHealth.level,
+          components: financialHealth.components.map(c => ({ label: c.label, points: c.points, max: c.max, detail: c.detail })),
+          trend: financialHealth.trend
         })
       });
 
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Error al obtener diagnóstico');
-      setCfoDiagnosis(json.data);
+      const narrative: CFONarrative = {
+        liquidityInsight: json.data.liquidityInsight,
+        spendingLeakInsight: json.data.spendingLeakInsight,
+        actionableRecommendation: json.data.actionableRecommendation,
+        updatedAt: new Date().toISOString()
+      };
+      setCfoNarrative(narrative);
+      try { localStorage.setItem(narrativeStorageKey, JSON.stringify(narrative)); } catch { /* almacenamiento no disponible */ }
     } catch (e: any) {
       console.warn('Error CFO Copilot:', e);
       setCfoError(e.message || 'No se pudo generar el diagnóstico.');
@@ -92,12 +121,6 @@ export const AnalyticsTab: React.FC = () => {
       setIsLoadingCfo(false);
     }
   };
-
-  useEffect(() => {
-    if (!cfoDiagnosis && !isLoadingCfo) {
-      fetchCfoDiagnostic();
-    }
-  }, []);
 
   // 1. Margen promedio mensual neto (ahorro promedio de los meses con flujo)
   const validMonths = monthlyHistoricalFlow.filter(m => m.inVal > 0 || m.outVal > 0);
@@ -157,6 +180,9 @@ export const AnalyticsTab: React.FC = () => {
   };
 
   const criticalHealth = criticalMonth ? getForecastHealth(criticalMonth.projectedEndingBalance) : null;
+
+  // Color del badge de salud según el puntaje determinista.
+  const scoreBadgeClass = financialHealth.score >= 60 ? 'badge-success' : financialHealth.score >= 40 ? 'badge-warning' : 'badge-danger';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
@@ -254,20 +280,17 @@ export const AnalyticsTab: React.FC = () => {
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>Copiloto CFO • Diagnóstico Ejecutivo con IA</span>
-                {cfoDiagnosis && (
-                  <span
-                    className={`badge ${
-                      cfoDiagnosis.healthScore >= 80 ? 'badge-success' : cfoDiagnosis.healthScore >= 50 ? 'badge-warning' : 'badge-danger'
-                    }`}
-                    style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                  >
-                    Salud {cfoDiagnosis.healthScore}/100 • {cfoDiagnosis.healthLevel}
-                  </span>
-                )}
+                <span>Copiloto CFO • Salud Financiera</span>
+                <span
+                  className={`badge ${scoreBadgeClass}`}
+                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                  title="Puntaje determinista calculado con tus datos • siempre reproducible"
+                >
+                  Salud {financialHealth.score}/100 • {financialHealth.level}
+                </span>
               </h3>
               <p style={{ margin: '2px 0 0 0', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                Auditoría algorítmica de solvencia, detección de fugas y estrategia de caja en tiempo real
+                Se calcula con tus datos y no cambia al azar. La IA solo lo explica en palabras.
               </p>
             </div>
           </div>
@@ -288,9 +311,62 @@ export const AnalyticsTab: React.FC = () => {
             }}
           >
             <Sparkles size={14} color="var(--accent-brand)" />
-            <span>{isLoadingCfo ? 'Analizando balances con IA...' : cfoDiagnosis ? 'Actualizar Diagnóstico con IA' : 'Generar Diagnóstico con IA'}</span>
+            <span>{isLoadingCfo ? 'Consultando IA...' : cfoNarrative ? 'Actualizar explicación IA' : 'Explicar / Priorizar con IA'}</span>
           </button>
         </div>
+
+        {/* Desglose determinista del puntaje (siempre visible, sin IA) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+          {financialHealth.components.map(c => {
+            const pct = c.max > 0 ? Math.max(0, Math.min(100, (c.points / c.max) * 100)) : 0;
+            const barColor = pct >= 66 ? 'var(--accent-success)' : pct >= 33 ? 'var(--accent-warning)' : 'var(--accent-danger)';
+            return (
+              <div
+                key={c.key}
+                title={c.detail}
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '10px', padding: '10px 12px' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '6px' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{c.label}</span>
+                  <span className="tabular-nums" style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {c.points}/{c.max}
+                  </span>
+                </div>
+                <div style={{ height: '5px', borderRadius: '3px', background: 'var(--border-subtle)', marginTop: '7px', overflow: 'hidden' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: '3px' }} />
+                </div>
+                <p style={{ margin: '6px 0 0 0', fontSize: '0.68rem', color: 'var(--text-muted)', lineHeight: '1.35' }}>{c.detail}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Qué cambió vs mes anterior (determinista) */}
+        {monthlyComparison && (monthlyComparison.prevExpense > 0 || monthlyComparison.currExpense > 0) && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
+              borderRadius: '10px',
+              padding: '8px 12px',
+              marginBottom: '14px'
+            }}
+          >
+            <span>{monthlyComparison.isReduction ? '📉' : '📈'}</span>
+            <span>
+              Gasto vs {monthlyComparison.prevMonthLabel}:{' '}
+              <strong style={{ color: monthlyComparison.isReduction ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                {monthlyComparison.variationStr}
+              </strong>{' '}
+              • diferencia de {formatSoles(monthlyComparison.differential)}
+            </span>
+          </div>
+        )}
 
         {cfoError && (
           <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)', color: 'var(--accent-danger)', fontSize: '0.78rem', marginBottom: '14px' }}>
@@ -298,76 +374,51 @@ export const AnalyticsTab: React.FC = () => {
           </div>
         )}
 
-        {cfoDiagnosis ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
-            {/* Bloque 1: Solvencia & Cobertura */}
-            <div
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-default)',
-                borderRadius: '12px',
-                padding: '14px 16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                <span>💧</span>
-                <span>Solvencia & Liquidez</span>
+        {cfoNarrative ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
+              {/* Bloque 1: Solvencia & Cobertura */}
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <span>💧</span>
+                  <span>Solvencia & Liquidez</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
+                  {cfoNarrative.liquidityInsight}
+                </p>
               </div>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
-                {cfoDiagnosis.liquidityInsight}
-              </p>
-            </div>
 
-            {/* Bloque 2: Detección de Fugas */}
-            <div
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-default)',
-                borderRadius: '12px',
-                padding: '14px 16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-warning)' }}>
-                <span>🔍</span>
-                <span>Fugas & Concentración</span>
+              {/* Bloque 2: Detección de Fugas */}
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-warning)' }}>
+                  <span>🔍</span>
+                  <span>Fugas & Concentración</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
+                  {cfoNarrative.spendingLeakInsight}
+                </p>
               </div>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
-                {cfoDiagnosis.spendingLeakInsight}
-              </p>
-            </div>
 
-            {/* Bloque 3: Acción Recomendada */}
-            <div
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-default)',
-                borderRadius: '12px',
-                padding: '14px 16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-brand)' }}>
-                <span>🎯</span>
-                <span>Acción Inmediata CFO</span>
+              {/* Bloque 3: Acción Recomendada */}
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-brand)' }}>
+                  <span>🎯</span>
+                  <span>Acción Inmediata CFO</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
+                  {cfoNarrative.actionableRecommendation}
+                </p>
               </div>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
-                {cfoDiagnosis.actionableRecommendation}
-              </p>
             </div>
-          </div>
+            <p style={{ margin: '10px 2px 0 0', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+              Explicación IA actualizada el {new Date(cfoNarrative.updatedAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </p>
+          </>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface)', borderRadius: '10px', padding: '12px 16px', border: '1px dashed var(--border-default)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
               <span>💡</span>
-              <span>Haz clic en <strong>Generar Diagnóstico con IA</strong> para auditar tu flujo de caja, detectar gastos críticos y recibir recomendaciones ejecutivas personalizadas.</span>
+              <span>Tu puntaje ya está calculado arriba. Pulsa <strong>Explicar / Priorizar con IA</strong> para una lectura en lenguaje simple y la acción de mayor impacto de esta semana.</span>
             </div>
           </div>
         )}
@@ -557,6 +608,12 @@ export const AnalyticsTab: React.FC = () => {
                   <span>+ Ingresos:</span>
                   <strong className="tabular-nums text-success">+{formatSoles(f.expectedIncome)}</strong>
                 </div>
+                {(f.scheduledReceivableDue ?? 0) > 0 && (
+                  <div className="forecast-stat-row" style={{ color: 'var(--accent-success)' }}>
+                    <span>+ Cobranzas Programadas:</span>
+                    <strong className="tabular-nums">+{formatSoles(f.scheduledReceivableDue ?? 0)}</strong>
+                  </div>
+                )}
                 <div className="forecast-stat-row">
                   <span>- Fijos Programados:</span>
                   <strong className="tabular-nums text-danger">-{formatSoles(f.fixedExpenses)}</strong>
@@ -569,6 +626,12 @@ export const AnalyticsTab: React.FC = () => {
                   <div className="forecast-stat-row" style={{ color: 'var(--accent-warning)' }}>
                     <span>- Vencimiento Tarjetas:</span>
                     <strong className="tabular-nums">-{formatSoles(f.projectedCardOutflows)}</strong>
+                  </div>
+                )}
+                {(f.scheduledDebtDue ?? 0) > 0 && (
+                  <div className="forecast-stat-row" style={{ color: 'var(--accent-danger)' }}>
+                    <span>- Deudas por Vencer:</span>
+                    <strong className="tabular-nums">-{formatSoles(f.scheduledDebtDue ?? 0)}</strong>
                   </div>
                 )}
 

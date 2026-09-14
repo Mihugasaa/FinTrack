@@ -34,7 +34,23 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   title
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // Si no cabe hacia abajo (modal alto cerca del borde), el popover abre hacia arriba.
+  const [openUp, setOpenUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleToggleOpen = () => {
+    if (disabled) return;
+    if (!isOpen) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const POPOVER_HEIGHT = 380; // alto aprox. del calendario
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        setOpenUp(spaceBelow < POPOVER_HEIGHT && spaceAbove > spaceBelow);
+      }
+    }
+    setIsOpen(prev => !prev);
+  };
 
   // Inicializar año y mes a partir de value o fecha actual
   const getInitialView = () => {
@@ -226,7 +242,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         type="button"
         id={id ? `${id}-btn` : undefined}
         className={`custom-date-picker-trigger ${isOpen ? 'open' : ''}`}
-        onClick={() => !disabled && setIsOpen(prev => !prev)}
+        onClick={handleToggleOpen}
         disabled={disabled}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
@@ -252,7 +268,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
       {/* Popover Calendario Estilizado */}
       {isOpen && (
-        <div className="custom-date-picker-popover" role="dialog" aria-modal="true">
+        <div className={`custom-date-picker-popover ${openUp ? 'open-up' : ''}`} role="dialog" aria-modal="true">
           {/* Barra superior de mes/año y navegación */}
           <div className="date-picker-header">
             <button

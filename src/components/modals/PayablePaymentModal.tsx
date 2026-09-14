@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Coins, X } from 'lucide-react';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 import { useFinance } from '@/contexts/FinanceContext';
 
@@ -121,12 +122,9 @@ export const PayablePaymentModal: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">Fecha de Pago</label>
-            <input
-              type="date"
-              className="form-input"
-              required
+            <CustomDatePicker
               value={payablePaymentDate}
-              onChange={e => setPayablePaymentDate(e.target.value)}
+              onChange={setPayablePaymentDate}
             />
           </div>
 

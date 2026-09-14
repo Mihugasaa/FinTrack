@@ -437,6 +437,48 @@ export const TransactionsTab: React.FC = () => {
                     );
                   }
 
+                  if (item.kind === 'scheduled_payable') {
+                    const sch = item.data;
+                    return (
+                      <React.Fragment key={sch.id}>
+                        {isDividerHere && renderTodayDividerRow(idx)}
+                        <tr style={{ background: 'rgba(245, 158, 11, 0.03)' }}>
+                          <td className="tabular-nums text-body-sm text-muted">{formatDisplayDate(sch.dueDate)}</td>
+                          <td>
+                            <div className="tx-concept-main">
+                              <span>Vencimiento: {sch.creditorName}</span>
+                              <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Deuda por Vencer</span>
+                            </div>
+                            <div className="tx-concept-sub">{sch.description || 'Pago de deuda programado'}</div>
+                          </td>
+                          <td>
+                            <span className="badge badge-neutral" style={{ color: '#10b981' }}>
+                              Cuenta Débito / Bancos
+                            </span>
+                          </td>
+                          <td className="tx-amount-cell" style={{ color: 'var(--accent-warning)' }}>
+                            {sch.currency === 'USD' ? (
+                              <div>
+                                <span className="tabular-nums nowrap" style={{ fontWeight: 600 }}>-$ {sch.remaining.toFixed(2)} USD</span>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>-{formatSoles(sch.amountPen)}</span>
+                              </div>
+                            ) : (
+                              `-${formatSoles(sch.amountPen)}`
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className="badge badge-scheduled" title="Pago de deuda con fecha de vencimiento. Ya se considera en el flujo de caja proyectado; aún no se ha debitado de tu cuenta.">
+                              ⏳ Programado
+                            </span>
+                          </td>
+                          <td className="text-center text-muted" style={{ fontSize: '0.75rem' }}>
+                            Programado
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    );
+                  }
+
                   if (item.kind === 'card_payment') {
                     const pay = item.data;
                     const pm = paymentMethods.find(p => p.id === pay.paymentMethodId);
@@ -695,6 +737,45 @@ export const TransactionsTab: React.FC = () => {
                             </div>
                           ) : (
                             <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-danger)' }}>-{formatSoles(pay.amount)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              }
+
+              if (item.kind === 'scheduled_payable') {
+                const sch = item.data;
+                return (
+                  <React.Fragment key={sch.id}>
+                    {isDividerHere && renderTodayDividerMobile(idx)}
+                    <div className="mobile-tx-card" style={{ borderLeft: '4px dashed #f59e0b' }}>
+                      <div className="mobile-tx-main-row">
+                        <div className="mobile-tx-left">
+                          <div className="mobile-tx-icon-wrap" style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
+                            <ArrowUpRight size={16} />
+                          </div>
+                          <div className="mobile-tx-info">
+                            <div className="mobile-tx-title-row">
+                              <span className="mobile-tx-title" title={`Vencimiento: ${sch.creditorName}`}>Vencimiento: {sch.creditorName}</span>
+                              <span className="badge badge-scheduled" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⏳ Programado</span>
+                            </div>
+                            <div className="mobile-tx-meta" title={`Vence ${formatDisplayDate(sch.dueDate)} • ${sch.description}`}>
+                              <span>Vence {formatDisplayDate(sch.dueDate)}</span>
+                              <span>•</span>
+                              <span>{sch.description || 'Pago de deuda'}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mobile-tx-right">
+                          {sch.currency === 'USD' ? (
+                            <div style={{ textAlign: 'right' }}>
+                              <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-warning)' }}>-$ {sch.remaining.toFixed(2)} USD</span>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>-{formatSoles(sch.amountPen)}</span>
+                            </div>
+                          ) : (
+                            <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-warning)' }}>-{formatSoles(sch.amountPen)}</span>
                           )}
                         </div>
                       </div>

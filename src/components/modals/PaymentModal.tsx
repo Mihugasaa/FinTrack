@@ -3,6 +3,7 @@
 import React from 'react';
 import { X, CreditCard, Banknote, TrendingUp, DollarSign } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { useFinance } from '@/contexts/FinanceContext';
 
 type PaymentSourceType = 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT';
@@ -107,12 +108,9 @@ export const PaymentModal: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">Fecha de Pago</label>
-            <input
-              type="date"
-              className="form-input"
-              required
+            <CustomDatePicker
               value={paymentDate}
-              onChange={e => setPaymentDate(e.target.value)}
+              onChange={setPaymentDate}
             />
           </div>
 

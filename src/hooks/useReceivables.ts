@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { SupabaseDataService } from '@/services/supabaseData.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
+import { generateUUID } from '@/lib/utils';
 import { Receivable, CurrencyCode } from '@/types';
 
 interface UseReceivablesDeps {
@@ -22,6 +23,8 @@ interface UseReceivablesDeps {
 export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps) {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
+  // Id del préstamo en edición (null = alta nueva). Alterna el modal entre crear/editar.
+  const [editingReceivableId, setEditingReceivableId] = useState<string | null>(null);
 
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
   const [collectingRec, setCollectingRec] = useState<Receivable | null>(null);
@@ -266,6 +269,7 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
   };
 
   const handleOpenAddLoanForDebtor = (name: string) => {
+    setEditingReceivableId(null);
     setDebtorName(name);
     setLoanDesc('');
     setLoanAmount('');
@@ -275,6 +279,20 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
     setHasUserManuallyEditedLoanTc(false);
     const d = new Date();
     setLoanDate(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`);
+    setIsReceivableModalOpen(true);
+  };
+
+  // Abre el modal en modo edición, sembrando los campos con el préstamo elegido.
+  const handleOpenEditReceivable = (rec: Receivable) => {
+    setEditingReceivableId(rec.id);
+    setDebtorName(rec.debtorName);
+    setLoanDesc(rec.description && rec.description !== 'Préstamo' ? rec.description : '');
+    setLoanAmount(rec.originalAmount.toString());
+    setLoanCurrency(rec.currency || 'PEN');
+    setLoanExchangeRate(rec.exchangeRate ? rec.exchangeRate.toString() : FALLBACK_USD_PEN_RATE_STR);
+    setLoanTcInfo(null);
+    setHasUserManuallyEditedLoanTc(true);
+    setLoanDate(rec.loanDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`);
     setIsReceivableModalOpen(true);
   };
 
@@ -296,8 +314,41 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
     const tc = loanCurrency === 'USD' ? (parseFloat(loanExchangeRate) || FALLBACK_USD_PEN_RATE) : 1;
     const amountPen = loanCurrency === 'USD' ? orig * tc : orig;
 
+    // Modo edición: actualiza el préstamo conservando los abonos ya cobrados.
+    if (editingReceivableId) {
+      const existing = receivables.find(r => r.id === editingReceivableId);
+      if (existing) {
+        const paid = existing.paidAmount || 0;
+        const rem = Math.max(0, orig - paid);
+        const updated: Receivable = {
+          ...existing,
+          debtorName: debtorName.trim(),
+          description: loanDesc.trim() || 'Préstamo',
+          originalAmount: orig,
+          remainingAmount: rem,
+          currency: loanCurrency,
+          exchangeRate: loanCurrency === 'USD' ? tc : undefined,
+          amountPen,
+          loanDate,
+          status: rem <= 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending')
+        };
+        setReceivables(prev => prev.map(r => (r.id === editingReceivableId ? updated : r)));
+        SupabaseDataService.updateReceivable(updated);
+      }
+      setIsReceivableModalOpen(false);
+      setEditingReceivableId(null);
+      setDebtorName('');
+      setLoanDesc('');
+      setLoanAmount('');
+      setLoanCurrency('PEN');
+      setLoanExchangeRate(FALLBACK_USD_PEN_RATE_STR);
+      setLoanTcInfo(null);
+      setHasUserManuallyEditedLoanTc(false);
+      return;
+    }
+
     const newRec: Receivable = {
-      id: `rec-${Date.now()}`,
+      id: generateUUID(),
       debtorName: debtorName.trim(),
       description: loanDesc.trim() || 'Préstamo',
       originalAmount: orig,
@@ -335,6 +386,9 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
     setReceivables,
     isReceivableModalOpen,
     setIsReceivableModalOpen,
+    editingReceivableId,
+    setEditingReceivableId,
+    handleOpenEditReceivable,
     isCollectModalOpen,
     setIsCollectModalOpen,
     collectingRec,

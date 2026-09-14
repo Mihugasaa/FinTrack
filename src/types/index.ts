@@ -236,5 +236,9 @@ export interface CashflowForecastMonth {
   projectedEndingBalance: number;
   liquidityMargin: number;
   isDeficitRisk: boolean;
+  // Deudas propias con vencimiento programado en este mes (salida) y cobranzas
+  // esperadas de terceros con fecha de devolución en este mes (entrada).
+  scheduledDebtDue?: number;
+  scheduledReceivableDue?: number;
 }
 

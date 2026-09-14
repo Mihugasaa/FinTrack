@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { SupabaseDataService } from '@/services/supabaseData.service';
+import { AIIntelligenceService } from '@/services/aiIntelligence.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { UserProfile } from '@/services/auth.service';
 import { generateUUID, deduplicateTransactions, resolvePaymentMethod } from '@/lib/utils';
@@ -142,13 +143,16 @@ export function useTransactions({
   }, [paymentMethods, selectedMethodId]);
 
   const currentMonthTransactions = useMemo(() => {
-    // Orden determinista (fecha desc, luego descripción e id): mantiene estable el
-    // orden de gastos del mismo día entre meses, sin depender del orden en que la
-    // nube devuelve las filas.
+    // Orden: fecha desc y, dentro del mismo día, el MÁS RECIENTE primero según el
+    // timestamp de creación embebido en notes (`[created:ISO]`). Así un gasto recién
+    // agregado aparece arriba de su día. Las filas legacy sin timestamp caen al
+    // desempate estable por descripción/id, sin alterar su orden relativo.
+    const createdAt = (t: Transaction) => (t.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '';
     return transactions
       .filter(t => t.date.startsWith(monthKey))
       .sort((a, b) =>
         b.date.localeCompare(a.date) ||
+        createdAt(b).localeCompare(createdAt(a)) ||
         (a.description || '').localeCompare(b.description || '') ||
         (a.id || '').localeCompare(b.id || '')
       );
@@ -321,6 +325,26 @@ export function useTransactions({
     setNaturalExpenseError(null);
     setIsExpenseModalOpen(true);
 
+    // 1) Parser LOCAL instantáneo: cubre el caso común sin round-trip a la IA.
+    const local = AIIntelligenceService.parseExpenseLocally(naturalText, currentDateStr, categories, paymentMethods);
+    if (local && local.amount > 0 && local.confidence >= 0.6) {
+      setEditingTransactionId(null);
+      setDesc(local.description);
+      setAmount(local.amount.toString());
+      setCurrency(local.currency);
+      if (local.currency === 'USD') fetchSunatRate(local.date, true);
+      setTxDate(local.date);
+      setIsRecurring(local.isFixed);
+      setIsRefundMode(false);
+      setIsInstallment(false);
+      if (local.categoryId) setSelectedCategoryId(local.categoryId);
+      if (local.paymentMethodId) setSelectedMethodId(local.paymentMethodId);
+      setIsParsingNaturalExpense(false);
+      setIsExpenseModalOpen(true);
+      return;
+    }
+
+    // 2) Respaldo con IA solo si el parser local no logró un monto confiable.
     try {
       const res = await fetch('/api/ai/parse-natural-expense', {
         method: 'POST',
@@ -467,7 +491,9 @@ export function useTransactions({
         return;
       }
 
-      const finalNotes = isRefundMode ? '[isRefund:true]' : undefined;
+      // Timestamp de creación embebido para ordenar por recencia dentro del mismo día.
+      const createdTag = `[created:${new Date().toISOString()}]`;
+      const finalNotes = `${isRefundMode ? '[isRefund:true] ' : ''}${createdTag}`;
       const newTx: Transaction = {
         id: generateUUID(),
         date: txDate,

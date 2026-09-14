@@ -93,6 +93,13 @@ export const AnnualTab: React.FC = () => {
   const totalAnnualCashOut = totals.cashOut;
   const cashOutCommittedPct = totalAnnualIncome > 0 ? (totalAnnualCashOut / totalAnnualIncome) * 100 : 0;
 
+  // Gauge de ahorro: el arco se deriva del dato real (antes estaba hardcodeado).
+  // Circunferencia del círculo r=35 ≈ 220 (coincide con stroke-dasharray del CSS).
+  const GAUGE_CIRCUMFERENCE = 220;
+  const gaugePct = Math.max(0, Math.min(100, heroSavingsRate));
+  const gaugeOffset = GAUGE_CIRCUMFERENCE * (1 - gaugePct / 100);
+  const gaugeColor = heroSavingsRate >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)';
+
   // Deuda de tarjetas gestionada a la fecha, derivada del resumen real por tarjeta.
   const cardStats = useMemo(() => {
     const obligations = cardDebtSummary.reduce((acc, c) => acc + (c.consumedToDate || 0) + (c.initialDebt || 0), 0);
@@ -133,14 +140,48 @@ export const AnnualTab: React.FC = () => {
     });
   }, [categoryList]);
 
-  // Datos para gráfico de barras de flujo (mismo flujo real consolidado).
+  // Datos para gráfico de flujo (mismo flujo real consolidado).
   const flowItems = monthlyHistoricalFlow;
 
-  // Escala del gráfico: el mayor de ingreso o salida entre los meses, con margen.
-  const maxFlowVal = useMemo(() => {
-    const peak = flowItems.reduce((max, m) => Math.max(max, m.inVal, m.outVal), 0);
-    return peak > 0 ? peak * 1.1 : 1;
+  // Geometría del gráfico de COLCHÓN ACUMULADO: una línea/área que traza cómo
+  // evoluciona el excedente acumulado del año, con barras tenues de ingreso vs
+  // salida por mes como contexto. Responde "¿mi colchón mejora en el año?".
+  const cushionChart = useMemo(() => {
+    const W = 720, H = 220;
+    const padL = 46, padR = 18, padT = 30, padB = 30;
+    const innerW = W - padL - padR;
+    const innerH = H - padT - padB;
+    const n = flowItems.length;
+
+    // Serie acumulada del excedente neto mes a mes.
+    let run = 0;
+    const pts = flowItems.map((m, i) => {
+      run += m.savings;
+      return { key: m.key, label: m.label.slice(0, 3), inVal: m.inVal, outVal: m.outVal, savings: m.savings, cum: run, i };
+    });
+
+    const cumVals = pts.map(p => p.cum);
+    const maxC = Math.max(0, ...cumVals);
+    const minC = Math.min(0, ...cumVals);
+    const spanC = (maxC - minC) || 1;
+    const maxBar = Math.max(1, ...flowItems.map(m => Math.max(m.inVal, m.outVal)));
+
+    const xAt = (i: number) => (n <= 1 ? padL + innerW / 2 : padL + (i / (n - 1)) * innerW);
+    const yAt = (v: number) => padT + (1 - (v - minC) / spanC) * innerH;
+    const yZero = yAt(0);
+
+    const linePath = pts.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${xAt(p.i).toFixed(1)} ${yAt(p.cum).toFixed(1)}`).join(' ');
+    const areaPath = n > 1
+      ? `M ${xAt(0).toFixed(1)} ${yZero.toFixed(1)} ` +
+        pts.map(p => `L ${xAt(p.i).toFixed(1)} ${yAt(p.cum).toFixed(1)}`).join(' ') +
+        ` L ${xAt(n - 1).toFixed(1)} ${yZero.toFixed(1)} Z`
+      : '';
+
+    return { W, H, padL, padR, padT, padB, innerW, innerH, n, pts, maxC, minC, maxBar, baseY: padT + innerH, xAt, yAt, yZero, linePath, areaPath };
   }, [flowItems]);
+
+  // Formateo compacto para las etiquetas del gráfico (soporta negativos).
+  const fmtCushion = (v: number) => (Math.abs(v) >= 1000 ? `S/ ${(v / 1000).toFixed(1)}k` : `S/ ${Math.round(v)}`);
 
   return (
     <section className="annual-summary-panel clean-card panel-body">
@@ -188,7 +229,7 @@ export const AnnualTab: React.FC = () => {
                 cx="40"
                 cy="40"
                 r="35"
-                style={{ strokeDashoffset: 139 }}
+                style={{ strokeDashoffset: gaugeOffset, stroke: gaugeColor }}
               />
             </svg>
             <div className="gauge-circle-center tabular-nums">{heroSavingsRate}%</div>
@@ -244,7 +285,10 @@ export const AnnualTab: React.FC = () => {
         </div>
 
         {visualTab === 'flow' && (
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '14px', fontWeight: 600 }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '14px', fontWeight: 600, flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '16px', height: '3px', borderRadius: '2px', background: 'var(--accent-brand)' }} /> Colchón acumulado
+            </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#10b981' }} /> Ingreso
             </span>
@@ -258,33 +302,90 @@ export const AnnualTab: React.FC = () => {
       {/* Contenedor Visual: Vista Flujo de Caja */}
       {visualTab === 'flow' && (
         <div className="annual-visual-card">
-          <div className="flow-bars-grid">
-            {flowItems.map(item => {
-              const inPct = Math.min(100, Math.round((item.inVal / maxFlowVal) * 100));
-              const outPct = Math.min(100, Math.round((item.outVal / maxFlowVal) * 100));
-              const isPositive = item.savings >= 0;
+          {cushionChart.n === 0 ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '28px 0' }}>
+              Aún no hay meses con actividad este año para trazar la evolución.
+            </p>
+          ) : (
+            <div style={{ width: '100%' }}>
+              <svg
+                viewBox={`0 0 ${cushionChart.W} ${cushionChart.H}`}
+                style={{ width: '100%', height: 'auto', maxHeight: '300px', display: 'block' }}
+                preserveAspectRatio="xMidYMid meet"
+                role="img"
+                aria-label="Evolución del colchón acumulado mes a mes"
+              >
+                <defs>
+                  <linearGradient id="cushionFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--accent-brand)" stopOpacity="0.28" />
+                    <stop offset="100%" stopColor="var(--accent-brand)" stopOpacity="0.02" />
+                  </linearGradient>
+                </defs>
 
-              return (
-                <div key={item.key} className="flow-bar-row">
-                  <span className="flow-month-name">{item.label}</span>
-                  <div className="flow-tracks">
-                    <div className="flow-track-item">
-                      <div className="flow-fill-income" style={{ width: `${inPct}%` }} />
-                    </div>
-                    <div className="flow-track-item">
-                      <div className="flow-fill-expense" style={{ width: `${outPct}%` }} />
-                    </div>
-                  </div>
-                  <span
-                    className="flow-net-amount tabular-nums"
-                    style={{ color: isPositive ? 'var(--accent-success)' : 'var(--accent-danger)' }}
-                  >
-                    {isPositive ? '+' : ''}{formatSoles(item.savings)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                {/* Barras tenues de ingreso vs salida por mes (contexto) */}
+                {cushionChart.pts.map(p => {
+                  const x = cushionChart.xAt(p.i);
+                  const inH = (p.inVal / cushionChart.maxBar) * cushionChart.innerH;
+                  const outH = (p.outVal / cushionChart.maxBar) * cushionChart.innerH;
+                  return (
+                    <g key={`bar-${p.key}`} opacity="0.26">
+                      <rect x={x - 7} y={cushionChart.baseY - inH} width="6" height={inH} rx="1.5" fill="#10b981" />
+                      <rect x={x + 1} y={cushionChart.baseY - outH} width="6" height={outH} rx="1.5" fill="#f43f5e" />
+                    </g>
+                  );
+                })}
+
+                {/* Línea base cero */}
+                <line
+                  x1={cushionChart.padL}
+                  y1={cushionChart.yZero}
+                  x2={cushionChart.W - cushionChart.padR}
+                  y2={cushionChart.yZero}
+                  stroke="var(--border-medium)"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                />
+
+                {/* Etiquetas del eje Y: máximo, cero y mínimo si hay negativos */}
+                <text x={cushionChart.padL - 6} y={cushionChart.yAt(cushionChart.maxC) + 3} textAnchor="end" fontSize="11" fill="var(--text-muted)">{fmtCushion(cushionChart.maxC)}</text>
+                <text x={cushionChart.padL - 6} y={cushionChart.yZero + 3} textAnchor="end" fontSize="11" fill="var(--text-muted)">0</text>
+                {cushionChart.minC < 0 && (
+                  <text x={cushionChart.padL - 6} y={cushionChart.yAt(cushionChart.minC) + 3} textAnchor="end" fontSize="11" fill="var(--text-muted)">{fmtCushion(cushionChart.minC)}</text>
+                )}
+
+                {/* Área + línea del colchón acumulado */}
+                {cushionChart.areaPath && <path d={cushionChart.areaPath} fill="url(#cushionFill)" stroke="none" />}
+                <path d={cushionChart.linePath} fill="none" stroke="var(--accent-brand)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+                {/* Puntos + etiquetas de mes */}
+                {cushionChart.pts.map(p => {
+                  const x = cushionChart.xAt(p.i);
+                  const y = cushionChart.yAt(p.cum);
+                  return (
+                    <g key={`pt-${p.key}`}>
+                      <circle cx={x} cy={y} r="3.5" fill="var(--bg-surface)" stroke="var(--accent-brand)" strokeWidth="2">
+                        <title>{`${p.label}: colchón ${formatSoles(p.cum)} • mes ${p.savings >= 0 ? '+' : ''}${formatSoles(p.savings)}`}</title>
+                      </circle>
+                      <text x={x} y={cushionChart.H - 10} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{p.label}</text>
+                    </g>
+                  );
+                })}
+
+                {/* Etiqueta del último valor acumulado (acotada para no cortarse arriba) */}
+                {(() => {
+                  const last = cushionChart.pts[cushionChart.pts.length - 1];
+                  const x = cushionChart.xAt(last.i);
+                  const y = cushionChart.yAt(last.cum);
+                  const labelY = Math.max(y - 12, 16);
+                  return (
+                    <text x={x} y={labelY} textAnchor={last.i === 0 ? 'start' : 'end'} fontSize="12" fontWeight="700" fill="var(--accent-brand)">
+                      {last.cum >= 0 ? '+' : ''}{fmtCushion(last.cum)}
+                    </text>
+                  );
+                })()}
+              </svg>
+            </div>
+          )}
 
           {/* Fila de 3 Hitos Integrada (derivados del flujo real) */}
           <div className="annual-highlights-strip">

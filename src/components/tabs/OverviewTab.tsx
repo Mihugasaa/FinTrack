@@ -2,7 +2,6 @@
 
 import React from 'react';
 import {
-  Sparkles,
   ArrowDownLeft,
   ArrowUpRight,
   Repeat,
@@ -10,7 +9,6 @@ import {
   Trash2,
   Tag
 } from 'lucide-react';
-import { SupabaseDataService } from '@/services/supabaseData.service';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const OverviewTab: React.FC = () => {
@@ -21,16 +19,14 @@ export const OverviewTab: React.FC = () => {
     monthNames,
     currentMonth,
     currentYear,
-    monthKey,
     currentDateStr,
     now,
     debitStats,
     initialDebitForMonth,
+    isInitialDebitAuto,
     totalSalaryAmount,
     currentOtherIncomes,
     setIsAdjustDebitModalOpen,
-    prevMonthClosingBalance,
-    setInitialDebitBalances,
     diagnostic,
     currentMonthTransactions,
     categoryBreakdown,
@@ -38,6 +34,7 @@ export const OverviewTab: React.FC = () => {
     setActiveTab,
     paymentMethods,
     categories,
+    cardPaymentPlan,
     resolvePaymentMethod,
     handleOpenEditTransaction,
     promptDeleteTransaction,
@@ -45,6 +42,10 @@ export const OverviewTab: React.FC = () => {
     formatDisplayDate,
     formatSoles
   } = useFinance();
+
+  // Distribución por categoría: mostramos 6 por defecto y el resto tras "Ver más"
+  // (evita saturar sin ocultar información: el badge indica el total real).
+  const [showAllCats, setShowAllCats] = React.useState(false);
 
   // Últimos movimientos "a la fecha": en el mes en curso solo mostramos gastos con
   // fecha hasta hoy (no los programados a futuro dentro del mismo mes). En meses
@@ -87,6 +88,14 @@ export const OverviewTab: React.FC = () => {
           <div className="zen-context-row">
             <span className="zen-context-item">
               Saldo base: <strong>{formatSoles(initialDebitForMonth)}</strong>
+              {isInitialDebitAuto && (
+                <span
+                  style={{ marginLeft: '5px', fontSize: '0.72rem', color: 'var(--accent-info)', fontWeight: 600 }}
+                  title="Arrastrado automáticamente del cierre del mes anterior"
+                >
+                  ↳ arrastrado
+                </span>
+              )}
             </span>
             <span>•</span>
             {isCurrentActiveMonth && !debitStats.isSalaryCreditedToday && (
@@ -127,36 +136,11 @@ export const OverviewTab: React.FC = () => {
             <button
               className="btn-adjust-link"
               onClick={() => setIsAdjustDebitModalOpen(true)}
-              title="Ajustar saldo inicial de este mes"
+              title="Ajustar o fijar manualmente el saldo inicial de este mes"
               style={{ marginLeft: '4px' }}
             >
               ✏️ Ajustar Saldo
             </button>
-            {initialDebitForMonth === 0 && prevMonthClosingBalance && prevMonthClosingBalance.amount > 0 && (
-              <button
-                className="btn-adjust-link"
-                onClick={() => {
-                  const newBal = prevMonthClosingBalance.amount;
-                  setInitialDebitBalances(prev => ({
-                    ...prev,
-                    [monthKey]: newBal
-                  }));
-                  SupabaseDataService.updateInitialDebitBalance(currentYear, currentMonth, newBal);
-                }}
-                title={`Adoptar saldo de cierre de ${prevMonthClosingBalance.monthName} (${formatSoles(prevMonthClosingBalance.amount)})`}
-                style={{
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
-                  color: 'var(--accent-info)',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <Sparkles size={11} /> Traer cierre de {prevMonthClosingBalance.monthName} ({formatSoles(prevMonthClosingBalance.amount)})
-              </button>
-            )}
           </div>
         </div>
 
@@ -192,6 +176,49 @@ export const OverviewTab: React.FC = () => {
         </div>
       </section>
 
+      {/* PRÓXIMOS VENCIMIENTOS DE TARJETAS (forward-looking: próximo pago real de cada
+          tarjeta, sin importar el mes visible) */}
+      {(() => {
+        const now = new Date();
+        const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
+        const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const dues = cardPaymentPlan
+          .filter(p => p.nextDueAmount > 0.005 && p.nextDueDate)
+          .map(p => {
+            const days = Math.ceil((new Date(`${p.nextDueDate}T12:00:00`).getTime() - todayMs) / 86400000);
+            return { p, days, weekday: WEEKDAYS[new Date(`${p.nextDueDate}T12:00:00`).getDay()] };
+          })
+          .sort((a, b) => a.days - b.days);
+        if (dues.length === 0) return null;
+        return (
+          <section className="clean-card" style={{ marginBottom: '16px', padding: '14px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+              <span style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>💳</span> Próximos Vencimientos de Tarjetas
+              </span>
+              <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={() => setActiveTab('cards')}>
+                Ver planificador
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+              {dues.slice(0, 4).map(d => {
+                const color = d.days < 0 ? 'var(--accent-danger)' : d.days <= 3 ? 'var(--accent-warning)' : 'var(--accent-info)';
+                const label = d.days < 0 ? `venció hace ${Math.abs(d.days)} d` : d.days === 0 ? 'vence hoy' : `en ${d.days} d`;
+                return (
+                  <div key={d.p.cardId} style={{ flex: '1 1 180px', minWidth: '160px', border: '1px solid var(--border-subtle)', borderLeft: `4px solid ${d.p.cardColor}`, borderRadius: '10px', padding: '8px 12px', background: 'var(--bg-subtle)' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>{d.p.cardName}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {d.weekday} {formatDisplayDate(d.p.nextDueDate!)} · <span style={{ color, fontWeight: 700 }}>{label}</span>
+                    </div>
+                    <div className="tabular-nums" style={{ fontWeight: 800, color: 'var(--accent-danger)', marginTop: '2px' }}>{formatSoles(d.p.nextDueAmount)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
+
       {/* FILA 2: ANÁLISIS DE GASTO Y COMPARATIVA (50% / 50% SIMÉTRICO) */}
       <div className="overview-grid-balanced">
         {/* Gráfico 1: Barra Segmentada de Categorías */}
@@ -216,7 +243,7 @@ export const OverviewTab: React.FC = () => {
           </div>
 
           <div className="category-legend-grid">
-            {categoryBreakdown.slice(0, 6).map(item => (
+            {(showAllCats ? categoryBreakdown : categoryBreakdown.slice(0, 6)).map(item => (
               <div key={item.category.id} className="legend-item">
                 <div className="legend-label-group">
                   <span className="legend-dot" style={{ backgroundColor: item.category.color }}></span>
@@ -233,6 +260,17 @@ export const OverviewTab: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {categoryBreakdown.length > 6 && (
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ marginTop: '10px', width: '100%', padding: '6px 10px', fontSize: '0.76rem' }}
+              onClick={() => setShowAllCats(prev => !prev)}
+            >
+              {showAllCats ? 'Ver menos' : `Ver ${categoryBreakdown.length - 6} más`}
+            </button>
+          )}
         </div>
 
         {/* Gráfico 2: Comparativa de Flujo Mensual Dinámica */}

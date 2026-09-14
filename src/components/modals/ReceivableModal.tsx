@@ -3,6 +3,7 @@
 import React from 'react';
 import { X, Banknote, DollarSign, Sparkles, Repeat } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import { CurrencyCode } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
@@ -11,6 +12,8 @@ export const ReceivableModal: React.FC = () => {
   const {
     setIsReceivableModalOpen,
     handleCreateReceivable,
+    editingReceivableId,
+    setEditingReceivableId,
     debtorName,
     setDebtorName,
     loanDesc,
@@ -30,14 +33,18 @@ export const ReceivableModal: React.FC = () => {
     handleBackdropMouseDown,
     handleBackdropClick
   } = useFinance();
-  const onClose = () => setIsReceivableModalOpen(false);
+  const onClose = () => {
+    setIsReceivableModalOpen(false);
+    setEditingReceivableId(null);
+  };
   const onSubmit = handleCreateReceivable;
+  const isEditing = !!editingReceivableId;
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-drag-handle" />
         <div className="modal-title-row">
-          <span className="text-h2 font-bold">Registrar Dinero Prestado</span>
+          <span className="text-h2 font-bold">{isEditing ? 'Editar Préstamo' : 'Registrar Dinero Prestado'}</span>
           <button id="btn-close-receivable-modal" className="month-nav-btn modal-close-btn" onClick={onClose}>
             <X size={16} />
           </button>
@@ -107,14 +114,10 @@ export const ReceivableModal: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">Fecha en que realizaste el préstamo</label>
-            <input
+            <CustomDatePicker
               id="input-loan-date"
-              type="date"
-              className="form-input"
-              required
               value={loanDate}
-              onChange={e => {
-                const newDate = e.target.value;
+              onChange={(newDate) => {
                 setLoanDate(newDate);
                 if (loanCurrency === 'USD') {
                   fetchLoanSunatRate(newDate, true);
@@ -222,7 +225,7 @@ export const ReceivableModal: React.FC = () => {
               Cancelar
             </button>
             <button id="btn-submit-receivable" type="submit" className="btn-primary">
-              Guardar Préstamo
+              {isEditing ? 'Actualizar Préstamo' : 'Guardar Préstamo'}
             </button>
           </div>
         </form>

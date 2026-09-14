@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { useFinance } from '@/contexts/FinanceContext';
 
 export const IncomeModal: React.FC = () => {
@@ -53,13 +54,10 @@ export const IncomeModal: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">Fecha del Ingreso</label>
-            <input
+            <CustomDatePicker
               id="input-income-date"
-              type="date"
-              className="form-input"
-              required
               value={incomeDate}
-              onChange={e => setIncomeDate(e.target.value)}
+              onChange={setIncomeDate}
             />
           </div>
 

@@ -218,7 +218,14 @@ export class AIIntelligenceService {
     historicalMonthlyVariableAvg: number,
     monthsAhead: number = 6,
     allTransactions: Transaction[] = [],
-    creditCardIds: string[] = []
+    creditCardIds: string[] = [],
+    // Ingresos extra reales ya registrados por mes (YYYY-MM). Permite que la
+    // proyección considere ingresos adicionales que el usuario anticipó para meses
+    // futuros sin necesidad de navegar hasta ese mes.
+    extraIncomesByMonth: Record<string, { amount: number }[]> = {},
+    // Saldo inicial anticipado por mes (YYYY-MM). Si el usuario fijó a mano el saldo
+    // de arranque de un mes futuro, se usa como ancla en lugar del arrastre calculado.
+    initialBalanceOverrides: Record<string, number> = {}
   ): CashflowForecastMonth[] {
     const forecast: CashflowForecastMonth[] = [];
     const monthNames = [
@@ -240,8 +247,15 @@ export class AIIntelligenceService {
 
       const targetYM = `${targetYear}-${targetMonth.toString().padStart(2, '0')}`;
       const monthLabel = `${monthNames[targetMonth - 1]} ${targetYear}`;
-      const projectedInitial = runningBalance;
-      const expectedIncome = totalSalary;
+      // Si el usuario fijó un saldo inicial para este mes futuro, ese valor ancla la
+      // proyección; si no, se arrastra el saldo final del mes anterior.
+      const override = initialBalanceOverrides[targetYM];
+      const projectedInitial = (typeof override === 'number' && override > 0) ? override : runningBalance;
+      // Ingreso previsto = sueldo + ingresos extra que el usuario ya anticipó para
+      // ese mes futuro (bonos, reembolsos programados, préstamos por recibir, etc.).
+      const extraIncomeThisMonth = (extraIncomesByMonth[targetYM] || [])
+        .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const expectedIncome = totalSalary + extraIncomeThisMonth;
 
       // 1. Salidas reales por vencimientos bancarios de tarjetas de crédito en este mes exacto
       const cardPaymentsDue = allTransactions

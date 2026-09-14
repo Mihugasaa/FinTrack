@@ -444,7 +444,8 @@ export class SupabaseDataService {
         creditLimit: row.credit_limit != null ? parseFloat(row.credit_limit) : undefined,
         color: row.color || '#3b82f6',
         icon: row.icon || 'credit-card',
-        isActive: row.is_active !== false
+        isActive: row.is_active !== false,
+        initialDebt: row.initial_debt != null ? parseFloat(row.initial_debt) : 0
       }));
     } catch (e) {
       this.logSupabaseError('getPaymentMethods (catch)', e);
@@ -476,8 +477,18 @@ export class SupabaseDataService {
       }
       // Only credit cards carry a limit; debit/cash stay null (avoids the schema default).
       payload.credit_limit = pm.type === 'credit' ? (pm.creditLimit ?? null) : null;
+      // Deuda inicial arrastrada (solo tarjetas de crédito).
+      payload.initial_debt = pm.type === 'credit' ? (pm.initialDebt ?? 0) : 0;
 
-      const { error } = await supabase.from('payment_methods').insert(payload);
+      let { error } = await supabase.from('payment_methods').insert(payload);
+
+      // Fallback si la columna initial_debt aún no se migró en PostgreSQL.
+      if (error && error.message?.includes('initial_debt')) {
+        delete payload.initial_debt;
+        const retry = await supabase.from('payment_methods').insert(payload);
+        error = retry.error;
+      }
+
       if (error) {
         this.logSupabaseError('createPaymentMethod (POST)', error.message);
         return false;
@@ -501,13 +512,25 @@ export class SupabaseDataService {
         payment_due_day: pm.paymentDueDay || null,
         color: pm.color,
         // Only credit cards carry a limit; debit/cash stay null.
-        credit_limit: pm.type === 'credit' ? (pm.creditLimit ?? null) : null
+        credit_limit: pm.type === 'credit' ? (pm.creditLimit ?? null) : null,
+        // Deuda inicial arrastrada (solo tarjetas de crédito).
+        initial_debt: pm.type === 'credit' ? (pm.initialDebt ?? 0) : 0
       };
 
-      const { error } = await supabase
+      let { error } = await supabase
         .from('payment_methods')
         .update(payload)
         .eq('id', pm.id);
+
+      // Fallback si la columna initial_debt aún no se migró en PostgreSQL.
+      if (error && error.message?.includes('initial_debt')) {
+        delete payload.initial_debt;
+        const retry = await supabase
+          .from('payment_methods')
+          .update(payload)
+          .eq('id', pm.id);
+        error = retry.error;
+      }
 
       return !error;
     } catch (e) {
@@ -997,6 +1020,47 @@ export class SupabaseDataService {
       };
     } catch (e) {
       this.logSupabaseError('getMonthlyPeriod (catch)', e);
+      return null;
+    }
+  }
+
+  // GET: Historial COMPLETO de periodos mensuales (saldo inicial y sueldo base por mes),
+  // indexado por clave YYYY-MM. Permite que las vistas consolidadas y el simulador usen
+  // los saldos/sueldos reales de todos los meses sin tener que visitarlos uno por uno.
+  public static async getAllMonthlyPeriods(): Promise<Record<string, { initialDebitBalance: number; baseSalary: number }> | null> {
+    if (!supabase || !isSupabaseConfigured) return null;
+
+    try {
+      const userId = await this.getAuthUserId();
+      if (!userId) return null;
+
+      const { data, error } = await this.executeWithRetry<any[]>(
+        () => supabase!
+          .from('monthly_periods')
+          .select('year, month, base_salary, initial_debit_balance')
+          .eq('user_id', userId),
+        'getAllMonthlyPeriods'
+      );
+
+      if (error || !data) {
+        if (error) this.logSupabaseError('getAllMonthlyPeriods', error.message);
+        return null;
+      }
+
+      const map: Record<string, { initialDebitBalance: number; baseSalary: number }> = {};
+      data.forEach((row: any) => {
+        const y = parseInt(row.year, 10);
+        const m = parseInt(row.month, 10);
+        if (!y || !m) return;
+        const key = `${y}-${m.toString().padStart(2, '0')}`;
+        map[key] = {
+          initialDebitBalance: parseFloat(row.initial_debit_balance || '0'),
+          baseSalary: parseFloat(row.base_salary || '0')
+        };
+      });
+      return map;
+    } catch (e) {
+      this.logSupabaseError('getAllMonthlyPeriods (catch)', e);
       return null;
     }
   }

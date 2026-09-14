@@ -7,7 +7,6 @@
  * 4. Clasifica en: Conciliados, Faltantes en la App (con sugerencia de categoría IA) y Discrepancias.
  */
 
-import * as XLSX from 'xlsx';
 import {
   StatementTransaction,
   Transaction,
@@ -25,6 +24,10 @@ export class ReconciliationService {
     if (file.name.toLowerCase().endsWith('.pdf')) {
       return await this.parsePdfFile(file);
     }
+
+    // Carga diferida de SheetJS: solo se descarga cuando el usuario procesa un
+    // Excel/CSV, no en el bundle inicial del dashboard.
+    const XLSX = await import('xlsx');
 
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -91,7 +94,8 @@ export class ReconciliationService {
   /**
    * Parsea contenido de texto CSV directamente
    */
-  public static parseCSVContent(csvText: string): StatementTransaction[] {
+  public static async parseCSVContent(csvText: string): Promise<StatementTransaction[]> {
+    const XLSX = await import('xlsx');
     const workbook = XLSX.read(csvText, { type: 'string' });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawRows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });

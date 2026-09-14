@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
     icon TEXT DEFAULT 'credit-card',
     is_active BOOLEAN DEFAULT TRUE,
     credit_limit NUMERIC(12, 2) DEFAULT 4000.00,
+    initial_debt NUMERIC(12, 2) DEFAULT 0.00,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

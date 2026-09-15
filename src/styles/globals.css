@@ -3,11 +3,12 @@
    Inspirado en la sobriedad y ergonomía de Stripe, Linear y Wise
    ============================================================================== */
 
-/* Las variables --font-jakarta / --font-jetbrains las inyecta next/font desde el
-   layout (fuentes auto-hospedadas). Se dejan fallbacks por si acaso. */
+/* La variable --font-jakarta la inyecta next/font desde el layout (fuente
+   auto-hospedada). Toda la app usa Plus Jakarta Sans, incluidos los numeros.
+   --font-mono queda como respaldo de sistema por si algo lo referencia. */
 :root {
   --font-sans: var(--font-jakarta), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 :root, :root[data-theme="light"] {

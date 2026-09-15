@@ -1595,7 +1595,7 @@ html.is-resizing *::after {
 
 .tx-amount-cell {
   text-align: right;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
   font-size: 0.925rem;
   white-space: nowrap !important;
@@ -2061,6 +2061,29 @@ html.is-resizing *::after {
 
 .annual-matrix-table tr:hover td {
   background: var(--bg-subtle);
+}
+
+/* Tapa de la franja de la barra de estado (notch / Dynamic Island) en PWA
+   standalone. En iOS esa franja pinta un blur translucido; arriba del todo no
+   hay contenido que lo justifique y se ve un blur molesto. La tapamos con el
+   color de fondo SOLO cuando el scroll esta arriba (.is-visible); al hacer
+   scroll se oculta para que el contenido pase bajo la barra con su blur natural.
+   En navegador y equipos sin notch mide 0px y no se nota. */
+.status-bar-cover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--bg-app);
+  z-index: 940;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.status-bar-cover.is-visible {
+  opacity: 1;
 }
 
 /* Bloqueo de scroll en segundo plano al abrir modales. La posición del body la
@@ -6173,7 +6196,7 @@ body.modal-open {
 .debit-balance-val {
   font-size: 1.55rem;
   font-weight: 800;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   line-height: 1.15;
   margin: 3px 0 2px;
   white-space: nowrap !important;
@@ -6203,7 +6226,7 @@ body.modal-open {
 .debit-stat-val {
   font-size: 0.975rem;
   font-weight: 700;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   margin-top: 2px;
   white-space: nowrap !important;
@@ -6294,7 +6317,7 @@ body.modal-open {
 .card-zen-debt-val {
   font-size: 1.4rem;
   font-weight: 800;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--accent-warning);
   white-space: nowrap !important;
 }

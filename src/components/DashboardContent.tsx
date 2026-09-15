@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { Header } from '@/components/layout/Header';
 import { NavigationTabs } from '@/components/layout/NavigationTabs';
@@ -106,6 +106,18 @@ export function DashboardContent() {
     window.scrollTo(0, 0);
   }, [activeTab]);
 
+  // Blur de la barra de estado (PWA en iOS): solo molesta arriba del todo, donde
+  // no hay contenido que justifique el blur. Mientras estamos arriba tapamos esa
+  // franja con un color solido; al hacer scroll la destapamos para que el
+  // contenido pase bajo la barra con su blur natural (eso al usuario si le gusta).
+  const [atTop, setAtTop] = useState(true);
+  useEffect(() => {
+    const onScroll = () => setAtTop(window.scrollY <= 2);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   // Con un modal abierto seguimos el viewport visible (visualViewport) para que
   // la hoja quede por encima del teclado y el campo enfocado sea visible, en vez
   // de esconderse detras del teclado en iOS. Publicamos alto/offset como
@@ -147,6 +159,10 @@ export function DashboardContent() {
 
   return (
     <div className="dashboard-container">
+      {/* Tapa de la franja de la barra de estado, solo visible arriba del todo:
+          evita el blur del borde superior sin quitar el blur al hacer scroll. */}
+      <div className={`status-bar-cover ${atTop ? 'is-visible' : ''}`} aria-hidden="true" />
+
       {/* 1. HEADER MODULAR CON CONTEXTO TEMPORAL GLOBAL */}
       <Header />
 

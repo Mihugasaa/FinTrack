@@ -1,22 +1,15 @@
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
+import { Plus_Jakarta_Sans } from 'next/font/google';
 import '@/styles/globals.css';
 
-// Fuentes auto-hospedadas por Next (no dependen de la CDN de Google en tiempo de
-// ejecucion). Asi la tipografia carga igual en todos los dispositivos y no hay
-// salto ni fallback a Segoe UI/Roboto. Se exponen como variables CSS que consume
-// globals.css (--font-sans / --font-mono).
+// Fuente unica auto-hospedada por Next (no depende de la CDN de Google en tiempo
+// de ejecucion). Asi la tipografia carga igual en todos los dispositivos y no
+// hay salto ni fallback a Segoe UI/Roboto. Toda la app usa Plus Jakarta Sans,
+// incluidos los numeros (con tabular-nums para alinearlos).
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
   variable: '--font-jakarta',
-  display: 'swap',
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  variable: '--font-jetbrains',
   display: 'swap',
 });
 
@@ -56,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" data-theme="light" className={`${jakarta.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="es" data-theme="light" className={jakarta.variable} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

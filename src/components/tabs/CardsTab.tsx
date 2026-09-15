@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Plus,
   Pencil,
@@ -29,10 +29,11 @@ export const CardsTab: React.FC = () => {
     currentMonthCardPayments,
     handleOpenEditCardPayment,
     handleDeleteCardPayment,
+    cardsSubTab: activeSubTab,
+    setCardsSubTab: setActiveSubTab,
     formatDisplayDate,
     formatSoles
   } = useFinance();
-  const [activeSubTab, setActiveSubTab] = useState<'payments' | 'schedule'>('payments');
 
   // Cálculo de Deuda Consolidada Total en Tarjetas de Crédito
   const totalCreditDebt = cardDebtSummary.reduce(
@@ -445,7 +446,8 @@ export const CardsTab: React.FC = () => {
                           <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                             vence <strong style={{ color: 'var(--text-primary)' }}>{r.weekday} {formatDisplayDate(plan.nextDueDate!)}</strong>
                           </span>
-                          <span className="tabular-nums" style={{ color: countdownColor, fontWeight: 700, fontSize: '0.82rem' }}>• {countdownLabel}</span>
+                          <span aria-hidden style={{ color: 'var(--border-medium)', fontWeight: 400, fontSize: '0.82rem' }}>|</span>
+                          <span className="tabular-nums" style={{ color: countdownColor, fontWeight: 700, fontSize: '0.82rem' }}>{countdownLabel}</span>
                         </div>
                       ) : (
                         <div style={{ fontSize: '0.85rem', color: 'var(--accent-success)', fontWeight: 600 }}>

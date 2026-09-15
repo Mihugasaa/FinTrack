@@ -24,6 +24,7 @@ export const TransactionsTab: React.FC = () => {
   const {
     combinedMovements,
     monthMovementsTotal,
+    diagnostic,
     searchQuery,
     setSearchQuery,
     txTypeFilter,
@@ -98,6 +99,14 @@ export const TransactionsTab: React.FC = () => {
             {isAnyFilterActive
               ? `${combinedMovements.length} de ${monthMovementsTotal} movimientos`
               : `${monthMovementsTotal} movimientos`}
+          </span>
+          <span
+            className="movements-gasto-hint"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}
+            title="Suma de gastos consumidos este mes (neto de reembolsos). No incluye ingresos ni pagos a tarjeta."
+          >
+            <span aria-hidden className="movements-gasto-sep" style={{ color: 'var(--border-medium)' }}>|</span>
+            Gasto del mes: <strong className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>{formatSoles(diagnostic.totalExpensesConsumed)}</strong>
           </span>
         </div>
       </div>
@@ -675,24 +684,35 @@ export const TransactionsTab: React.FC = () => {
                           <div className="mobile-tx-info">
                             <div className="mobile-tx-title-row">
                               <span className="mobile-tx-title">{inc.description}</span>
-                              <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>Ingreso</span>
                             </div>
                             <div className="mobile-tx-meta">
                               <span>{formatDisplayDate(inc.date)}</span>
                               <span>•</span>
-                              {isFuture ? (
-                                <span className="badge badge-scheduled" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⏳ Programado</span>
-                              ) : (
-                                <span className="badge badge-collected" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>✓ Cobrado</span>
-                              )}
+                              <span>{inc.type === 'salary' ? 'Sueldo / Nómina' : 'Ingreso extra'}</span>
                               <span>•</span>
                               <span style={{ color: 'var(--accent-success)', fontWeight: 500 }}>Débito</span>
                             </div>
                           </div>
                         </div>
                         <div className="mobile-tx-right">
+                          <div className="mobile-tx-tags">
+                            <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>Ingreso</span>
+                          </div>
                           <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-success)' }}>+{formatSoles(inc.amount)}</span>
                         </div>
+                      </div>
+                      <div className="mobile-tx-footer-row">
+                        {isFuture ? (
+                          <>
+                            <span className="badge badge-scheduled" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>⏳ Programado</span>
+                            <span className="mobile-tx-due">Se acredita el {formatDisplayDate(inc.date)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="badge badge-collected" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>✓ Cobrado</span>
+                            <span className="mobile-tx-due" style={{ color: 'var(--accent-success)' }}>Acreditado el {formatDisplayDate(inc.date)}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </React.Fragment>
@@ -714,22 +734,18 @@ export const TransactionsTab: React.FC = () => {
                           <div className="mobile-tx-info">
                             <div className="mobile-tx-title-row">
                               <span className="mobile-tx-title" title={`Pago a ${pay.creditorName}`}>Pago a {pay.creditorName}</span>
-                              <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Deuda</span>
                             </div>
                             <div className="mobile-tx-meta" title={`${formatDisplayDate(pay.paymentDate)} • ${pay.description}`}>
                               <span>{formatDisplayDate(pay.paymentDate)}</span>
                               <span>•</span>
-                              {isFuture ? (
-                                <span className="badge badge-scheduled" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⏳ Programado</span>
-                              ) : (
-                                <span className="badge badge-immediate" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⚡ Inmediato</span>
-                              )}
-                              <span>•</span>
-                              <span>{pay.description || 'Deuda'}</span>
+                              <span>{pay.description || 'Devolución de deuda'}</span>
                             </div>
                           </div>
                         </div>
                         <div className="mobile-tx-right">
+                          <div className="mobile-tx-tags">
+                            <span className="badge badge-warning" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>Deuda</span>
+                          </div>
                           {pay.currency === 'USD' ? (
                             <div style={{ textAlign: 'right' }}>
                               <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-danger)' }}>-$ {pay.amount.toFixed(2)} USD</span>
@@ -739,6 +755,19 @@ export const TransactionsTab: React.FC = () => {
                             <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-danger)' }}>-{formatSoles(pay.amount)}</span>
                           )}
                         </div>
+                      </div>
+                      <div className="mobile-tx-footer-row">
+                        {isFuture ? (
+                          <>
+                            <span className="badge badge-scheduled" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>⏳ Programado</span>
+                            <span className="mobile-tx-due">Se debita el {formatDisplayDate(pay.paymentDate)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="badge badge-immediate" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>⚡ Inmediato</span>
+                            <span className="mobile-tx-due">Debitado el {formatDisplayDate(pay.paymentDate)}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </React.Fragment>
@@ -750,7 +779,7 @@ export const TransactionsTab: React.FC = () => {
                 return (
                   <React.Fragment key={sch.id}>
                     {isDividerHere && renderTodayDividerMobile(idx)}
-                    <div className="mobile-tx-card" style={{ borderLeft: '4px dashed #f59e0b' }}>
+                    <div className="mobile-tx-card" style={{ borderLeft: '4px solid #f59e0b' }}>
                       <div className="mobile-tx-main-row">
                         <div className="mobile-tx-left">
                           <div className="mobile-tx-icon-wrap" style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
@@ -759,16 +788,16 @@ export const TransactionsTab: React.FC = () => {
                           <div className="mobile-tx-info">
                             <div className="mobile-tx-title-row">
                               <span className="mobile-tx-title" title={`Vencimiento: ${sch.creditorName}`}>Vencimiento: {sch.creditorName}</span>
-                              <span className="badge badge-scheduled" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⏳ Programado</span>
                             </div>
-                            <div className="mobile-tx-meta" title={`Vence ${formatDisplayDate(sch.dueDate)} • ${sch.description}`}>
-                              <span>Vence {formatDisplayDate(sch.dueDate)}</span>
-                              <span>•</span>
-                              <span>{sch.description || 'Pago de deuda'}</span>
+                            <div className="mobile-tx-meta" title={sch.description}>
+                              <span>{sch.description || 'Pago de deuda programado'}</span>
                             </div>
                           </div>
                         </div>
                         <div className="mobile-tx-right">
+                          <div className="mobile-tx-tags">
+                            <span className="badge badge-warning" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>Deuda por Vencer</span>
+                          </div>
                           {sch.currency === 'USD' ? (
                             <div style={{ textAlign: 'right' }}>
                               <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-warning)' }}>-$ {sch.remaining.toFixed(2)} USD</span>
@@ -778,6 +807,10 @@ export const TransactionsTab: React.FC = () => {
                             <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-warning)' }}>-{formatSoles(sch.amountPen)}</span>
                           )}
                         </div>
+                      </div>
+                      <div className="mobile-tx-footer-row">
+                        <span className="badge badge-scheduled" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>⏳ Programado</span>
+                        <span className="mobile-tx-due">Vence el {formatDisplayDate(sch.dueDate)}</span>
                       </div>
                     </div>
                   </React.Fragment>
@@ -803,9 +836,6 @@ export const TransactionsTab: React.FC = () => {
                               <span className="mobile-tx-title" title={isRefund ? `Reembolso ${pm?.name || 'Tarjeta'}` : `Pago a ${pm?.name || 'Tarjeta'}`}>
                                 {isRefund ? `Reembolso ${pm?.name || 'Tarjeta'}` : `Pago a ${pm?.name || 'Tarjeta'}`}
                               </span>
-                              <span className={`badge ${isRefund ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.65rem' }}>
-                                {isRefund ? 'Reembolso' : 'Amortización'}
-                              </span>
                             </div>
                             <div className="mobile-tx-meta" title={`${formatDisplayDate(pay.paymentDate)} • ${isRefund ? 'Comercio/Banco' : 'Débito'}`}>
                               <span>{formatDisplayDate(pay.paymentDate)}</span>
@@ -821,6 +851,11 @@ export const TransactionsTab: React.FC = () => {
                           </div>
                         </div>
                         <div className="mobile-tx-right">
+                          <div className="mobile-tx-tags">
+                            <span className={`badge ${isRefund ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
+                              {isRefund ? 'Reembolso' : 'Amortización'}
+                            </span>
+                          </div>
                           <span className="mobile-tx-amount tabular-nums" style={{ color: isRefund ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
                             {isRefund ? `+${formatSoles(pay.amountPaid)}` : `-${formatSoles(pay.amountPaid)}`}
                           </span>
@@ -857,6 +892,15 @@ export const TransactionsTab: React.FC = () => {
                         <div className="mobile-tx-info">
                           <div className="mobile-tx-title-row">
                             <span className="mobile-tx-title" title={t.description}>{t.description}</span>
+                          </div>
+                          <div className="mobile-tx-meta" title={`${formatDisplayDate(t.date)} • ${cat?.name || 'General'} • ${pm?.name || 'Débito / Efectivo'}`}>
+                            <span>{formatDisplayDate(t.date)}</span> <span>•</span> <span>{cat?.name || 'General'}</span> <span>•</span> <span style={{ color: pm?.color || 'var(--text-secondary)', fontWeight: 500 }}>{pm?.name || 'Débito / Efectivo'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mobile-tx-right">
+                        {(t.isFixedSubscription || t.isRefund || t.isInstallment) && (
+                          <div className="mobile-tx-tags">
                             {t.isFixedSubscription && (
                               <span className="badge-fixed-tag" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>Fijo</span>
                             )}
@@ -869,12 +913,7 @@ export const TransactionsTab: React.FC = () => {
                               </span>
                             )}
                           </div>
-                          <div className="mobile-tx-meta" title={`${formatDisplayDate(t.date)} • ${cat?.name || 'General'} • ${pm?.name || 'Débito / Efectivo'}`}>
-                            <span>{formatDisplayDate(t.date)}</span> <span>•</span> <span>{cat?.name || 'General'}</span> <span>•</span> <span style={{ color: pm?.color || 'var(--text-secondary)', fontWeight: 500 }}>{pm?.name || 'Débito / Efectivo'}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mobile-tx-right">
+                        )}
                         <span className="mobile-tx-amount tabular-nums" style={{ color: t.isRefund ? 'var(--accent-success)' : undefined }}>
                           {t.isRefund ? `+${formatSoles(t.amountPen)}` : formatSoles(t.amountPen)}
                         </span>

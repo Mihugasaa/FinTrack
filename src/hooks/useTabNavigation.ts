@@ -8,8 +8,7 @@ export type ActiveTab =
   | 'transactions'
   | 'cards'
   | 'receivables'
-  | 'annual'
-  | 'analytics'
+  | 'analysis'
   | 'reconciliation';
 
 export const VALID_TABS: ActiveTab[] = [
@@ -18,10 +17,23 @@ export const VALID_TABS: ActiveTab[] = [
   'transactions',
   'cards',
   'receivables',
-  'annual',
-  'analytics',
+  'analysis',
   'reconciliation'
 ];
+
+// Los tabs 'annual' y 'analytics' se fusionaron en el hub 'analysis'. Remapeamos
+// cualquier valor legacy guardado en la URL o en localStorage para no romper los
+// enlaces ni la última pestaña recordada de sesiones anteriores.
+const LEGACY_TAB_MAP: Record<string, ActiveTab> = {
+  annual: 'analysis',
+  analytics: 'analysis'
+};
+
+const normalizeTab = (raw: string | null): ActiveTab | null => {
+  if (!raw) return null;
+  const mapped = LEGACY_TAB_MAP[raw] || raw;
+  return VALID_TABS.includes(mapped as ActiveTab) ? (mapped as ActiveTab) : null;
+};
 
 export function useTabNavigation(defaultTab: ActiveTab = 'overview') {
   const [activeTab, setActiveTabState] = useState<ActiveTab>(defaultTab);
@@ -33,16 +45,23 @@ export function useTabNavigation(defaultTab: ActiveTab = 'overview') {
 
     const syncFromUrl = () => {
       const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get('tab') as ActiveTab | null;
+      const tabParam = normalizeTab(params.get('tab'));
       const subtabParam = params.get('subtab') as 'receivables' | 'payables' | null;
 
-      if (tabParam && VALID_TABS.includes(tabParam)) {
+      if (tabParam) {
         setActiveTabState(tabParam);
         localStorage.setItem('fintrack_active_tab', tabParam);
+        // Si la URL traía un valor legacy, lo reescribimos al canónico.
+        if (params.get('tab') !== tabParam) {
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set('tab', tabParam);
+          window.history.replaceState(null, '', newUrl.toString());
+        }
       } else {
-        const savedTab = localStorage.getItem('fintrack_active_tab') as ActiveTab | null;
-        if (savedTab && VALID_TABS.includes(savedTab)) {
+        const savedTab = normalizeTab(localStorage.getItem('fintrack_active_tab'));
+        if (savedTab) {
           setActiveTabState(savedTab);
+          localStorage.setItem('fintrack_active_tab', savedTab);
           const newUrl = new URL(window.location.href);
           newUrl.searchParams.set('tab', savedTab);
           window.history.replaceState(null, '', newUrl.toString());

@@ -203,12 +203,13 @@ export function calculatePaymentDueDateDetail(
  */
 export function getBestCardRecommendation(
   cards: PaymentMethod[],
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  utilizationByCard: Record<string, number> = {}
 ): {
   recommendedCard?: PaymentMethod;
   creditDays: number;
   reason: string;
-  allRanked: { card: PaymentMethod; creditDays: number; daysUntilClose: number }[];
+  allRanked: { card: PaymentMethod; creditDays: number; daysUntilClose: number; utilization: number }[];
 } {
   const creditCards = cards.filter(c => c.type === 'credit' && c.isActive && c.billingCloseDay);
   if (creditCards.length === 0) {
@@ -237,17 +238,35 @@ export function getBestCardRecommendation(
     }
     const daysUntilClose = Math.max(0, Math.ceil((closeDateThisMonth.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)));
 
+    const utilization = Math.max(0, Math.min(100, utilizationByCard[card.id] ?? 0));
+
     return {
       card,
       creditDays,
-      daysUntilClose
+      daysUntilClose,
+      utilization
     };
   });
 
-  evaluated.sort((a, b) => b.creditDays - a.creditDays);
+  // Orden: primero las tarjetas con utilización sana (una tarjeta casi al tope no
+  // conviene para cuidar el historial crediticio ni cabría el consumo); dentro de
+  // cada grupo, la que da más días de crédito sin intereses; a igualdad, la de
+  // menor utilización.
+  evaluated.sort((a, b) => {
+    const aRisky = a.utilization >= 80 ? 1 : 0;
+    const bRisky = b.utilization >= 80 ? 1 : 0;
+    if (aRisky !== bRisky) return aRisky - bRisky;
+    if (b.creditDays !== a.creditDays) return b.creditDays - a.creditDays;
+    return a.utilization - b.utilization;
+  });
 
   const best = evaluated[0];
-  const reason = `Te otorga ${best.creditDays} días de crédito sin intereses. Su corte es el día ${best.card.billingCloseDay} (en ${best.daysUntilClose} días) y pagarás recién el ${calculatePaymentDueDate(todayStr, best.card)}.`;
+  let reason = `Te da ${best.creditDays} días sin intereses: su corte es el ${best.card.billingCloseDay} (en ${best.daysUntilClose} días) y pagas recién el ${formatDisplayDate(calculatePaymentDueDate(todayStr, best.card))}.`;
+  if (best.utilization >= 80) {
+    reason += ` Ojo: ya usaste ${Math.round(best.utilization)}% de su línea; conviene bajarla antes de seguir cargando.`;
+  } else if (best.utilization > 30) {
+    reason += ` Usa ${Math.round(best.utilization)}% de su línea; intenta dejarla bajo 30% para el corte y cuidar tu score.`;
+  }
 
   return {
     recommendedCard: best.card,
@@ -471,6 +490,12 @@ export function computeMonthlyDebitChain(params: {
   };
 
   const debitMethodIds = paymentMethods.filter(p => p.type === 'debit' || p.type === 'cash').map(p => p.id);
+  const creditCardIds = paymentMethods.filter(p => p.type === 'credit').map(p => p.id);
+
+  // "Hoy" real (mes en curso): los meses anteriores se reconcilian con movimientos
+  // reales; los meses en curso/futuros restan compromisos (deudas y cuotas por vencer).
+  const nowRef = new Date();
+  const realTodayKey = `${nowRef.getFullYear()}-${(nowRef.getMonth() + 1).toString().padStart(2, '0')}`;
 
   // Índices por mes: evita recorrer todo el historial en cada eslabón de la cadena.
   const txByMonth = new Map<string, Transaction[]>();
@@ -484,6 +509,28 @@ export function computeMonthlyDebitChain(params: {
     if (p.sourceType === 'MERCHANT_REFUND' || p.sourceType === 'BANK_CREDIT') return;
     const k = (p.paymentDate || '').slice(0, 7);
     if (isMonthKey(k)) cardByMonth.set(k, (cardByMonth.get(k) || 0) + p.amountPaid);
+  });
+
+  // Cuotas/estados de cuenta de tarjeta por VENCIMIENTO bancario, por mes (neto de
+  // reembolsos): lo que hay que pagar cada mes para no generar intereses.
+  const cardBillDueByMonth = new Map<string, number>();
+  transactions.forEach(t => {
+    if (!creditCardIds.includes(t.paymentMethodId)) return;
+    const k = (t.paymentDueDate || '').slice(0, 7);
+    if (!isMonthKey(k)) return;
+    const net = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
+    cardBillDueByMonth.set(k, (cardBillDueByMonth.get(k) || 0) + net);
+  });
+
+  // Deudas propias con vencimiento programado, por mes (saldo pendiente en PEN).
+  const scheduledDueByMonth = new Map<string, number>();
+  payables.forEach(p => {
+    if (p.status === 'PAID') return;
+    const k = (p.dueDate || '').slice(0, 7);
+    if (!isMonthKey(k)) return;
+    const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
+    const pen = p.currency === 'USD' ? rem * (p.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
+    scheduledDueByMonth.set(k, (scheduledDueByMonth.get(k) || 0) + Math.max(0, pen));
   });
 
   const recByMonth = new Map<string, Receivable[]>();
@@ -502,6 +549,7 @@ export function computeMonthlyDebitChain(params: {
   transactions.forEach(t => { const k = (t.paymentDueDate || '').slice(0, 7); if (isMonthKey(k)) keys.add(k); });
   Object.keys(extraIncomes).forEach(k => { if (isMonthKey(k)) keys.add(k); });
   cardByMonth.forEach((_, k) => keys.add(k));
+  scheduledDueByMonth.forEach((_, k) => keys.add(k));
   recByMonth.forEach((_, k) => keys.add(k));
   extraKeys.forEach(k => { if (isMonthKey(k)) keys.add(k); });
 
@@ -535,7 +583,17 @@ export function computeMonthlyDebitChain(params: {
       payables
     );
 
-    const closing = round2(res.projectedDebitBalanceMonthEnd);
+    // Compromisos que reducen la caja proyectada del mes: deudas propias por vencer +
+    // cuotas de tarjeta por vencer no cubiertas por los abonos del mes. Solo en meses
+    // en curso o futuros (en meses cerrados el saldo real ya refleja lo pagado). Se
+    // restan del CIERRE para que lo proyectado que ve el usuario sea EXACTAMENTE lo que
+    // se arrastra al mes siguiente (arrastre consistente entre meses).
+    const commitments = key >= realTodayKey
+      ? (scheduledDueByMonth.get(key) || 0) +
+        Math.max(0, (cardBillDueByMonth.get(key) || 0) - (cardByMonth.get(key) || 0))
+      : 0;
+
+    const closing = round2(res.projectedDebitBalanceMonthEnd - commitments);
     out[key] = { initial: round2(initial), closing };
     carry = closing;
 
@@ -553,8 +611,11 @@ export function calculateMonthlyDiagnostic(
   budget: MonthlyBudget,
   transactions: Transaction[],
   receivables: Receivable[],
-  allTransactions: Transaction[]
+  allTransactions: Transaction[],
+  payables: Payable[] = []
 ): LiquidityDiagnostic {
+  const targetYearMonth = `${budget.year}-${budget.month.toString().padStart(2, '0')}`;
+
   // 1. Total Ingresos = Sueldo + Otros Ingresos
   const otherIncomesTotal = budget.otherIncomes.reduce((acc, curr) => acc + curr.amount, 0);
   const totalIncome = budget.baseSalary + otherIncomesTotal;
@@ -562,26 +623,48 @@ export function calculateMonthlyDiagnostic(
   // 2. Gastos consumidos en este mes calendario (descontando reembolsos y devoluciones)
   const totalExpensesConsumed = transactions.reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
 
-  // 3. Saldo simple restante (Ingresos - Gastos)
+  // 3. Saldo simple restante (Ingresos - Gastos). Tasa de ahorro = ingresos vs gasto
+  // devengado (no toca deudas/cobranzas: mide cuánto del ingreso te quedas).
   const simpleRemaining = totalIncome - totalExpensesConsumed;
   const savingsRatePercentage = totalIncome > 0 ? (simpleRemaining / totalIncome) * 100 : 0;
 
   // 4. Cobranzas a terceros cobradas
   const collectedReceivables = receivables.reduce((acc, curr) => acc + curr.paidAmount, 0);
 
-  // 5. Total disponible en cuenta
-  const totalAvailable = budget.initialDebitBalance + totalIncome + collectedReceivables;
+  // 4.b Préstamos recibidos acreditados a débito ESTE mes: entran como caja real
+  // disponible (mismo criterio que el saldo de débito).
+  const borrowedToDebit = payables
+    .filter(p => p.isCreditedToDebit && (p.issueDate || '').startsWith(targetYearMonth))
+    .reduce((acc, p) => {
+      const isUsd = p.currency === 'USD';
+      const orig = (isUsd && p.originalAmount) ? p.originalAmount : (p.originalAmount ?? p.totalAmount ?? 0);
+      const pen = isUsd ? (p.amountPen || orig * (p.exchangeRate || FALLBACK_USD_PEN_RATE)) : orig;
+      return acc + Math.max(0, pen);
+    }, 0);
+
+  // 5. Total disponible en cuenta (incluye préstamos acreditados a débito)
+  const totalAvailable = budget.initialDebitBalance + totalIncome + collectedReceivables + borrowedToDebit;
 
   // 6. Salida Real de Dinero del Mes:
-  // Todos los pagos cuya FECHA DE PAGO calculada cae en este año y mes (descontando reembolsos)
-  const targetYearMonth = `${budget.year}-${budget.month.toString().padStart(2, '0')}`;
-  
+  // Todos los pagos cuya FECHA DE PAGO calculada cae en este año y mes (descontando
+  // reembolsos). Incluye los vencimientos bancarios de tarjeta que caen este mes.
   const realCashOutflow = allTransactions
     .filter(t => t.paymentDueDate.startsWith(targetYearMonth))
     .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
 
-  // 7. Margen de Liquidez
-  const liquidityMargin = totalAvailable - realCashOutflow;
+  // 6.b Deudas propias con vencimiento programado este mes y saldo pendiente: son
+  // una salida de caja comprometida (aunque aún no la hayas pagado).
+  const scheduledPayablesDue = payables
+    .filter(p => (p.dueDate || '').startsWith(targetYearMonth) && p.status !== 'PAID')
+    .reduce((acc, p) => {
+      const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
+      const pen = p.currency === 'USD' ? rem * (p.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
+      return acc + Math.max(0, pen);
+    }, 0);
+
+  // 7. Margen de Liquidez = disponible - vencimientos del mes (tarjetas + débito) -
+  // deudas propias programadas para este mes.
+  const liquidityMargin = totalAvailable - realCashOutflow - scheduledPayablesDue;
   const isPositive = liquidityMargin >= 0;
 
   const statusText = isPositive

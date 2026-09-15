@@ -243,7 +243,7 @@ export const ReceivablesTab: React.FC = () => {
             <div className="loans-info-banner-left">
               <AlertCircle size={16} color="var(--accent-brand)" />
               <span>
-                <strong>Seguimiento de Cartera:</strong> El dinero prestado no computa como gasto de consumo ni reduce tu patrimonio. Al cobrarlo, tu saldo líquido bancario aumenta automáticamente en <strong>{formatSoles(totalReceivablesRemaining)}{totalReceivablesRemainingUsd > 0 ? ` • $ ${totalReceivablesRemainingUsd.toFixed(2)} USD` : ''}</strong>.
+                <strong>Lo que te deben no es un gasto.</strong> Ese dinero sigue siendo tuyo; cuando lo cobres, tu saldo en cuenta sube en <strong>{formatSoles(totalReceivablesRemaining)}{totalReceivablesRemainingUsd > 0 ? ` • $ ${totalReceivablesRemainingUsd.toFixed(2)} USD` : ''}</strong>.
               </span>
             </div>
             <div className="loans-info-banner-right">
@@ -552,7 +552,7 @@ export const ReceivablesTab: React.FC = () => {
             <div className="loans-info-banner-left">
               <AlertCircle size={16} color="var(--accent-warning)" />
               <span>
-                <strong>Trazabilidad sin Duplicidad:</strong> Las amortizaciones a tus acreedores se descuentan de tu saldo bancario como <em>Pago Deuda Mía</em> sin duplicar gastos. Saldo total pendiente: <strong>{formatSoles(totalPayablesRemaining)}</strong>{totalPayablesRemainingUsd > 0 ? <> <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>· ya incluye $ {totalPayablesRemainingUsd.toFixed(2)} USD convertidos</span></> : ''}.
+                <strong>Lo que debes.</strong> Cuando le pagas a alguien, se descuenta de tu saldo como pago de deuda, sin contarlo otra vez como gasto. Te queda por pagar <strong>{formatSoles(totalPayablesRemaining)}</strong>{totalPayablesRemainingUsd > 0 ? <> <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>· ya incluye $ {totalPayablesRemainingUsd.toFixed(2)} USD convertidos</span></> : ''}.
               </span>
             </div>
             <div className="loans-info-banner-right">

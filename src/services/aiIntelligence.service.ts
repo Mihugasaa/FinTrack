@@ -213,9 +213,16 @@ export class AIIntelligenceService {
   }
 
   /**
-   * Detecta anomalías y riesgos en las transacciones registradas
+   * Detecta anomalías y riesgos en las transacciones registradas.
+   * `transactions` es el conjunto del mes visible (para cargos duplicados y picos,
+   * que son mensuales). `historyTransactions` es el historial completo, usado solo
+   * para detectar suscripciones recurrentes reales (requiere ver varios meses).
    */
-  public static detectAnomalies(transactions: Transaction[], categories: Category[]): AIAnomaly[] {
+  public static detectAnomalies(
+    transactions: Transaction[],
+    categories: Category[],
+    historyTransactions: Transaction[] = transactions
+  ): AIAnomaly[] {
     const anomalies: AIAnomaly[] = [];
     if (!transactions || transactions.length === 0) return anomalies;
 
@@ -284,31 +291,66 @@ export class AIIntelligenceService {
       }
     });
 
-    // 3. Suscripciones Recurrentes no marcadas como fijas
+    // 3. Suscripciones recurrentes no marcadas como fijas.
+    // Regla endurecida: ya NO alerta por cualquier descripción repetida (eso hacía
+    // saltar gastos como varios cafés el mismo mes). Exige señales de suscripción
+    // real: mismo comercio, MONTO SIMILAR y SEPARACIÓN MENSUAL en meses distintos.
+    // Se evalúa sobre el historial completo (varios meses), no solo el mes visible.
     const recurringCandidates: Record<string, Transaction[]> = {};
-    transactions.forEach(t => {
-      if (!t.isFixedSubscription) {
+    historyTransactions.forEach(t => {
+      if (!t.isFixedSubscription && !t.isRefund) {
         const descKey = t.description.toLowerCase().trim();
+        if (!descKey) return;
         if (!recurringCandidates[descKey]) recurringCandidates[descKey] = [];
         recurringCandidates[descKey].push(t);
       }
     });
 
-    Object.entries(recurringCandidates).forEach(([desc, txs]) => {
-      if (txs.length >= 2) {
-        const sample = txs[0];
-        anomalies.push({
-          id: `anom-sub-${sample.id}`,
-          type: 'unregistered_subscription',
-          severity: 'low',
-          title: `Gasto Recurrente No Marcado como Fijo`,
-          description: `"${sample.description}" se repite varias veces (S/ ${sample.amountPen.toFixed(2)}). Marcarlo como "Fijo" te ayudará a proyectar tu liquidez automáticamente.`,
-          transactionId: sample.id,
-          amount: sample.amountPen,
-          date: sample.date,
-          suggestedAction: 'Edita este gasto y activa "Gasto fijo recurrente" para proyectarlo en los siguientes meses.'
-        });
+    // Referencia de "reciente": la fecha más nueva del historial. Solo alertamos por
+    // suscripciones aún activas (última ocurrencia dentro de ~62 días de esa fecha).
+    const latestMs = historyTransactions.reduce(
+      (max, t) => Math.max(max, new Date(t.date).getTime()),
+      0
+    );
+
+    const isSimilarAmount = (a: number, b: number) => Math.abs(a - b) <= Math.max(5, Math.min(a, b) * 0.1);
+
+    Object.values(recurringCandidates).forEach(txs => {
+      if (txs.length < 2) return;
+      const sorted = [...txs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Buscar un par con monto similar y separación mensual (20-45 días) en meses
+      // calendario distintos: eso distingue una suscripción de repeticiones intra-mes.
+      let hasMonthlyPair = false;
+      for (let i = 0; i < sorted.length && !hasMonthlyPair; i++) {
+        for (let j = i + 1; j < sorted.length; j++) {
+          const days = Math.abs(new Date(sorted[j].date).getTime() - new Date(sorted[i].date).getTime()) / 86400000;
+          const differentMonth = sorted[i].date.slice(0, 7) !== sorted[j].date.slice(0, 7);
+          if (differentMonth && days >= 20 && days <= 45 && isSimilarAmount(sorted[i].amountPen, sorted[j].amountPen)) {
+            hasMonthlyPair = true;
+            break;
+          }
+        }
       }
+      if (!hasMonthlyPair) return;
+
+      // Solo suscripciones vigentes: la última ocurrencia debe ser reciente.
+      const latestOccurrence = sorted[sorted.length - 1];
+      const daysSinceLast = (latestMs - new Date(latestOccurrence.date).getTime()) / 86400000;
+      if (daysSinceLast > 62) return;
+
+      const sample = latestOccurrence;
+      anomalies.push({
+        id: `anom-sub-${sample.id}`,
+        type: 'unregistered_subscription',
+        severity: 'low',
+        title: `Gasto Recurrente No Marcado como Fijo`,
+        description: `"${sample.description}" se repite cada mes con un monto similar (~S/ ${sample.amountPen.toFixed(2)}, ${sorted.length} veces). Marcarlo como "Fijo" te ayudará a proyectar tu liquidez automáticamente.`,
+        transactionId: sample.id,
+        amount: sample.amountPen,
+        date: sample.date,
+        suggestedAction: 'Edita este gasto y activa "Gasto fijo recurrente" para proyectarlo en los siguientes meses.'
+      });
     });
 
     return anomalies;

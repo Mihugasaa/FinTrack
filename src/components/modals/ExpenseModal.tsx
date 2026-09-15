@@ -132,10 +132,10 @@ export const ExpenseModal: React.FC = () => {
                 disabled={isParsingNaturalExpense}
                 style={{
                   flex: 1,
-                  background: 'var(--bg-subtle)',
-                  border: '1px solid var(--border-default)',
+                  background: 'var(--bg-surface)',
+                  border: '1.5px solid var(--border-medium)',
                   borderRadius: '8px',
-                  padding: '7px 10px',
+                  padding: '8px 11px',
                   fontSize: '0.8rem',
                   color: 'var(--text-primary)'
                 }}

@@ -21,9 +21,8 @@ import { IncomesTab } from '@/components/tabs/IncomesTab';
 import { TransactionsTab } from '@/components/tabs/TransactionsTab';
 import { CardsTab } from '@/components/tabs/CardsTab';
 import { ReceivablesTab } from '@/components/tabs/ReceivablesTab';
-import { AnalyticsTab } from '@/components/tabs/AnalyticsTab';
+import { AnalysisTab } from '@/components/tabs/AnalysisTab';
 import { ReconciliationTab } from '@/components/tabs/ReconciliationTab';
-import { AnnualTab } from '@/components/tabs/AnnualTab';
 
 /**
  * Maquetación del dashboard. Solo decide qué pestaña y qué modales están
@@ -79,13 +78,10 @@ export function DashboardContent() {
       {/* PESTAÑA 5: PRÉSTAMOS Y DEUDAS */}
       {activeTab === 'receivables' && <ReceivablesTab />}
 
-      {/* PESTAÑA 6: RESUMEN ANUAL */}
-      {activeTab === 'annual' && <AnnualTab />}
+      {/* PESTAÑA 6: ANÁLISIS (Mes actual · Tendencia · Proyección) */}
+      {activeTab === 'analysis' && <AnalysisTab />}
 
-      {/* PESTAÑA 7: ANALÍTICA AVANZADA, PROYECCIONES & IA */}
-      {activeTab === 'analytics' && <AnalyticsTab />}
-
-      {/* PESTAÑA 8: CONCILIACIÓN BANCARIA INTELIGENTE */}
+      {/* PESTAÑA 7: CONCILIACIÓN BANCARIA INTELIGENTE */}
       {activeTab === 'reconciliation' && <ReconciliationTab />}
 
       {/* =========================================================================

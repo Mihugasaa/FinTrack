@@ -2,6 +2,19 @@
    FINTRACK - FULL INTERACTIVE PROTOTYPE STYLES (INCLUYE GESTIÓN DE DÉBITO)
    ============================================================================== */
 
+/* Al redimensionar la ventana, congelamos TODAS las transiciones/animaciones para
+   que las cards y zonas salten directo a su layout final en lugar de animar el
+   reflow "poco a poco". La clase la pone/quita un efecto en el cliente (debounced). */
+html.is-resizing,
+html.is-resizing *,
+html.is-resizing *::before,
+html.is-resizing *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+
 .dashboard-container {
   max-width: min(1560px, 96vw);
   margin: 0 auto;
@@ -365,8 +378,14 @@
    ============================================================================== */
 .desktop-tabs-bar {
   display: flex;
+  /* El contenedor (con borde) ajusta su ancho al de los tabs y se centra, para que
+     el borde NO deje franjas en blanco a los lados. En pantallas donde los 7 tabs no
+     caben, `max-width:100%` + `overflow-x:auto` permiten desplazarlos sin recortar. */
+  width: fit-content;
+  max-width: 100%;
+  justify-content: flex-start;
   gap: 4px;
-  margin-bottom: 24px;
+  margin: 0 auto 24px auto;
   background: var(--bg-surface);
   padding: 4px;
   border-radius: 10px;
@@ -408,6 +427,23 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
+/* Contador de alertas de auditoría en el tab Análisis. */
+.tab-alert-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent-danger);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ==============================================================================
    NAVEGACIÓN MÓVIL (BOTTOM NAVIGATION BAR - THUMB ZONE ESTÁNDAR)
    ============================================================================== */
@@ -441,14 +477,29 @@
   background: transparent;
   border: none;
   color: var(--text-muted);
-  padding: 6px 4px;
+  padding: 6px 2px;
   border-radius: 8px;
   font-size: 0.675rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
-  min-width: 56px;
+  min-width: 0;
+  flex: 1 1 0;
   position: relative;
+}
+
+/* Etiqueta del nav móvil: una sola línea (evita que "Movimientos" se parta en dos). */
+.mobile-nav-item span {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 360px) {
+  .mobile-nav-item {
+    font-size: 0.6rem;
+  }
 }
 
 .mobile-nav-item:active {
@@ -1336,6 +1387,18 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* En móvil, "Gasto del mes" baja a su propia línea (no apretado junto al título). */
+@media (max-width: 600px) {
+  .movements-gasto-hint {
+    flex-basis: 100%;
+    margin-top: 2px;
+  }
+  .movements-gasto-sep {
+    display: none;
+  }
 }
 
 /* =========================================================================
@@ -1915,6 +1978,16 @@
   align-items: flex-end;
   gap: 4px;
   flex-shrink: 0;
+}
+
+/* Tags de tipo (Fijo, Ingreso, Deuda, Cuota, Reembolso...) alineados en la esquina
+   superior derecha de la card móvil, para que no queden dispersos por la tarjeta. */
+.mobile-tx-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 140px;
 }
 
 .mobile-tx-amount {
@@ -2625,6 +2698,33 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+/* En móvil el toggle Ritmo/Distribución (etiquetas largas) se salía de pantalla.
+   Se vuelve de ancho completo en dos columnas iguales. Scoped al bar del anual
+   para no afectar los otros controles segmentados. */
+@media (max-width: 640px) {
+  .annual-segmented-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .annual-segmented-bar .segmented-tabs-wrap {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .annual-segmented-bar .segmented-tab-btn {
+    justify-content: center;
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 0.7rem;
+    gap: 4px;
+    min-width: 0;
+    line-height: 1.2;
+    /* Permitir que el texto largo ("Distribución por Categorías") ajuste en
+       dos líneas dentro de su celda en vez de desbordar (base tiene nowrap). */
+    white-space: normal !important;
+  }
+}
+
 /* Contenedor Visual Principal (Zen & Espacioso) */
 .annual-visual-card {
   background: var(--bg-surface);
@@ -2633,6 +2733,119 @@
   padding: 24px;
   margin-bottom: 22px;
   box-shadow: var(--shadow-card);
+}
+
+/* Distribución por categorías (donut + leyenda). Apila en móvil para no salirse
+   de pantalla, y la leyenda puede encoger (min-width:0) para truncar nombres. */
+.annual-cat-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 32px;
+  align-items: center;
+}
+.annual-cat-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .annual-cat-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    justify-items: center;
+  }
+  .annual-cat-legend {
+    width: 100%;
+  }
+}
+
+/* Gráfico de colchón acumulado: ancho completo con altura fija (no aspect-ratio)
+   para que no se estire en desktop ni quede diminuto/ilegible en móvil. Las
+   etiquetas van en HTML. */
+.annual-flow-chart {
+  position: relative;
+  width: 100%;
+}
+/* Fila: eje Y (izquierda) + zona de trazado (derecha). */
+.annual-flow-plot-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+/* Eje Y: columna angosta cuyas etiquetas se alinean a las líneas guía del SVG. */
+.annual-flow-yaxis {
+  position: relative;
+  width: 42px;
+  height: 200px;
+  flex-shrink: 0;
+}
+.annual-flow-ytick {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.annual-flow-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.annual-flow-svgwrap {
+  position: relative;
+  height: 200px;
+}
+.annual-flow-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.annual-flow-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-brand);
+  background: var(--bg-surface);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+/* Valor del colchón por punto (el último enfatizado). */
+.annual-flow-cval {
+  position: absolute;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--accent-brand);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.annual-flow-cval.is-last {
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.annual-flow-axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 2px 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.annual-flow-axis span {
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .annual-flow-yaxis { width: 34px; height: 168px; }
+  .annual-flow-svgwrap { height: 168px; }
+  .annual-flow-ytick { font-size: 0.55rem; }
+  .annual-flow-cval { font-size: 0.55rem; }
+  .annual-flow-cval.is-last { font-size: 0.62rem; }
+  /* En móvil angosto ocultamos los valores intermedios (quedan primero + último);
+     las líneas guía siguen dando la escala. */
+  .annual-flow-cval.is-mid { display: none; }
 }
 
 /* Gráfico Zen de Flujo */
@@ -2768,6 +2981,22 @@
 .health-pill.pill-green { background: rgba(16, 185, 129, 0.12); color: var(--accent-success); }
 .health-pill.pill-red { background: rgba(239, 68, 68, 0.12); color: var(--accent-danger); }
 .health-pill.pill-blue { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+.health-pill.pill-amber { background: rgba(245, 158, 11, 0.14); color: #b45309; }
+:root[data-theme="dark"] .health-pill.pill-amber { color: #fbbf24; }
+
+/* Nota metodológica bajo la tabla anual (devengado vs caja + tiers de estado). */
+.annual-table-note {
+  margin: 12px 2px 0 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.annual-table-note strong {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
 
 /* Vista Móvil Dedicada (< 768px): Tarjetas Táctiles */
 .annual-mobile-cards-list {
@@ -2819,6 +3048,7 @@
   .annual-mobile-card.m-card-green::before { background: var(--accent-success); }
   .annual-mobile-card.m-card-red::before { background: var(--accent-danger); }
   .annual-mobile-card.m-card-blue::before { background: #3b82f6; }
+  .annual-mobile-card.m-card-amber::before { background: var(--accent-warning); }
 
   .m-card-header {
     display: flex;
@@ -3708,6 +3938,12 @@
   }
 }
 
+/* Comparativo mes a mes a todo el ancho (ya sin la tarjeta de categorías, que
+   ahora vive solo en Visión General y en el Anual). */
+.analytics-chart-full {
+  margin-bottom: 0;
+}
+
 /* ==========================================================================
    MACRO KPIS DE ANALÍTICA (PULSO EJECUTIVO)
    ========================================================================== */
@@ -3861,7 +4097,8 @@
   background: var(--bg-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 16px 14px 10px 44px;
+  /* Footer ampliado (30px) para alojar mes + margen bajo cada columna. */
+  padding: 16px 14px 30px 44px;
   margin-bottom: 16px;
   overflow: hidden;
 }
@@ -3875,7 +4112,9 @@
   top: 16px;
   left: 10px;
   right: 14px;
-  bottom: 34px;
+  /* Alineado con el footer ampliado del canvas para mantener la línea base
+     de las barras sobre la guía de S/ 0. */
+  bottom: 54px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -3982,6 +4221,17 @@
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+/* Margen neto del mes bajo la etiqueta del mes (columna del comparativo). */
+.chart-bar-margin {
+  position: absolute;
+  bottom: -42px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 
 .chart-legend {
@@ -4146,6 +4396,72 @@
   white-space: nowrap !important;
 }
 
+/* Sparkline de la trayectoria del saldo final proyectado (simulador). */
+.sim-sparkline {
+  margin-bottom: 14px;
+  padding: 10px 14px 6px 14px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+}
+
+/* El sparkline ocupa todo el ancho con ALTURA FIJA (no aspect-ratio), así no se
+   estira en desktop ni se encoge en móvil. El texto va en HTML aparte. */
+.sim-spark-plot {
+  position: relative;
+  width: 100%;
+}
+.sim-spark-svg {
+  display: block;
+  width: 100%;
+  height: 104px;
+}
+.sim-spark-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-brand);
+  background: var(--bg-surface);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.sim-spark-val {
+  position: absolute;
+  font-size: 0.66rem;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.sim-spark-axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 2px 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.sim-spark-axis span {
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .sim-spark-svg {
+    height: 86px;
+  }
+}
+
+.sim-sparkline-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
 /* Centro de Auditoría de IA y Anomalías */
 .ai-audit-container {
   background: var(--bg-surface);
@@ -4203,6 +4519,84 @@
   background: rgba(239, 68, 68, 0.15);
   color: var(--accent-danger);
   border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Tira de alertas proactivas de auditoría en Visión General (resumen descartable;
+   el detalle completo vive en el tab Análisis). */
+.overview-alert-strip {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-left: 4px solid var(--accent-warning);
+}
+
+.alert-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.alert-strip-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.alert-strip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alert-strip-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+}
+
+.alert-strip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent-brand);
+}
+.alert-strip-dot[data-sev="high"] { background: var(--accent-danger); }
+.alert-strip-dot[data-sev="medium"] { background: var(--accent-warning); }
+.alert-strip-dot[data-sev="low"] { background: var(--accent-brand); }
+
+.alert-strip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alert-strip-more {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--accent-brand);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.alert-strip-more:hover {
+  text-decoration: underline;
 }
 
 /* ==========================================================================
@@ -5392,7 +5786,8 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
-  margin-bottom: 20px;
+  /* El contenedor padre ya separa las secciones con su gap; sin margin-bottom
+     para no duplicar el espacio vertical entre bloques. */
 }
 
 @media (max-width: 640px) {
@@ -5457,7 +5852,6 @@
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-  margin-bottom: 18px;
 }
 
 .loans-subtab-switch {
@@ -5559,7 +5953,6 @@
   background: rgba(99, 102, 241, 0.06);
   border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: 12px;
-  margin-bottom: 18px;
   flex-wrap: wrap;
 }
 

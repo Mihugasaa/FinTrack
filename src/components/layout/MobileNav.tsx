@@ -9,10 +9,8 @@ import {
   MoreHorizontal,
   X,
   Users,
-  Calendar,
-  TrendingUp,
-  CheckCheck,
-  LogOut
+  BarChart3,
+  CheckCheck
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
@@ -24,14 +22,14 @@ export const MobileNav: React.FC = () => {
     setIsMoreMenuOpen,
     receivables,
     payables,
-    currentUser,
-    handleLogout,
+    aiAnomalies,
     handleBackdropMouseDown,
     handleBackdropClick
   } = useFinance();
   const pendingReceivablesCount = receivables.filter(r => r.remainingAmount > 0).length;
   const pendingPayablesCount = payables.filter(p => p.remainingAmount > 0).length;
   const totalPendingLoans = pendingReceivablesCount + pendingPayablesCount;
+  const anomalyCount = aiAnomalies.length;
 
   return (
     <>
@@ -56,7 +54,7 @@ export const MobileNav: React.FC = () => {
           }}
         >
           <ListFilter size={18} />
-          <span>Gastos</span>
+          <span>Movimientos</span>
         </button>
 
         <button
@@ -83,12 +81,12 @@ export const MobileNav: React.FC = () => {
 
         <button
           id="btn-mobile-more"
-          className={`mobile-nav-item ${(activeTab === 'receivables' || activeTab === 'annual' || isMoreMenuOpen) ? 'active' : ''}`}
+          className={`mobile-nav-item ${(activeTab === 'receivables' || activeTab === 'analysis' || isMoreMenuOpen) ? 'active' : ''}`}
           onClick={() => setIsMoreMenuOpen(prev => !prev)}
         >
           <MoreHorizontal size={18} />
           <span>Más</span>
-          {totalPendingLoans > 0 && <span className="mobile-nav-badge" />}
+          {(totalPendingLoans > 0 || anomalyCount > 0) && <span className="mobile-nav-badge" />}
         </button>
       </nav>
 
@@ -131,35 +129,24 @@ export const MobileNav: React.FC = () => {
               </button>
 
               <button
-                className={`more-menu-item ${activeTab === 'annual' ? 'active' : ''}`}
+                className={`more-menu-item ${activeTab === 'analysis' ? 'active' : ''}`}
                 onClick={() => {
-                  onSelectTab('annual');
+                  onSelectTab('analysis');
                   setIsMoreMenuOpen(false);
                 }}
               >
                 <div className="more-item-left">
-                  <Calendar size={18} className="text-brand" />
+                  <BarChart3 size={18} className="text-brand" />
                   <div>
-                    <div>Resumen Anual</div>
-                    <div className="text-body-sm text-muted">Matriz de gastos anual completa</div>
+                    <div>Análisis</div>
+                    <div className="text-body-sm text-muted">Mes actual, tendencia y proyección de saldos</div>
                   </div>
                 </div>
-              </button>
-
-              <button
-                className={`more-menu-item ${activeTab === 'analytics' ? 'active' : ''}`}
-                onClick={() => {
-                  onSelectTab('analytics');
-                  setIsMoreMenuOpen(false);
-                }}
-              >
-                <div className="more-item-left">
-                  <TrendingUp size={18} className="text-brand" />
-                  <div>
-                    <div>Analítica & Forecast IA</div>
-                    <div className="text-body-sm text-muted">Proyección 3-6 meses y auditoría ML</div>
-                  </div>
-                </div>
+                {anomalyCount > 0 && (
+                  <span className="badge badge-danger">
+                    {anomalyCount} {anomalyCount === 1 ? 'alerta' : 'alertas'}
+                  </span>
+                )}
               </button>
 
               <button
@@ -174,24 +161,6 @@ export const MobileNav: React.FC = () => {
                   <div>
                     <div>Conciliación Bancaria</div>
                     <div className="text-body-sm text-muted">Comparar estado de cuenta con app</div>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                id="btn-logout-mobile"
-                className="more-menu-item"
-                onClick={() => {
-                  setIsMoreMenuOpen(false);
-                  handleLogout();
-                }}
-                style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '4px' }}
-              >
-                <div className="more-item-left">
-                  <LogOut size={18} color="var(--accent-danger)" />
-                  <div>
-                    <div style={{ color: 'var(--accent-danger)' }}>Cerrar Sesión</div>
-                    <div className="text-body-sm text-muted">@{currentUser?.username}</div>
                   </div>
                 </div>
               </button>

@@ -7,7 +7,9 @@ import {
   Repeat,
   Pencil,
   Trash2,
-  Tag
+  Tag,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
@@ -32,6 +34,9 @@ export const OverviewTab: React.FC = () => {
     categoryBreakdown,
     monthlyComparison,
     setActiveTab,
+    setCardsSubTab,
+    aiAnomalies,
+    handleDismissAnomaly,
     paymentMethods,
     categories,
     cardPaymentPlan,
@@ -57,8 +62,69 @@ export const OverviewTab: React.FC = () => {
     return list.slice(0, 5);
   }, [currentMonthTransactions, isCurrentActiveMonth, currentDateStr]);
 
+  // Flujo del mes visible (para las tarjetas Entradas/Salidas, según el mes sea en
+  // curso, pasado o futuro). Los "previstos" incluyen sueldo + ingresos extra del mes.
+  const monthIncome = totalSalaryAmount + debitStats.otherIncomesTotalMonth;
+  const expectedInflow = monthIncome + debitStats.collectedFromDebtors;
+  const realizedInflow = debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday + debitStats.collectedFromDebtors;
+  const realizedOutflow = debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidMonth;
+  const pastOutflow = debitStats.debitExpensesTotalMonth + debitStats.cardPaymentsPaidMonth;
+  // Salida programada del mes futuro: gastos débito registrados + cuotas de tarjeta
+  // por vencer + deudas propias programadas de ese mes.
+  const scheduledOutflow = debitStats.debitExpensesTotalMonth + debitStats.cardBillsDueThisMonth + debitStats.scheduledDebtDueThisMonth;
+  // Lo que aún falta pagar en el mes en curso (para no quedar solo con lo "efectuado").
+  const pendingThisMonth = debitStats.unpaidCardBillsDueThisMonth + debitStats.scheduledDebtDueThisMonth;
+
   return (
     <div>
+      {/* TIRA DE ALERTAS PROACTIVAS: auditoría IA resumida y descartable. El
+          detalle completo vive en el tab Análisis (Mes actual). Solo aparece si
+          hay anomalías activas. */}
+      {aiAnomalies.length > 0 && (
+        <section className="overview-alert-strip clean-card">
+          <div className="alert-strip-head">
+            <span className="alert-strip-title">
+              <AlertTriangle size={16} color="var(--accent-warning)" />
+              Auditoría: {aiAnomalies.length} {aiAnomalies.length === 1 ? 'alerta por revisar' : 'alertas por revisar'}
+            </span>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+              onClick={() => setActiveTab('analysis')}
+            >
+              Ver detalle
+            </button>
+          </div>
+          <div className="alert-strip-list">
+            {aiAnomalies.slice(0, 3).map(anom => (
+              <div key={anom.id} className="alert-strip-item">
+                <span className="alert-strip-dot" data-sev={anom.severity} />
+                <span className="alert-strip-text" title={anom.description}>{anom.title}</span>
+                <button
+                  type="button"
+                  className="btn-dismiss-alert"
+                  onClick={() => handleDismissAnomaly(anom.id)}
+                  title="Descartar esta alerta"
+                  aria-label="Descartar alerta"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+            {aiAnomalies.length > 3 && (
+              <button
+                type="button"
+                className="alert-strip-more"
+                onClick={() => setActiveTab('analysis')}
+              >
+                +{aiAnomalies.length - 3} más en Análisis
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* 3. HERO MASTER: MI DINERO EN DÉBITO (ARMONÍA ZEN Y FOCO EN LIQUIDEZ) */}
       <section className="zen-hero clean-card">
         <div className="zen-hero-left">
@@ -109,7 +175,7 @@ export const OverviewTab: React.FC = () => {
             {isPastMonth && (
               <>
                 <span className="zen-context-item">
-                  Sueldo completado: <strong>{formatSoles(totalSalaryAmount)}</strong>
+                  Ingresos del mes: <strong>{formatSoles(monthIncome)}</strong>
                 </span>
                 <span>•</span>
               </>
@@ -117,7 +183,12 @@ export const OverviewTab: React.FC = () => {
             {isFutureMonth && (
               <>
                 <span className="zen-context-item">
-                  Sueldo previsto: <strong>{formatSoles(totalSalaryAmount)}</strong>
+                  Ingresos previstos: <strong>{formatSoles(monthIncome)}</strong>
+                  {debitStats.otherIncomesTotalMonth > 0 && (
+                    <span style={{ marginLeft: '5px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      (sueldo {formatSoles(totalSalaryAmount)} + extras {formatSoles(debitStats.otherIncomesTotalMonth)})
+                    </span>
+                  )}
                 </span>
                 <span>•</span>
               </>
@@ -144,33 +215,42 @@ export const OverviewTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Flujo Real de Débito */}
+        {/* Flujo del mes: en curso muestra lo acreditado/efectuado; en meses
+            futuros muestra lo previsto/programado (para que no salga todo en S/0). */}
         <div className="zen-hero-right">
           <div className="zen-flow-card">
             <span className="zen-flow-title flex items-center gap-xs">
-              <ArrowDownLeft size={13} color="var(--accent-success)" /> Entradas Acreditadas
+              <ArrowDownLeft size={13} color="var(--accent-success)" />{' '}
+              {isCurrentActiveMonth ? 'Entradas Acreditadas' : isFutureMonth ? 'Ingresos Previstos' : 'Entradas del Mes'}
             </span>
             <span className="zen-flow-amount tabular-nums text-success">
-              +{formatSoles(debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday + debitStats.collectedFromDebtors)}
+              +{formatSoles(isCurrentActiveMonth ? realizedInflow : expectedInflow)}
             </span>
             <span className="zen-flow-sub">
-              {debitStats.isSalaryCreditedToday
-                ? 'Sueldo acreditado'
-                : currentOtherIncomes.length > 0
-                ? `${currentOtherIncomes[0].description} S/ ${debitStats.otherIncomesReceivedToday.toFixed(2)}`
-                : 'Sin extras aún'}
+              {isCurrentActiveMonth
+                ? (debitStats.isSalaryCreditedToday
+                    ? 'Sueldo acreditado'
+                    : currentOtherIncomes.length > 0
+                    ? `${currentOtherIncomes[0].description} S/ ${debitStats.otherIncomesReceivedToday.toFixed(2)}`
+                    : 'Sin extras aún')
+                : `Sueldo ${formatSoles(totalSalaryAmount)}${debitStats.otherIncomesTotalMonth > 0 ? ` • Extras ${formatSoles(debitStats.otherIncomesTotalMonth)}` : ''}${debitStats.collectedFromDebtors > 0 ? ` • Cobros ${formatSoles(debitStats.collectedFromDebtors)}` : ''}`}
             </span>
           </div>
 
           <div className="zen-flow-card">
             <span className="zen-flow-title flex items-center gap-xs">
-              <ArrowUpRight size={13} color="var(--accent-danger)" /> Salidas Efectuadas
+              <ArrowUpRight size={13} color="var(--accent-danger)" />{' '}
+              {isCurrentActiveMonth ? 'Salidas Efectuadas' : isFutureMonth ? 'Salidas Programadas' : 'Salidas del Mes'}
             </span>
             <span className="zen-flow-amount tabular-nums text-danger">
-              -{formatSoles(debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidMonth)}
+              -{formatSoles(isCurrentActiveMonth ? realizedOutflow : isFutureMonth ? scheduledOutflow : pastOutflow)}
             </span>
             <span className="zen-flow-sub">
-              Débito S/ {debitStats.debitExpensesPaidToday.toFixed(2)} • Tarjetas S/ {debitStats.cardPaymentsPaidMonth.toFixed(2)}
+              {isCurrentActiveMonth
+                ? `Débito ${formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${pendingThisMonth > 0 ? ` • Por pagar ${formatSoles(pendingThisMonth)}` : ''}`
+                : isFutureMonth
+                ? `Tarjetas ${formatSoles(debitStats.cardBillsDueThisMonth)} • Deudas ${formatSoles(debitStats.scheduledDebtDueThisMonth)}${debitStats.debitExpensesTotalMonth > 0 ? ` • Débito ${formatSoles(debitStats.debitExpensesTotalMonth)}` : ''}`
+                : `Débito ${formatSoles(debitStats.debitExpensesTotalMonth)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}`}
             </span>
           </div>
         </div>
@@ -196,7 +276,11 @@ export const OverviewTab: React.FC = () => {
               <span style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>💳</span> Próximos Vencimientos de Tarjetas
               </span>
-              <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={() => setActiveTab('cards')}>
+              <button
+                className="btn-secondary"
+                style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                onClick={() => { setCardsSubTab('schedule'); setActiveTab('cards'); }}
+              >
                 Ver planificador
               </button>
             </div>
@@ -208,7 +292,7 @@ export const OverviewTab: React.FC = () => {
                   <div key={d.p.cardId} style={{ flex: '1 1 180px', minWidth: '160px', border: '1px solid var(--border-subtle)', borderLeft: `4px solid ${d.p.cardColor}`, borderRadius: '10px', padding: '8px 12px', background: 'var(--bg-subtle)' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>{d.p.cardName}</div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      {d.weekday} {formatDisplayDate(d.p.nextDueDate!)} · <span style={{ color, fontWeight: 700 }}>{label}</span>
+                      {d.weekday} {formatDisplayDate(d.p.nextDueDate!)} <span style={{ color: 'var(--border-medium)', fontWeight: 400 }}>|</span> <span style={{ color, fontWeight: 700 }}>{label}</span>
                     </div>
                     <div className="tabular-nums" style={{ fontWeight: 800, color: 'var(--accent-danger)', marginTop: '2px' }}>{formatSoles(d.p.nextDueAmount)}</div>
                   </div>
@@ -473,14 +557,39 @@ export const OverviewTab: React.FC = () => {
           {cardAdvisor.recommendedCard && (
             <div className="card-pill-hero">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <span className="card-item-title" title={cardAdvisor.recommendedCard.name}>{cardAdvisor.recommendedCard.name}</span>
+                <span className="card-item-title" title={cardAdvisor.recommendedCard.name}>
+                  Usa hoy: {cardAdvisor.recommendedCard.name}
+                </span>
                 <span className="badge badge-success tabular-nums">
                   {cardAdvisor.creditDays} días libres
                 </span>
               </div>
               <p className="card-item-subtitle" style={{ margin: 0 }}>
-                Cierra el día {cardAdvisor.recommendedCard.billingCloseDay}. Al comprar hoy, pagarás recién el día {cardAdvisor.recommendedCard.paymentDueDay} del siguiente mes.
+                {cardAdvisor.reason}
               </p>
+              {/* Nota de "¿podré pagarlo?": compara lo que vence pronto en tarjetas con
+                  tu saldo proyectado a fin de mes. */}
+              {(() => {
+                const totalCardDue = cardPaymentPlan.reduce((a, c) => a + c.nextDueAmount, 0);
+                if (totalCardDue < 0.01) return null;
+                const projected = debitStats.projectedDebitBalanceMonthEnd;
+                const ok = projected >= totalCardDue;
+                return (
+                  <div
+                    style={{
+                      marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--border-subtle)',
+                      fontSize: '0.76rem', color: 'var(--text-secondary)', display: 'flex', gap: '6px', alignItems: 'flex-start'
+                    }}
+                  >
+                    <span>{ok ? '✅' : '⚠️'}</span>
+                    <span>
+                      Vencen pronto <strong className="tabular-nums">{formatSoles(totalCardDue)}</strong> en tarjetas.
+                      Tu proyección a fin de mes es <strong className="tabular-nums" style={{ color: ok ? 'var(--accent-success)' : 'var(--accent-danger)' }}>{formatSoles(projected)}</strong>
+                      {ok ? ', alcanza para cubrirlas.' : ', quedarías corto: abona lo que puedas antes del corte.'}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -489,7 +598,7 @@ export const OverviewTab: React.FC = () => {
               Otras tarjetas disponibles
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-              {cardAdvisor.allRanked.slice(1).map(({ card, creditDays }) => (
+              {cardAdvisor.allRanked.slice(1).map(({ card, creditDays, utilization }) => (
                 <div
                   key={card.id}
                   style={{
@@ -503,7 +612,14 @@ export const OverviewTab: React.FC = () => {
                   }}
                 >
                   <span className="card-item-title" style={{ fontSize: '0.85rem' }} title={card.name}>{card.name}</span>
-                  <span className="card-item-meta tabular-nums">{creditDays} días libres</span>
+                  <span className="card-item-meta tabular-nums" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span>{creditDays} días libres</span>
+                    {utilization > 0 && (
+                      <span style={{ color: utilization >= 80 ? 'var(--accent-danger)' : utilization > 30 ? 'var(--accent-warning)' : 'var(--text-muted)' }}>
+                        {Math.round(utilization)}% uso
+                      </span>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>

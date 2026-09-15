@@ -8,8 +8,7 @@ import {
   CreditCard,
   Users,
   BarChart3,
-  CheckCheck,
-  Calendar
+  CheckCheck
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
@@ -22,7 +21,8 @@ export const NavigationTabs: React.FC = () => {
     monthMovementsTotal: movementsCount,
     paymentMethods,
     receivables,
-    payables
+    payables,
+    aiAnomalies
   } = useFinance();
   const salariesCount = salaries.length;
   const otherIncomesCount = currentOtherIncomes.length;
@@ -31,6 +31,7 @@ export const NavigationTabs: React.FC = () => {
   const pendingPayablesCount = payables.filter(p => p.remainingAmount > 0).length;
   const totalIncomesCount = salariesCount + otherIncomesCount;
   const totalPendingLoans = pendingReceivablesCount + pendingPayablesCount;
+  const anomalyCount = aiAnomalies.length;
 
   return (
     <nav className="desktop-tabs-bar desktop-only">
@@ -85,13 +86,21 @@ export const NavigationTabs: React.FC = () => {
       </button>
 
       <button
-        id="tab-analytics"
-        className={`tab-button ${activeTab === 'analytics' ? 'active' : ''}`}
-        onClick={() => onSelectTab('analytics')}
-        title="Analítica & IA: Comparativas mensuales y simulador de flujo predictivo"
+        id="tab-analysis"
+        className={`tab-button ${activeTab === 'analysis' ? 'active' : ''}`}
+        onClick={() => onSelectTab('analysis')}
+        title="Análisis: diagnóstico del mes, tendencia del año y proyección de saldos"
       >
         <BarChart3 size={15} />
-        <span>Analítica & IA</span>
+        <span>Análisis</span>
+        {anomalyCount > 0 && (
+          <span
+            className="tab-alert-badge"
+            title={`${anomalyCount} ${anomalyCount === 1 ? 'alerta de auditoría' : 'alertas de auditoría'}`}
+          >
+            {anomalyCount}
+          </span>
+        )}
       </button>
 
       <button
@@ -102,16 +111,6 @@ export const NavigationTabs: React.FC = () => {
       >
         <CheckCheck size={15} />
         <span>Conciliación</span>
-      </button>
-
-      <button
-        id="tab-annual"
-        className={`tab-button ${activeTab === 'annual' ? 'active' : ''}`}
-        onClick={() => onSelectTab('annual')}
-        title="Resumen Anual: Matriz anual consolidada estilo Excel"
-      >
-        <Calendar size={15} />
-        <span>Resumen Anual</span>
       </button>
     </nav>
   );

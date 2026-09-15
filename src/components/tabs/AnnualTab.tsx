@@ -13,9 +13,24 @@ interface MonthDetailRecord {
   surplus: number;
   savingsRatePct: number;
   statusText: string;
-  statusType: 'green' | 'red' | 'blue';
-  cardType: 'green' | 'red' | 'blue';
+  statusType: 'green' | 'red' | 'blue' | 'amber';
+  cardType: 'green' | 'red' | 'blue' | 'amber';
+  surplusDelta: number | null;
 }
+
+// Estado por tramos de tasa de ahorro (reemplaza el binario superávit/déficit).
+const savingsTier = (pct: number): { text: string; type: 'green' | 'red' | 'blue' | 'amber' } => {
+  if (pct < 0) return { text: 'Déficit', type: 'red' };
+  if (pct < 10) return { text: 'Ajustado', type: 'amber' };
+  if (pct < 20) return { text: 'Estable', type: 'blue' };
+  return { text: 'Saludable', type: 'green' };
+};
+
+const pillClassOf = (type: 'green' | 'red' | 'blue' | 'amber') =>
+  type === 'green' ? 'pill-green' : type === 'red' ? 'pill-red' : type === 'amber' ? 'pill-amber' : 'pill-blue';
+
+const mCardClassOf = (type: 'green' | 'red' | 'blue' | 'amber') =>
+  type === 'green' ? 'm-card-green' : type === 'red' ? 'm-card-red' : type === 'amber' ? 'm-card-amber' : 'm-card-blue';
 
 export const AnnualTab: React.FC = () => {
   const {
@@ -30,9 +45,12 @@ export const AnnualTab: React.FC = () => {
 
   // Meses reales derivados del flujo consolidado del usuario.
   const activeMonthsData = useMemo<MonthDetailRecord[]>(() => {
-    return monthlyHistoricalFlow.map(f => {
+    return monthlyHistoricalFlow.map((f, i, arr) => {
       const savingsPct = f.inVal > 0 ? Math.round((f.savings / f.inVal) * 100) : 0;
-      const isPositive = f.savings >= 0;
+      const tier = savingsTier(savingsPct);
+      // Variación del superávit respecto al mes previo (para la flecha ▲▼).
+      const prev = i > 0 ? arr[i - 1] : null;
+      const surplusDelta = prev ? Number((f.savings - prev.savings).toFixed(2)) : null;
       return {
         id: f.key,
         name: f.label,
@@ -42,9 +60,10 @@ export const AnnualTab: React.FC = () => {
         cashOut: f.outVal,
         surplus: f.savings,
         savingsRatePct: savingsPct,
-        statusText: isPositive ? 'Superávit' : 'Ajustado',
-        statusType: isPositive ? 'green' : 'red',
-        cardType: isPositive ? 'green' : 'red'
+        statusText: tier.text,
+        statusType: tier.type,
+        cardType: tier.type,
+        surplusDelta
       };
     });
   }, [monthlyHistoricalFlow]);
@@ -143,41 +162,57 @@ export const AnnualTab: React.FC = () => {
   // Datos para gráfico de flujo (mismo flujo real consolidado).
   const flowItems = monthlyHistoricalFlow;
 
-  // Geometría del gráfico de COLCHÓN ACUMULADO: una línea/área que traza cómo
-  // evoluciona el excedente acumulado del año, con barras tenues de ingreso vs
-  // salida por mes como contexto. Responde "¿mi colchón mejora en el año?".
+  // Geometría del gráfico "Ritmo de Flujo de Caja": barras del MARGEN NETO de cada
+  // mes (contribución: verde si ahorró, rojo si sobregastó) + línea del COLCHÓN
+  // ACUMULADO, ambos en el MISMO eje de soles. La altura de cada barra es lo que
+  // hace subir/bajar la línea, así el par barras+línea cuenta una sola historia.
   const cushionChart = useMemo(() => {
-    const W = 720, H = 220;
-    const padL = 46, padR = 18, padT = 30, padB = 30;
+    // Coordenadas normalizadas; el SVG se estira a lo ancho con altura fija (CSS).
+    // Sin eje Y ni etiquetas internas: esas van en HTML para no deformarse.
+    const W = 1000, H = 240;
+    // padT amplio: deja aire arriba para las etiquetas de valor del colchón sin que
+    // se recorten cuando el pico queda cerca del borde superior.
+    const padL = 10, padR = 10, padT = 42, padB = 20;
     const innerW = W - padL - padR;
     const innerH = H - padT - padB;
     const n = flowItems.length;
 
-    // Serie acumulada del excedente neto mes a mes.
+    // Colchón acumulado (línea) + margen neto del mes (barra de contribución).
     let run = 0;
     const pts = flowItems.map((m, i) => {
       run += m.savings;
-      return { key: m.key, label: m.label.slice(0, 3), inVal: m.inVal, outVal: m.outVal, savings: m.savings, cum: run, i };
+      return { key: m.key, label: m.label.slice(0, 3), savings: m.savings, cum: run, i };
     });
 
+    // Eje COMPARTIDO que cubre acumulado, márgenes y el cero.
     const cumVals = pts.map(p => p.cum);
-    const maxC = Math.max(0, ...cumVals);
-    const minC = Math.min(0, ...cumVals);
-    const spanC = (maxC - minC) || 1;
-    const maxBar = Math.max(1, ...flowItems.map(m => Math.max(m.inVal, m.outVal)));
+    const savVals = pts.map(p => p.savings);
+    const maxV = Math.max(0, ...cumVals, ...savVals);
+    const minV = Math.min(0, ...cumVals, ...savVals);
+    const span = (maxV - minV) || 1;
 
     const xAt = (i: number) => (n <= 1 ? padL + innerW / 2 : padL + (i / (n - 1)) * innerW);
-    const yAt = (v: number) => padT + (1 - (v - minC) / spanC) * innerH;
+    const yAt = (v: number) => padT + (1 - (v - minV) / span) * innerH;
     const yZero = yAt(0);
 
     const linePath = pts.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${xAt(p.i).toFixed(1)} ${yAt(p.cum).toFixed(1)}`).join(' ');
-    const areaPath = n > 1
+    // Área bajo la línea del colchón (hasta la base cero): da "cuerpo" a la línea y
+    // llena el espacio, comunicando el colchón que se va acumulando.
+    const areaPath = n >= 1
       ? `M ${xAt(0).toFixed(1)} ${yZero.toFixed(1)} ` +
         pts.map(p => `L ${xAt(p.i).toFixed(1)} ${yAt(p.cum).toFixed(1)}`).join(' ') +
         ` L ${xAt(n - 1).toFixed(1)} ${yZero.toFixed(1)} Z`
       : '';
 
-    return { W, H, padL, padR, padT, padB, innerW, innerH, n, pts, maxC, minC, maxBar, baseY: padT + innerH, xAt, yAt, yZero, linePath, areaPath };
+    // Líneas guía + eje Y (referencia de escala en soles). Sin esto el gráfico se
+    // sentía "sin ayuda": no había forma de leer cuánto vale cada altura. Solo se
+    // etiqueta el mínimo negativo cuando está lo bastante lejos del cero para no
+    // encimarse con su etiqueta.
+    const showMin = minV < 0 && (0 - minV) / span > 0.1;
+    const tickVals = showMin ? [maxV, 0, minV] : [maxV, maxV / 2, 0];
+    const gridTicks = Array.from(new Set(tickVals)).map(v => ({ v, yPct: (yAt(v) / H) * 100, y: yAt(v) }));
+
+    return { W, H, padL, padR, padT, padB, innerW, innerH, n, pts, maxV, minV, xAt, yAt, yZero, linePath, areaPath, gridTicks };
   }, [flowItems]);
 
   // Formateo compacto para las etiquetas del gráfico (soporta negativos).
@@ -290,10 +325,10 @@ export const AnnualTab: React.FC = () => {
               <span style={{ width: '16px', height: '3px', borderRadius: '2px', background: 'var(--accent-brand)' }} /> Colchón acumulado
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#10b981' }} /> Ingreso
+              <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#10b981' }} /> Mes con ahorro
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#f43f5e' }} /> Salida Caja
+              <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#f43f5e' }} /> Mes en rojo
             </span>
           </div>
         )}
@@ -307,83 +342,113 @@ export const AnnualTab: React.FC = () => {
               Aún no hay meses con actividad este año para trazar la evolución.
             </p>
           ) : (
-            <div style={{ width: '100%' }}>
-              <svg
-                viewBox={`0 0 ${cushionChart.W} ${cushionChart.H}`}
-                style={{ width: '100%', height: 'auto', maxHeight: '300px', display: 'block' }}
-                preserveAspectRatio="xMidYMid meet"
-                role="img"
-                aria-label="Evolución del colchón acumulado mes a mes"
-              >
-                <defs>
-                  <linearGradient id="cushionFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--accent-brand)" stopOpacity="0.28" />
-                    <stop offset="100%" stopColor="var(--accent-brand)" stopOpacity="0.02" />
-                  </linearGradient>
-                </defs>
+            <div className="annual-flow-chart">
+              <div className="annual-flow-plot-row">
+                {/* Eje Y (referencia de escala en soles), en HTML para no deformarse. */}
+                <div className="annual-flow-yaxis" aria-hidden>
+                  {cushionChart.gridTicks.map(t => (
+                    <span key={`yt-${t.v}`} className="annual-flow-ytick tabular-nums" style={{ top: `${t.yPct}%` }}>
+                      {fmtCushion(t.v)}
+                    </span>
+                  ))}
+                </div>
 
-                {/* Barras tenues de ingreso vs salida por mes (contexto) */}
-                {cushionChart.pts.map(p => {
-                  const x = cushionChart.xAt(p.i);
-                  const inH = (p.inVal / cushionChart.maxBar) * cushionChart.innerH;
-                  const outH = (p.outVal / cushionChart.maxBar) * cushionChart.innerH;
-                  return (
-                    <g key={`bar-${p.key}`} opacity="0.26">
-                      <rect x={x - 7} y={cushionChart.baseY - inH} width="6" height={inH} rx="1.5" fill="#10b981" />
-                      <rect x={x + 1} y={cushionChart.baseY - outH} width="6" height={outH} rx="1.5" fill="#f43f5e" />
-                    </g>
-                  );
-                })}
+                <div className="annual-flow-plot">
+                  <div className="annual-flow-svgwrap">
+                    <svg
+                      className="annual-flow-svg"
+                      viewBox={`0 0 ${cushionChart.W} ${cushionChart.H}`}
+                      preserveAspectRatio="none"
+                      role="img"
+                      aria-label="Ahorro neto de cada mes y colchón acumulado a lo largo del año"
+                    >
+                      <defs>
+                        <linearGradient id="cushionGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--accent-brand)" stopOpacity="0.24" />
+                          <stop offset="100%" stopColor="var(--accent-brand)" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
 
-                {/* Línea base cero */}
-                <line
-                  x1={cushionChart.padL}
-                  y1={cushionChart.yZero}
-                  x2={cushionChart.W - cushionChart.padR}
-                  y2={cushionChart.yZero}
-                  stroke="var(--border-medium)"
-                  strokeWidth="1"
-                  strokeDasharray="4 4"
-                />
+                      {/* Líneas guía horizontales (escala) */}
+                      {cushionChart.gridTicks.map(t => (
+                        <line
+                          key={`grid-${t.v}`}
+                          x1={cushionChart.padL}
+                          y1={t.y}
+                          x2={cushionChart.W - cushionChart.padR}
+                          y2={t.y}
+                          stroke="var(--border-subtle)"
+                          strokeWidth="1"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      ))}
 
-                {/* Etiquetas del eje Y: máximo, cero y mínimo si hay negativos */}
-                <text x={cushionChart.padL - 6} y={cushionChart.yAt(cushionChart.maxC) + 3} textAnchor="end" fontSize="11" fill="var(--text-muted)">{fmtCushion(cushionChart.maxC)}</text>
-                <text x={cushionChart.padL - 6} y={cushionChart.yZero + 3} textAnchor="end" fontSize="11" fill="var(--text-muted)">0</text>
-                {cushionChart.minC < 0 && (
-                  <text x={cushionChart.padL - 6} y={cushionChart.yAt(cushionChart.minC) + 3} textAnchor="end" fontSize="11" fill="var(--text-muted)">{fmtCushion(cushionChart.minC)}</text>
-                )}
+                      {/* Área del colchón acumulado (da cuerpo a la línea) */}
+                      {cushionChart.areaPath && (
+                        <path d={cushionChart.areaPath} fill="url(#cushionGrad)" stroke="none" />
+                      )}
 
-                {/* Área + línea del colchón acumulado */}
-                {cushionChart.areaPath && <path d={cushionChart.areaPath} fill="url(#cushionFill)" stroke="none" />}
-                <path d={cushionChart.linePath} fill="none" stroke="var(--accent-brand)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                      {/* Barras del ahorro NETO del mes (verde ahorró / rojo sobregastó):
+                          su altura es la contribución que sube o baja el colchón. */}
+                      {cushionChart.pts.map(p => {
+                        const x = cushionChart.xAt(p.i);
+                        const yv = cushionChart.yAt(p.savings);
+                        const top = Math.min(yv, cushionChart.yZero);
+                        const h = Math.max(1.5, Math.abs(yv - cushionChart.yZero));
+                        return (
+                          <rect key={`bar-${p.key}`} x={x - 10} y={top} width="20" height={h} rx="2" fill={p.savings >= 0 ? '#10b981' : '#f43f5e'} opacity="0.5" />
+                        );
+                      })}
 
-                {/* Puntos + etiquetas de mes */}
-                {cushionChart.pts.map(p => {
-                  const x = cushionChart.xAt(p.i);
-                  const y = cushionChart.yAt(p.cum);
-                  return (
-                    <g key={`pt-${p.key}`}>
-                      <circle cx={x} cy={y} r="3.5" fill="var(--bg-surface)" stroke="var(--accent-brand)" strokeWidth="2">
-                        <title>{`${p.label}: colchón ${formatSoles(p.cum)} • mes ${p.savings >= 0 ? '+' : ''}${formatSoles(p.savings)}`}</title>
-                      </circle>
-                      <text x={x} y={cushionChart.H - 10} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{p.label}</text>
-                    </g>
-                  );
-                })}
+                      {/* Línea base cero, resaltada solo si hay meses en negativo */}
+                      {cushionChart.minV < 0 && (
+                        <line
+                          x1={cushionChart.padL}
+                          y1={cushionChart.yZero}
+                          x2={cushionChart.W - cushionChart.padR}
+                          y2={cushionChart.yZero}
+                          stroke="var(--border-medium)"
+                          strokeWidth="1.2"
+                          strokeDasharray="4 4"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      )}
 
-                {/* Etiqueta del último valor acumulado (acotada para no cortarse arriba) */}
-                {(() => {
-                  const last = cushionChart.pts[cushionChart.pts.length - 1];
-                  const x = cushionChart.xAt(last.i);
-                  const y = cushionChart.yAt(last.cum);
-                  const labelY = Math.max(y - 12, 16);
-                  return (
-                    <text x={x} y={labelY} textAnchor={last.i === 0 ? 'start' : 'end'} fontSize="12" fontWeight="700" fill="var(--accent-brand)">
-                      {last.cum >= 0 ? '+' : ''}{fmtCushion(last.cum)}
-                    </text>
-                  );
-                })()}
-              </svg>
+                      {/* Línea del colchón acumulado */}
+                      <path d={cushionChart.linePath} fill="none" stroke="var(--accent-brand)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                    </svg>
+
+                    {/* Dots + valor del colchón por punto (HTML, no se deforma). El
+                        último se enfatiza; los intermedios se ocultan en móvil angosto. */}
+                    {cushionChart.pts.map((p, i, arr) => {
+                      const xPct = (cushionChart.xAt(p.i) / cushionChart.W) * 100;
+                      const yPct = (cushionChart.yAt(p.cum) / cushionChart.H) * 100;
+                      const isLast = i === arr.length - 1;
+                      const isMid = i !== 0 && !isLast;
+                      const alignX = i === 0 ? '0' : isLast ? '-100%' : '-50%';
+                      return (
+                        <React.Fragment key={`cum-${p.key}`}>
+                          <span className="annual-flow-dot" style={{ left: `${xPct}%`, top: `${yPct}%` }} />
+                          <span
+                            className={`annual-flow-cval tabular-nums${isLast ? ' is-last' : ''}${isMid ? ' is-mid' : ''}`}
+                            style={{ left: `${xPct}%`, top: `${yPct}%`, transform: `translate(${alignX}, -150%)` }}
+                            title={`${p.label}: colchón acumulado ${formatSoles(p.cum)}`}
+                          >
+                            {isLast ? 'Colchón ' : ''}{p.cum >= 0 ? '+' : ''}{fmtCushion(p.cum)}
+                          </span>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+
+                  {/* Eje X de meses en HTML para que sea legible en cualquier ancho */}
+                  <div className="annual-flow-axis">
+                    {cushionChart.pts.map(p => (
+                      <span key={p.key} title={`${p.label}: ahorro del mes ${p.savings >= 0 ? '+' : ''}${formatSoles(p.savings)}`}>{p.label}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -429,7 +494,7 @@ export const AnnualTab: React.FC = () => {
       {/* Contenedor Visual: Vista Categorías */}
       {visualTab === 'categories' && (
         <div className="annual-visual-card">
-          <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '32px', alignItems: 'center' }}>
+          <div className="annual-cat-layout">
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ position: 'relative', width: '160px', height: '160px' }}>
                 <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
@@ -464,7 +529,7 @@ export const AnnualTab: React.FC = () => {
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="annual-cat-legend">
               {categoryList.length === 0 && (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '24px 0' }}>
                   Aún no hay consumos registrados este año.
@@ -477,16 +542,17 @@ export const AnnualTab: React.FC = () => {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
+                    gap: '10px',
                     padding: '10px 14px',
                     background: 'var(--bg-subtle)',
                     borderRadius: '10px'
                   }}
                 >
-                  <span style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.84rem' }}>
-                    <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: cat.color }} />
-                    {cat.name}
+                  <span style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.84rem', minWidth: 0, overflow: 'hidden' }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: cat.color, flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat.name}</span>
                   </span>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexShrink: 0 }}>
                     <span className="tabular-nums font-bold" style={{ fontSize: '0.88rem' }}>
                       {formatSoles(cat.total)}
                     </span>
@@ -543,7 +609,15 @@ export const AnnualTab: React.FC = () => {
                       className="tabular-nums text-right font-bold"
                       style={{ color: isSurplusPositive ? 'var(--accent-success)' : 'var(--accent-danger)' }}
                     >
-                      {isSurplusPositive ? '+' : ''}{formatSoles(row.surplus)}
+                      <div>{isSurplusPositive ? '+' : ''}{formatSoles(row.surplus)}</div>
+                      {row.surplusDelta !== null && Math.abs(row.surplusDelta) >= 0.01 && (
+                        <div
+                          style={{ fontSize: '0.68rem', fontWeight: 700, color: row.surplusDelta >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}
+                          title={`Variación del superávit respecto al mes anterior`}
+                        >
+                          {row.surplusDelta >= 0 ? '▲' : '▼'} {formatSoles(Math.abs(row.surplusDelta))}
+                        </div>
+                      )}
                     </td>
                     <td
                       className="tabular-nums text-right font-bold"
@@ -552,15 +626,7 @@ export const AnnualTab: React.FC = () => {
                       {isRatePositive ? '+' : ''}{row.savingsRatePct}%
                     </td>
                     <td className="text-right">
-                      <span
-                        className={`health-pill ${
-                          row.statusType === 'green'
-                            ? 'pill-green'
-                            : row.statusType === 'red'
-                            ? 'pill-red'
-                            : 'pill-blue'
-                        }`}
-                      >
+                      <span className={`health-pill ${pillClassOf(row.statusType)}`}>
                         {row.statusText}
                       </span>
                     </td>
@@ -592,15 +658,21 @@ export const AnnualTab: React.FC = () => {
                   {totals.savingsRate.toFixed(1)}%
                 </td>
                 <td className="text-right">
-                  <span className="health-pill pill-green">
-                    {totals.surplus >= 0 ? 'Superávit' : 'Déficit'}
-                  </span>
+                  {(() => {
+                    const tier = savingsTier(totals.savingsRate);
+                    return <span className={`health-pill ${pillClassOf(tier.type)}`}>{tier.text}</span>;
+                  })()}
                 </td>
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
+
+      {/* Nota metodológica: distingue el gasto devengado de la salida real y explica los tiers de estado */}
+      <p className="annual-table-note">
+        <strong>Gastos devengados</strong> = lo que consumiste en el mes, por la fecha del gasto. <strong>Salida real de caja</strong> = lo que efectivamente salió de tu cuenta ese mes, por la fecha de vencimiento del pago. El <strong>Estado</strong> va por tasa de ahorro: Saludable ≥ 20%, Estable 10 a 20%, Ajustado 0 a 10%, Déficit bajo 0%.
+      </p>
 
       {/* 2. VISTA MÓVIL DEDICADA: Tarjetas Mensuales Táctiles (< 768px) */}
       <div className="annual-mobile-cards-list">
@@ -624,36 +696,29 @@ export const AnnualTab: React.FC = () => {
           return (
             <div
               key={row.id}
-              className={`annual-mobile-card ${
-                row.cardType === 'green'
-                  ? 'm-card-green'
-                  : row.cardType === 'red'
-                  ? 'm-card-red'
-                  : 'm-card-blue'
-              }`}
+              className={`annual-mobile-card ${mCardClassOf(row.cardType)}`}
             >
               <div className="m-card-header">
                 <div>
                   <span className="m-card-month">{row.name}</span>
                   <div style={{ marginTop: '2px' }}>
-                    <span
-                      className={`health-pill ${
-                        row.statusType === 'green'
-                          ? 'pill-green'
-                          : row.statusType === 'red'
-                          ? 'pill-red'
-                          : 'pill-blue'
-                      }`}
-                    >
+                    <span className={`health-pill ${pillClassOf(row.statusType)}`}>
                       {row.isProjected ? `Proyectado • ${row.statusText}` : row.statusText}
                     </span>
                   </div>
                 </div>
-                <div
-                  className="m-card-superavit tabular-nums"
-                  style={{ color: isSurplusPositive ? 'var(--accent-success)' : 'var(--accent-danger)' }}
-                >
-                  {isSurplusPositive ? '+' : ''}{formatSoles(row.surplus)}
+                <div style={{ textAlign: 'right' }}>
+                  <div
+                    className="m-card-superavit tabular-nums"
+                    style={{ color: isSurplusPositive ? 'var(--accent-success)' : 'var(--accent-danger)' }}
+                  >
+                    {isSurplusPositive ? '+' : ''}{formatSoles(row.surplus)}
+                  </div>
+                  {row.surplusDelta !== null && Math.abs(row.surplusDelta) >= 0.01 && (
+                    <div style={{ fontSize: '0.66rem', fontWeight: 700, color: row.surplusDelta >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                      {row.surplusDelta >= 0 ? '▲' : '▼'} {formatSoles(Math.abs(row.surplusDelta))}
+                    </div>
+                  )}
                 </div>
               </div>
 

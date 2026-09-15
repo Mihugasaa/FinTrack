@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     const categoriesStr = topCategories.length > 0
-      ? topCategories.map(c => `${c.category}: S/ ${c.amount.toFixed(2)} • ${c.percentage}%`).join('\n')
+      ? topCategories.map(c => `${c.category}: S/ ${c.amount.toFixed(2)} • ${c.percentage.toFixed(1)}%`).join('\n')
       : 'Sin distribución de categorías disponible';
 
     const componentsStr = components.length > 0
@@ -97,7 +97,8 @@ Genera un informe ejecutivo en un JSON EXACTO con estos campos:
 REGLAS DE ORO:
 1. Coherencia: tus textos deben alinearse con el puntaje ${healthScore ?? ''} y su nivel ${healthLevel ?? ''}. No contradigas el número ya calculado.
 2. CONCISIÓN EJECUTIVA: cada insight máximo 2 oraciones contundentes. Cero redundancias.
-3. REGLA ESTRICTA DE DISEÑO FINTRACK: PROHIBIDO USAR PARÉNTESIS '(' O ')'. Si necesitas acotar, usa viñetas '•' o comas. Absolutamente ningún paréntesis.`;
+3. NÚMEROS LIMPIOS: redondea todo porcentaje a un decimal y todo monto a dos decimales. Nunca escribas cifras con muchos decimales.
+4. REGLA ESTRICTA DE DISEÑO FINTRACK: PROHIBIDO USAR PARÉNTESIS '(' O ')'. Si necesitas acotar, usa viñetas '•' o comas. Absolutamente ningún paréntesis.`;
 
     // El puntaje es determinista y llega ya calculado desde el cliente. La IA solo
     // aporta la narrativa; nunca sobreescribe el número. Si por retrocompatibilidad

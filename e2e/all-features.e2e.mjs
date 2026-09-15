@@ -334,11 +334,20 @@ async function runE2ETests() {
     }
   });
 
-  // 14. PESTAÑA DE ANALÍTICA & IA (FORECAST 3-6 MESES Y DETECCIÓN DE ANOMALÍAS)
-  await assertStep('14. Visualización de Analítica & IA (Proyección P9, Categorías y Detección de Anomalías)', async () => {
-    const tabAnalytics = await page.waitForSelector('#tab-analytics', { timeout: 5000 });
-    await tabAnalytics.click();
+  // 14. HUB DE ANÁLISIS (MES ACTUAL · TENDENCIA · PROYECCIÓN) + DETECCIÓN DE ANOMALÍAS
+  await assertStep('14. Hub de Análisis (diagnóstico del mes, auditoría IA y proyección P9)', async () => {
+    const tabAnalysis = await page.waitForSelector('#tab-analysis', { timeout: 5000 });
+    await tabAnalysis.click();
     await new Promise(r => setTimeout(r, 600));
+
+    // Vista por defecto "Mes actual": debe mostrar el contenedor de auditoría IA
+    const auditCount = await page.evaluate(() => document.querySelectorAll('.ai-audit-container').length);
+    if (auditCount === 0) throw new Error('Contenedor de auditoría de IA no encontrado en la vista Mes actual');
+
+    // Cambiar a la vista "Proyección" para el simulador de flujo
+    const projectionBtn = await page.waitForSelector('#analysis-view-projection', { timeout: 5000 });
+    await projectionBtn.click();
+    await new Promise(r => setTimeout(r, 400));
 
     // Verificar que los botones de horizonte existen
     const btnHorizon3 = await page.waitForSelector('#forecast-horizon-3', { timeout: 5000 });
@@ -358,9 +367,12 @@ async function runE2ETests() {
     // Volver a 6 meses
     await btnHorizon6.click();
 
-    // Verificar contenedor de auditoría IA
-    const auditCount = await page.evaluate(() => document.querySelectorAll('.ai-audit-container').length);
-    if (auditCount === 0) throw new Error('Contenedor de auditoría de IA no encontrado');
+    // Vista "Tendencia": debe renderizar el consolidado anual embebido
+    const trendBtn = await page.waitForSelector('#analysis-view-trend', { timeout: 5000 });
+    await trendBtn.click();
+    await new Promise(r => setTimeout(r, 400));
+    const annualMatrixCount = await page.evaluate(() => document.querySelectorAll('.annual-summary-panel').length);
+    if (annualMatrixCount === 0) throw new Error('El consolidado anual no se renderizó en la vista Tendencia');
   });
 
   // 15. CONCILIACIÓN BANCARIA Y CARGA DE ESTADO DE CUENTA

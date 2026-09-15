@@ -2183,10 +2183,13 @@ body.modal-open {
     align-items: flex-end;
     padding: 0;
     /* Seguimos el viewport visible: cuando el teclado sube, --kb-viewport-h se
-       encoge y la hoja del modal queda por encima del teclado (JS lo publica). */
+       encoge y la hoja del modal queda por encima del teclado (JS lo publica).
+       La transicion suaviza el ajuste si iOS reporta el teclado de golpe, para
+       que la hoja suba fluida en vez de pegar un brinco. */
     top: var(--kb-viewport-top, 0px);
     bottom: auto;
     height: var(--kb-viewport-h, 100dvh);
+    transition: height 0.2s ease-out, top 0.2s ease-out;
   }
   .modal-box {
     max-width: 100%;
@@ -2197,6 +2200,7 @@ body.modal-open {
     max-height: min(92vh, calc(var(--kb-viewport-h, 100dvh) - 12px));
     overflow-y: auto;
     margin-bottom: 0;
+    transition: max-height 0.2s ease-out;
   }
   @keyframes slideUp {
     from { transform: translateY(100%); }

@@ -134,24 +134,12 @@ export function DashboardContent() {
     };
     sync();
 
-    const handleFocusIn = (e: FocusEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (!el || !el.closest('.modal-box')) return;
-      if (!/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
-      // Espera a que el teclado termine de abrir antes de centrar el campo.
-      window.setTimeout(() => {
-        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }, 220);
-    };
-
     vv?.addEventListener('resize', sync);
     vv?.addEventListener('scroll', sync);
-    document.addEventListener('focusin', handleFocusIn);
 
     return () => {
       vv?.removeEventListener('resize', sync);
       vv?.removeEventListener('scroll', sync);
-      document.removeEventListener('focusin', handleFocusIn);
       root.style.removeProperty('--kb-viewport-h');
       root.style.removeProperty('--kb-viewport-top');
     };

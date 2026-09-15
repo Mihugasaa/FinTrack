@@ -2,7 +2,6 @@
 
 import React from 'react';
 import {
-  Layers,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -12,6 +11,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
+import { FinTrackLogo } from '@/components/FinTrackLogo';
 
 export const Header: React.FC = () => {
   const {
@@ -43,9 +43,7 @@ export const Header: React.FC = () => {
       {/* Grupo Izquierdo: Logotipo y Contexto Temporal Global */}
       <div className="header-left-group">
         <div className="brand-section" title="FinTrack">
-          <div className="brand-logo-mark">
-            <Layers size={18} />
-          </div>
+          <FinTrackLogo size={34} />
           <span className="brand-text-title">FinTrack</span>
         </div>
 

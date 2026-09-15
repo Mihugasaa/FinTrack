@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Layers,
   User,
   Lock,
   Eye,
@@ -12,6 +11,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { AuthService } from '@/services/auth.service';
+import { FinTrackLogo } from '@/components/FinTrackLogo';
 import '@/styles/globals.css';
 import '@/styles/dashboard.css';
 
@@ -66,9 +66,7 @@ export default function LoginPage() {
       <div className="auth-card">
         {/* Cabecera de Marca */}
         <div className="auth-header">
-          <div className="auth-logo-badge">
-            <Layers size={24} />
-          </div>
+          <FinTrackLogo size={46} borderRadius={12} />
           <div>
             <h1 className="auth-title">
               FinTrack

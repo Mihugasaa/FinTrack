@@ -53,16 +53,27 @@ function useFinanceController() {
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
-    // Require an authenticated user; otherwise bounce to login.
-    const user = AuthService.getCurrentUser();
-    if (!user) {
-      router.replace('/login');
-      return;
-    }
-    setCurrentUser(user);
+    // Autenticación basada en la SESIÓN de Supabase (fuente de verdad), no solo en
+    // localStorage: así el PWA instalado (con cookie válida pero sin localStorage) no
+    // cae en el loop /→/login→/. Solo se manda a /login si no hay sesión real.
+    let cancelled = false;
+    (async () => {
+      const user = await AuthService.getSessionUser();
+      if (cancelled) return;
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+      setCurrentUser(user);
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
 
-    // Hydrate account data from Supabase (single source of truth). Month-scoped
-    // data (transactions, incomes, card payments, period) loads in the effect below.
+  // Carga inicial de datos de cuenta (una vez que hay usuario autenticado). La data
+  // por mes (transacciones, ingresos, abonos, periodo) se carga en el efecto de mes.
+  useEffect(() => {
+    if (!currentUser) return;
+
     SupabaseDataService.getPaymentMethods().then(methods => {
       if (methods && methods.length > 0) {
         setPaymentMethods(prev => methods.map(m => {
@@ -85,7 +96,7 @@ function useFinanceController() {
     SupabaseDataService.getCategories().then(cats => {
       if (cats && cats.length > 0) setCategories(cats);
     });
-  }, [router]);
+  }, [currentUser]);
 
   const handleLogout = async () => {
     await AuthService.logout();

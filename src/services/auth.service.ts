@@ -35,6 +35,55 @@ export class AuthService {
     return this.getCurrentUser() !== null;
   }
 
+  /**
+   * Usuario derivado de la SESIÓN real de Supabase (fuente de verdad), no del
+   * localStorage. Necesario porque en una PWA instalada (contenedor aislado en iOS)
+   * la cookie de sesión puede existir sin que el perfil esté en localStorage, lo que
+   * antes provocaba un loop de redirección /→/login→/. Rehidrata y cachea el perfil.
+   * Si Supabase no responde (offline), cae al perfil cacheado.
+   */
+  public static async getSessionUser(): Promise<UserProfile | null> {
+    if (typeof window === 'undefined') return null;
+    if (!supabase || !isSupabaseConfigured) return this.getCurrentUser();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const sUser = session?.user;
+      if (!sUser) return null;
+
+      const cached = this.getCurrentUser();
+      if (cached && cached.id === sUser.id) return cached;
+
+      let username = sUser.email ? sUser.email.split('@')[0] : 'usuario';
+      let fullName = username.charAt(0).toUpperCase() + username.slice(1);
+      try {
+        const { data: profData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', sUser.id)
+          .single();
+        if (profData) {
+          username = profData.username || username;
+          fullName = profData.full_name || fullName;
+        }
+      } catch {
+        // sin perfil en BD: usar los valores derivados del email
+      }
+
+      const profile: UserProfile = {
+        id: sUser.id,
+        username,
+        fullName,
+        role: 'Propietario',
+        createdAt: sUser.created_at || new Date().toISOString()
+      };
+      this.persistSession(profile);
+      return profile;
+    } catch {
+      // Error de red: usar el perfil cacheado si existe (no desloguear por estar offline).
+      return this.getCurrentUser();
+    }
+  }
+
   // The Supabase browser client owns the auth session cookies; here we only
   // cache the non-sensitive profile for synchronous UI reads.
   private static persistSession(profile: UserProfile) {

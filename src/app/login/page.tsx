@@ -66,7 +66,7 @@ export default function LoginPage() {
       <div className="auth-card">
         {/* Cabecera de Marca */}
         <div className="auth-header">
-          <FinTrackLogo size={46} borderRadius={12} />
+          <FinTrackLogo size={46} borderRadius={12} variant="tile" />
           <div>
             <h1 className="auth-title">
               FinTrack

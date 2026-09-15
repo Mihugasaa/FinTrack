@@ -332,8 +332,8 @@ export const AnalysisTab: React.FC = () => {
         <div
           className="cfo-copilot-card clean-card"
           style={{
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.03) 100%)',
-            border: '1px solid rgba(139, 92, 246, 0.25)',
+            background: 'var(--accent-brand-subtle)',
+            border: '1px solid var(--border-subtle)',
             borderRadius: '16px',
             padding: '20px 24px',
             position: 'relative'
@@ -346,12 +346,12 @@ export const AnalysisTab: React.FC = () => {
                   width: '36px',
                   height: '36px',
                   borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  background: 'var(--accent-brand)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)'
+                  boxShadow: '0 4px 12px var(--accent-brand-subtle)'
                 }}
               >
                 <Sparkles size={18} />

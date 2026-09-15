@@ -1,5 +1,24 @@
 import type { Metadata, Viewport } from 'next';
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import '@/styles/globals.css';
+
+// Fuentes auto-hospedadas por Next (no dependen de la CDN de Google en tiempo de
+// ejecucion). Asi la tipografia carga igual en todos los dispositivos y no hay
+// salto ni fallback a Segoe UI/Roboto. Se exponen como variables CSS que consume
+// globals.css (--font-sans / --font-mono).
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-jakarta',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-jetbrains',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'FinTrack',
@@ -10,11 +29,20 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'FinTrack',
   },
+  // Favicon vectorial (SVG) primero, con el PNG generado en /icon como respaldo
+  // para navegadores que no soportan favicon SVG. Apple usa el PNG de /apple-icon.
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icon', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: [{ url: '/apple-icon', sizes: '180x180' }],
+  },
   formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#6366f1',
+  themeColor: '#4f46e5',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -28,7 +56,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" data-theme="light" suppressHydrationWarning>
+    <html lang="es" data-theme="light" className={`${jakarta.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

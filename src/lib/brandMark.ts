@@ -1,37 +1,49 @@
-// Marca FinTrack en una sola fuente de verdad: gradiente de marca + línea de
-// tendencia verde ascendente + "F" blanca en trazos con extremos redondeados.
-// La usan el logo del header, el favicon/PWA y el ícono de "agregar a inicio",
-// para que se vean idénticos en todos lados y no vuelvan a divergir.
+// Marca FinTrack en una sola fuente de verdad. Concepto: un anillo (el ciclo de
+// facturacion que se repite mes a mes) con un corte limpio, y un punto central
+// (la fecha real en que el dinero se mueve). Plano, sin gradiente, un solo acento.
+// La usan el favicon/PWA y el apple-icon. El logo del header se dibuja aparte como
+// SVG en linea (FinTrackLogo) para poder cambiar de color con el tema.
 
-export const BRAND_GRADIENT_FROM = '#6366f1';
-export const BRAND_GRADIENT_TO = '#8b5cf6';
+export const BRAND_INK = '#0f172a';
+export const BRAND_INDIGO = '#4f46e5';
+export const BRAND_INDIGO_BRIGHT = '#6366f1';
 
 interface BrandMarkOptions {
   // Radio de esquina en unidades del lienzo 512 (0 = cuadrado a sangre, ideal
-  // para íconos instalables porque el SO aplica su propia máscara redondeada).
+  // para iconos instalables porque el SO aplica su propia mascara redondeada).
   cornerRadius?: number;
-  // Padding interno de la marca en unidades de 512 (zona segura para máscaras
-  // maskable de Android). 0 = la marca ocupa todo el lienzo (uso en el header).
+  // Padding interno de la marca en unidades de 512 (zona segura para mascaras
+  // maskable de Android). 0 = la marca ocupa todo el lienzo.
   inset?: number;
+  // Color del campo (fondo del icono).
+  bg?: string;
+  // Color del anillo.
+  ring?: string;
+  // Color del punto central.
+  dot?: string;
 }
 
 /**
- * Devuelve el SVG completo de la marca (fondo con gradiente + línea de tendencia
- * + F) listo para incrustar como data-URI o como imagen de ImageResponse.
+ * SVG completo del icono de marca (campo + anillo con corte + punto), listo para
+ * incrustar como data-URI o como imagen de ImageResponse. Por defecto rinde el
+ * icono primario: anillo blanco y punto indigo sobre campo tinta.
  */
-export function brandMarkSvg({ cornerRadius = 0, inset = 0 }: BrandMarkOptions = {}): string {
+export function brandMarkSvg({
+  cornerRadius = 0,
+  inset = 0,
+  bg = BRAND_INK,
+  ring = '#ffffff',
+  dot = BRAND_INDIGO_BRIGHT,
+}: BrandMarkOptions = {}): string {
   const scale = (512 - inset * 2) / 512;
   return (
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>" +
-    "<defs><linearGradient id='fintrackBrand' x1='0' y1='0' x2='1' y2='1'>" +
-    `<stop offset='0' stop-color='${BRAND_GRADIENT_FROM}'/>` +
-    `<stop offset='1' stop-color='${BRAND_GRADIENT_TO}'/>` +
-    '</linearGradient></defs>' +
-    `<rect width='512' height='512' rx='${cornerRadius}' ry='${cornerRadius}' fill='url(#fintrackBrand)'/>` +
+    `<rect width='512' height='512' rx='${cornerRadius}' ry='${cornerRadius}' fill='${bg}'/>` +
     `<g transform='translate(${inset}, ${inset}) scale(${scale})'>` +
-    "<polyline points='60,372 196,318 300,346 452,206' fill='none' stroke='#34d399' stroke-width='40' stroke-linecap='round' stroke-linejoin='round'/>" +
-    "<path d='M 205 385 L 205 145 L 320 145' fill='none' stroke='#ffffff' stroke-width='52' stroke-linecap='round' stroke-linejoin='round'/>" +
-    "<line x1='205' y1='265' x2='295' y2='265' stroke='#ffffff' stroke-width='52' stroke-linecap='round'/>" +
+    `<g transform='rotate(-52 256 256)'>` +
+    `<circle cx='256' cy='256' r='162' fill='none' stroke='${ring}' stroke-width='55' stroke-linecap='round' stroke-dasharray='874 144'/>` +
+    '</g>' +
+    `<circle cx='256' cy='256' r='47' fill='${dot}'/>` +
     '</g></svg>'
   );
 }

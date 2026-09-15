@@ -1,13 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
 /* ==============================================================================
    FINTRACK THEME SYSTEM (MODO OSCURO Y MODO CLARO)
    Inspirado en la sobriedad y ergonomía de Stripe, Linear y Wise
    ============================================================================== */
 
+/* Las variables --font-jakarta / --font-jetbrains las inyecta next/font desde el
+   layout (fuentes auto-hospedadas). Se dejan fallbacks por si acaso. */
 :root {
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: var(--font-jakarta), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 :root, :root[data-theme="light"] {

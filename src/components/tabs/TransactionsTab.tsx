@@ -117,8 +117,8 @@ export const TransactionsTab: React.FC = () => {
         style={{
           margin: '0 0 16px 0',
           padding: '10px 14px',
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%)',
-          border: '1px solid rgba(139, 92, 246, 0.25)',
+          background: 'var(--accent-brand-subtle)',
+          border: '1px solid var(--border-subtle)',
           borderRadius: '12px',
           display: 'flex',
           alignItems: 'center',
@@ -126,7 +126,7 @@ export const TransactionsTab: React.FC = () => {
           flexWrap: 'wrap'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#8b5cf6', fontWeight: 600, fontSize: '0.82rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-brand)', fontWeight: 600, fontSize: '0.82rem' }}>
           <Sparkles size={16} />
           <span className="desktop-only">Registro Rápido con IA:</span>
         </div>
@@ -171,7 +171,7 @@ export const TransactionsTab: React.FC = () => {
           style={{
             padding: '6px 14px',
             fontSize: '0.8rem',
-            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+            background: 'var(--accent-brand)',
             border: 'none',
             display: 'flex',
             alignItems: 'center',

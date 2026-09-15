@@ -5369,7 +5369,7 @@ body.modal-open {
   left: 0;
   min-width: 100%;
   width: max-content;
-  max-width: min(380px, 92vw);
+  max-width: min(380px, calc(100vw - 24px));
   z-index: 1000;
   background: var(--bg-surface-elevated, var(--bg-surface, #ffffff));
   background-color: var(--bg-surface);
@@ -5383,6 +5383,13 @@ body.modal-open {
 .custom-select-dropdown.open-up {
   top: auto;
   bottom: calc(100% + 6px);
+}
+
+/* Cuando el trigger esta pegado al borde derecho (tipico en movil), el menu se
+   ancla a la derecha del trigger y crece hacia adentro para no salirse de pantalla. */
+.custom-select-dropdown.align-right {
+  left: auto;
+  right: 0;
 }
 
 @keyframes customSelectFadeIn {

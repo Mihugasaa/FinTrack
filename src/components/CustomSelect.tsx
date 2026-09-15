@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 
 export interface CustomSelectOption {
@@ -33,7 +33,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(opt => opt.value === value);
 
@@ -46,6 +48,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         const spaceBelow = window.innerHeight - rect.bottom;
         const spaceAbove = rect.top;
         setOpenUp(spaceBelow < DROPDOWN_HEIGHT && spaceAbove > spaceBelow);
+
+        // Si el menú, anclado a la izquierda del trigger, se saldría por la
+        // derecha (tipico en movil cuando el filtro esta pegado al borde),
+        // lo anclamos a la derecha para que crezca hacia adentro.
+        const dropdownWidth = Math.min(380, window.innerWidth * 0.92);
+        setAlignRight(rect.left + dropdownWidth > window.innerWidth - 8);
       }
     }
     setIsOpen(prev => !prev);
@@ -75,6 +83,20 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen]);
+
+  // Ya con el menu montado, medimos su ancho real y decidimos el anclaje: si
+  // abierto a la izquierda se saldria por la derecha, lo anclamos a la derecha.
+  // Corrige la estimacion inicial de handleToggleOpen con la medida exacta.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const container = containerRef.current;
+    const dropdown = dropdownRef.current;
+    if (!container || !dropdown) return;
+    const cRect = container.getBoundingClientRect();
+    const width = dropdown.offsetWidth;
+    const overflowsRight = cRect.left + width > window.innerWidth - 8;
+    setAlignRight(prev => (prev !== overflowsRight ? overflowsRight : prev));
+  }, [isOpen, options.length]);
 
   const handleSelect = (val: string) => {
     onChange(val);
@@ -130,7 +152,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       </button>
 
       {isOpen && (
-        <div className={`custom-select-dropdown ${openUp ? 'open-up' : ''}`} role="listbox">
+        <div ref={dropdownRef} className={`custom-select-dropdown ${openUp ? 'open-up' : ''} ${alignRight ? 'align-right' : ''}`} role="listbox">
           <div className="custom-select-dropdown-list">
             {options.map(option => {
               const isSelected = option.value === value;

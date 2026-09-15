@@ -120,20 +120,31 @@ export function DashboardContent() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Con un modal abierto, publicamos el rectangulo VISIBLE real (visualViewport):
-  // alto y offset superior. El overlay del modal se dimensiona exacto a ese
-  // rectangulo, asi la hoja se apoya justo sobre el teclado sin hueco y funciona
-  // igual en Safari (con barra de direcciones) y en la PWA. Sin transiciones: la
-  // hoja sigue la animacion nativa del teclado en vez de pelearse con ella.
+  // Con un modal abierto ajustamos el overlay al viewport visible SOLO cuando el
+  // teclado esta realmente abierto (overlap grande). Si no, lo dejamos FIJO a
+  // pantalla completa. Clave: asi la barra de direcciones de Safari mostrandose/
+  // ocultandose y el rebote (overscroll) al deslizar NO mueven el modal, que era
+  // justo el bug. El teclado se detecta por un overlap > umbral, ignorando el
+  // ruido pequeno de la barra/rebote.
   useEffect(() => {
     if (!isAnyModalOpen) return;
     const vv = window.visualViewport;
     if (!vv) return;
     const root = document.documentElement;
+    const KB_THRESHOLD = 140; // px; el teclado tapa mucho mas que la barra/rebote
 
     const sync = () => {
-      root.style.setProperty('--kb-vv-h', `${Math.round(vv.height)}px`);
-      root.style.setProperty('--kb-vv-top', `${Math.round(vv.offsetTop)}px`);
+      const overlap = window.innerHeight - vv.height - vv.offsetTop;
+      if (overlap > KB_THRESHOLD) {
+        // Teclado abierto: seguimos el rectangulo visible exacto (sin hueco).
+        root.style.setProperty('--kb-vv-top', `${Math.round(vv.offsetTop)}px`);
+        root.style.setProperty('--kb-vv-h', `${Math.round(vv.height)}px`);
+      } else {
+        // Sin teclado: overlay fijo a pantalla completa, estable ante scroll,
+        // barra de direcciones y rebote (no se mueve al deslizar).
+        root.style.setProperty('--kb-vv-top', '0px');
+        root.style.setProperty('--kb-vv-h', '100dvh');
+      }
     };
     sync();
 

@@ -42,7 +42,7 @@ export const Header: React.FC = () => {
     <header className="dashboard-header">
       {/* Grupo Izquierdo: Logotipo y Contexto Temporal Global */}
       <div className="header-left-group">
-        <div className="brand-section" title="FinTrack - Control Financiero Inteligente">
+        <div className="brand-section" title="FinTrack">
           <div className="brand-logo-mark">
             <Layers size={18} />
           </div>

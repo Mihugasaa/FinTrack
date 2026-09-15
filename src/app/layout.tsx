@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'FinTrack - Control Inteligente de Gastos y Tarjetas',
+  title: 'FinTrack',
   description: 'Gestión inteligente de finanzas personales, flujo de caja y ciclos de facturación de tarjetas de crédito.',
 };
 

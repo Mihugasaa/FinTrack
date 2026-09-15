@@ -6,7 +6,6 @@ import { useFinance } from '@/contexts/FinanceContext';
 
 export const ReconciliationTab: React.FC = () => {
   const {
-    handleLoadDemoStatement,
     handleStatementFileUpload,
     statementFileName,
     isParsingStatement,
@@ -58,18 +57,6 @@ export const ReconciliationTab: React.FC = () => {
           <p className="panel-header-subtitle" style={{ margin: 0 }}>
             Audita y contrasta tus extractos de cuenta bancarios para asegurar que ningún gasto quede sin registrar.
           </p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button
-            id="btn-load-demo-statement"
-            className="btn-primary"
-            onClick={handleLoadDemoStatement}
-            title="Cargar extracto de prueba para ver el funcionamiento inmediato"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-          >
-            <Sparkles size={14} />
-            <span>Cargar Demo BCP</span>
-          </button>
         </div>
       </div>
 

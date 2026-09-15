@@ -646,7 +646,6 @@ function useFinanceController() {
     statementFileName,
     setStatementFileName,
     handleStatementFileUpload,
-    handleLoadDemoStatement,
     handleImportStatementItem,
     handleImportAllUnmatched
   } = useReconciliation({
@@ -1788,7 +1787,6 @@ function useFinanceController() {
     statementFileName,
     setStatementFileName,
     handleStatementFileUpload,
-    handleLoadDemoStatement,
     handleImportStatementItem,
     handleImportAllUnmatched,
 

@@ -10,7 +10,6 @@ import {
   Transaction,
   PaymentMethod,
   Category,
-  StatementTransaction,
   ReconciliationSummary,
   ReconciliationItem
 } from '@/types';
@@ -57,27 +56,6 @@ export function useReconciliation({
     } finally {
       setIsParsingStatement(false);
     }
-  };
-
-  // Carga de Estado de Cuenta Demo (BCP / Interbank) para prueba inmediata
-  const handleLoadDemoStatement = () => {
-    setIsParsingStatement(true);
-    setStatementFileName('Estado_Cuenta_BCP_Demostracion.xlsx');
-
-    const demoStatement: StatementTransaction[] = [
-      { id: 'stmt-demo-1', date: `${monthKey}-05`, description: 'SUPERMERCADOS WONG MIRAFLORES', amount: 142.50, type: 'debit' },
-      { id: 'stmt-demo-2', date: `${monthKey}-08`, description: 'NETFLIX MENSUALIDAD', amount: 44.90, type: 'debit' },
-      { id: 'stmt-demo-3', date: `${monthKey}-12`, description: 'UBER TRIP LIMA PE', amount: 24.50, type: 'debit' },
-      { id: 'stmt-demo-4', date: `${monthKey}-14`, description: 'STARBUCKS JAVIER PRADO', amount: 19.00, type: 'debit' },
-      { id: 'stmt-demo-5', date: `${monthKey}-18`, description: 'FARMACIAS INKAFARMA', amount: 38.00, type: 'debit' },
-      { id: 'stmt-demo-6', date: `${monthKey}-22`, description: 'RAPPI PERU SAC', amount: 56.50, type: 'debit' }
-    ];
-
-    setTimeout(() => {
-      const summary = ReconciliationService.reconcile(demoStatement, currentMonthTransactions, categories);
-      setReconciliationSummary(summary);
-      setIsParsingStatement(false);
-    }, 400);
   };
 
   // Importar gasto faltante con 1 Clic desde el Estado de Cuenta
@@ -216,7 +194,6 @@ export function useReconciliation({
     statementFileName,
     setStatementFileName,
     handleStatementFileUpload,
-    handleLoadDemoStatement,
     handleImportStatementItem,
     handleImportAllUnmatched
   };

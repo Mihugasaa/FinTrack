@@ -1,9 +1,23 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
   title: 'FinTrack',
   description: 'Gestión inteligente de finanzas personales, flujo de caja y ciclos de facturación de tarjetas de crédito.',
+  applicationName: 'FinTrack',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'FinTrack',
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#6366f1',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

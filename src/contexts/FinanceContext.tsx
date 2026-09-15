@@ -453,6 +453,21 @@ function useFinanceController() {
     handleDeletePayable
   } = usePayables({ currentYear, currentMonth, onCreditToDebit: creditLoanIncome });
 
+  // Atajo PWA: si se entra con ?action=new-expense (acceso rápido del ícono en el
+  // celular), abre directo el modal de registrar gasto. Solo una vez.
+  const didPwaActionRef = useRef(false);
+  useEffect(() => {
+    if (didPwaActionRef.current || !currentUser || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'new-expense') {
+      didPwaActionRef.current = true;
+      handleOpenCreateTransaction();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('action');
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, [currentUser, handleOpenCreateTransaction]);
+
   // Sincronización de datos por mes desde Supabase (las transacciones se cargan
   // en useTransactions; aquí quedan ingresos, periodo y abonos, que comparten
   // el mismo disparo de mes/usuario)

@@ -6,19 +6,23 @@ import { AIIntelligenceService } from '@/services/aiIntelligence.service';
 import { SupabaseDataService } from '@/services/supabaseData.service';
 import { calculatePaymentDueDate } from '@/lib/calculations';
 import { generateUUID, deduplicateTransactions } from '@/lib/utils';
+import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 import {
   Transaction,
   PaymentMethod,
   Category,
   ReconciliationSummary,
-  ReconciliationItem
+  ReconciliationItem,
+  StatementTransaction
 } from '@/types';
 
 interface UseReconciliationDeps {
   monthKey: string;
   categories: Category[];
   paymentMethods: PaymentMethod[];
-  currentMonthTransactions: Transaction[];
+  // Todas las transacciones (todos los meses): la ventana de conciliación la
+  // define el periodo del estado de cuenta, que puede abarcar dos meses.
+  allTransactions: Transaction[];
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
 }
 
@@ -32,13 +36,33 @@ export function useReconciliation({
   monthKey,
   categories,
   paymentMethods,
-  currentMonthTransactions,
+  allTransactions,
   setTransactions
 }: UseReconciliationDeps) {
   const [isParsingStatement, setIsParsingStatement] = useState(false);
   const [reconciliationSummary, setReconciliationSummary] = useState<ReconciliationSummary | null>(null);
   const [reconciliationFilter, setReconciliationFilter] = useState<'all' | 'matched' | 'unmatched_app' | 'mismatch'>('all');
   const [statementFileName, setStatementFileName] = useState<string>('');
+
+  // Campos de moneda para un gasto importado desde el extracto: si el cargo es
+  // en dólares, se guarda en USD con su equivalente en soles al tipo de cambio
+  // de respaldo, en vez de tratar el número como si fueran soles.
+  const buildAmountFields = (st: StatementTransaction) => {
+    if (st.currency === 'USD') {
+      return {
+        currency: 'USD' as const,
+        originalAmount: st.amount,
+        exchangeRate: FALLBACK_USD_PEN_RATE,
+        amountPen: Math.round(st.amount * FALLBACK_USD_PEN_RATE * 100) / 100
+      };
+    }
+    return {
+      currency: 'PEN' as const,
+      originalAmount: st.amount,
+      exchangeRate: 1,
+      amountPen: st.amount
+    };
+  };
 
   // Carga y Parseo de Estado de Cuenta Real (.xlsx, .xls, .csv, .pdf)
   const handleStatementFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,7 +72,7 @@ export function useReconciliation({
     setStatementFileName(file.name);
     try {
       const parsed = await ReconciliationService.parseFile(file);
-      const summary = ReconciliationService.reconcile(parsed, currentMonthTransactions, categories);
+      const summary = ReconciliationService.reconcile(parsed, allTransactions, categories);
       setReconciliationSummary(summary);
     } catch (err) {
       console.error('Error al procesar archivo bancario:', err);
@@ -78,10 +102,7 @@ export function useReconciliation({
       description: st.description,
       categoryId: catId,
       paymentMethodId: debitMethod.id,
-      currency: 'PEN',
-      originalAmount: st.amount,
-      exchangeRate: 1,
-      amountPen: st.amount,
+      ...buildAmountFields(st),
       paymentDueDate: dueDate,
       isFixedSubscription: predicted?.isFixedSuggestion || false,
       notes: 'Conciliado e importado automáticamente desde Estado de Cuenta bancario'
@@ -145,10 +166,7 @@ export function useReconciliation({
         description: st.description,
         categoryId: catId,
         paymentMethodId: debitMethod.id,
-        currency: 'PEN',
-        originalAmount: st.amount,
-        exchangeRate: 1,
-        amountPen: st.amount,
+        ...buildAmountFields(st),
         paymentDueDate: dueDate,
         isFixedSubscription: predicted?.isFixedSuggestion || false,
         notes: 'Conciliado e importado automáticamente desde Estado de Cuenta bancario'
@@ -162,7 +180,7 @@ export function useReconciliation({
     setReconciliationSummary(prev => {
       if (!prev) return null;
       const updatedItems = prev.items.map(it => {
-        const created = newTxs.find(tx => tx.description === it.statementTx?.description && tx.amountPen === it.statementTx?.amount);
+        const created = newTxs.find(tx => tx.description === it.statementTx?.description && tx.originalAmount === it.statementTx?.amount);
         if (it.status === 'unmatched_in_app' && created) {
           return {
             ...it,

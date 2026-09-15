@@ -14,7 +14,6 @@ export const ReconciliationTab: React.FC = () => {
     setReconciliationFilter,
     setReconciliationSummary,
     setStatementFileName,
-    currentMonthTransactions,
     paymentMethods,
     handleImportStatementItem,
     handleImportAllUnmatched,
@@ -22,8 +21,13 @@ export const ReconciliationTab: React.FC = () => {
     formatSoles
   } = useFinance();
   // Derivados locales (antes calculados por el padre y pasados como props)
-  const currentMonthTransactionsCount = currentMonthTransactions.length;
   const creditCards = paymentMethods.filter(pm => pm.type === 'credit' && pm.isActive);
+  // Importe del extracto con su moneda: los cargos en dólares se muestran en US$,
+  // no convertidos a soles, para que coincidan con lo que dice el estado de cuenta.
+  const formatStatementAmount = (tx?: { amount: number; currency?: string }) => {
+    if (!tx) return '—';
+    return tx.currency === 'USD' ? `US$ ${tx.amount.toFixed(2)}` : formatSoles(tx.amount);
+  };
   // Filtrar elementos de auditoría según filtro activo
   const filteredItems = (reconciliationSummary?.items || []).filter(item => {
     if (reconciliationFilter === 'matched') return item.status === 'matched';
@@ -238,7 +242,7 @@ export const ReconciliationTab: React.FC = () => {
                 {formatSoles(reconciliationSummary.totalAppAmount)}
               </div>
               <div className="reconciliation-kpi-sub tabular-nums">
-                {currentMonthTransactionsCount} gastos del mes
+                {reconciliationSummary.items.filter(i => i.appTx).length} gastos en el periodo
               </div>
             </div>
 
@@ -404,7 +408,7 @@ export const ReconciliationTab: React.FC = () => {
                         )}
                       </td>
                       <td className="tabular-nums text-right font-bold" style={{ whiteSpace: 'nowrap' }}>
-                        {item.statementTx ? formatSoles(item.statementTx.amount) : '—'}
+                        {formatStatementAmount(item.statementTx)}
                       </td>
                       <td>
                         {item.appTx ? (
@@ -515,7 +519,7 @@ export const ReconciliationTab: React.FC = () => {
                   </span>
                   <span className="reconciliation-mobile-card-amount tabular-nums">
                     {item.statementTx
-                      ? formatSoles(item.statementTx.amount)
+                      ? formatStatementAmount(item.statementTx)
                       : formatSoles(item.appTx?.amountPen || 0)}
                   </span>
                 </div>

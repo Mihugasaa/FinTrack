@@ -678,7 +678,7 @@ function useFinanceController() {
     monthKey,
     categories,
     paymentMethods,
-    currentMonthTransactions,
+    allTransactions: transactions,
     setTransactions
   });
 

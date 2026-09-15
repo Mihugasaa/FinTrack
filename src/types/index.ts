@@ -181,7 +181,8 @@ export interface StatementTransaction {
   id: string;
   date: string; // YYYY-MM-DD
   description: string;
-  amount: number;
+  amount: number; // Importe en la moneda del movimiento (ver currency)
+  currency?: CurrencyCode; // Moneda del movimiento en el extracto (PEN por defecto)
   type: 'debit' | 'credit';
   originalRowIndex?: number;
 }

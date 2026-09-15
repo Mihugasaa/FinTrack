@@ -9,6 +9,7 @@ interface RawAITransaction {
   date?: string;
   description?: string;
   amount?: number | string;
+  currency?: string;
   type?: 'debit' | 'credit';
 }
 
@@ -59,18 +60,20 @@ Extrae TODOS los movimientos o transacciones financieras en un arreglo JSON con 
     "date": "YYYY-MM-DD",
     "description": "Nombre limpio del establecimiento, comercio o concepto (ej. Supermercados Metro, Starbucks, Uber, etc.)",
     "amount": 125.50,
+    "currency": "PEN",
     "type": "debit"
   }
 ]
 
 Reglas estrictas:
-1. "date": fecha del movimiento normalizada obligatoriamente a formato ISO "YYYY-MM-DD" (ejemplo: si dice 15/04/2024 -> "2024-04-15").
+1. "date": usa la FECHA DE CONSUMO del movimiento (no la fecha de proceso si aparecen ambas), normalizada obligatoriamente a formato ISO "YYYY-MM-DD" (ejemplo: si dice 15/04/2024 -> "2024-04-15"). Si el año no aparece en la fila, dedúcelo del ciclo de facturación o del periodo del estado de cuenta.
 2. "description": limpia códigos de terminales, números de operación repetitivos o sufijos de país (como "OP. 000342", "LIMA PE", "POS 4321"). Deja el nombre identificable del comercio o servicio.
-3. "amount": número positivo flotante/decimal de 2 cifras. Omite símbolos de moneda (S/, $, USD).
-4. "type": 
+3. "amount": número positivo flotante/decimal de 2 cifras, en la moneda de ESE movimiento. Omite símbolos de moneda (S/, $, USD). NUNCA conviertas entre monedas: usa el número tal cual aparece en su columna.
+4. "currency": moneda del movimiento. Los estados de cuenta de tarjeta suelen tener DOS columnas de importe: "Soles" (S/) y "Dólares" (US$/$). Devuelve "USD" si el importe está en la columna de dólares, o "PEN" si está en la de soles. Si solo hay una moneda en todo el documento, usa esa.
+5. "type":
    - "debit" para consumos, compras en comercios, retiros de efectivo, cargos por membresía, comisiones o seguros.
    - "credit" para pagos de tarjeta, abonos, transferencias recibidas o sueldos.
-5. NO incluyas filas de totales, líneas de saldos iniciales o finales, ni resúmenes publicitarios. Únicamente movimientos individuales.`;
+6. NO incluyas filas de totales, líneas de saldos iniciales o finales (SALDO ANTERIOR), ni resúmenes publicitarios. Únicamente movimientos individuales.`;
 
       for (const model of GEMINI_MODELS) {
         try {
@@ -117,6 +120,7 @@ Reglas estrictas:
                       date: t.date || new Date().toISOString().split('T')[0],
                       description: (t.description || 'Consumo bancario').trim(),
                       amount: Math.abs(Math.round(amt * 100) / 100),
+                      currency: String(t.currency).toUpperCase() === 'USD' ? 'USD' : 'PEN',
                       type: t.type === 'credit' ? 'credit' : 'debit',
                       originalRowIndex: index + 1
                     };
@@ -186,12 +190,14 @@ Reglas estrictas:
           }
 
           const isCredit = /abono|deposito|transferencia recibida|sueldo|pago de tarjeta|haber/i.test(line);
+          const isUsd = /US\$|USD|d[oó]lar/i.test(line);
 
           fallbackList.push({
             id: `stmt-pdf-local-${lineIdx}-${Date.now()}`,
             date: isoDate,
             description: desc,
             amount: Math.round(amount * 100) / 100,
+            currency: isUsd ? 'USD' : 'PEN',
             type: isCredit ? 'credit' : 'debit',
             originalRowIndex: lineIdx
           });

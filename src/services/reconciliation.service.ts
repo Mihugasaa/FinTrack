@@ -15,6 +15,7 @@ import {
   ReconciliationItem
 } from '@/types';
 import { AIIntelligenceService } from './aiIntelligence.service';
+import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 
 export class ReconciliationService {
   /**
@@ -251,18 +252,39 @@ export class ReconciliationService {
   }
 
   /**
+   * Diferencia de monto consciente de moneda. Si el extracto y el gasto están
+   * en la misma moneda, compara en esa moneda sin tipo de cambio (US$ del banco
+   * vs US$ original de la app). Si difieren, normaliza el extracto a soles con
+   * el tipo de cambio de respaldo.
+   */
+  private static amountDiffPen(stmt: StatementTransaction, app: Transaction): number {
+    const stmtCur = stmt.currency || 'PEN';
+    const appCur = app.currency || 'PEN';
+    if (stmtCur === appCur) {
+      return Math.abs(stmt.amount - app.originalAmount);
+    }
+    const stmtPen = stmtCur === 'USD' ? stmt.amount * FALLBACK_USD_PEN_RATE : stmt.amount;
+    return Math.abs(stmtPen - app.amountPen);
+  }
+
+  /** Formatea el importe del extracto con su símbolo de moneda (S/ o US$). */
+  private static formatStmtAmount(stmt: StatementTransaction): string {
+    const val = stmt.amount.toFixed(2);
+    return (stmt.currency || 'PEN') === 'USD' ? `US$ ${val}` : `S/ ${val}`;
+  }
+
+  /**
    * Realiza la conciliación cruzada entre el estado de cuenta y las transacciones de la app
    */
   public static reconcile(
     statementTxs: StatementTransaction[],
-    appTxs: Transaction[],
+    appTxsAll: Transaction[],
     categories: Category[]
   ): ReconciliationSummary {
     const items: ReconciliationItem[] = [];
     const matchedAppIds = new Set<string>();
     const matchedStmtIds = new Set<string>();
 
-    let totalStatementAmount = 0;
     let totalAppAmount = 0;
     let matchedCount = 0;
     let unmatchedInAppCount = 0;
@@ -271,8 +293,20 @@ export class ReconciliationService {
     // Solo comparamos débitos/cargos (consumos de dinero)
     const debitStatementTxs = statementTxs.filter(t => t.type === 'debit');
 
-    debitStatementTxs.forEach(st => {
-      totalStatementAmount += st.amount;
+    // Ventana de conciliación = periodo real del estado de cuenta (ciclo de
+    // facturación), no el mes calendario de la app. Un extracto que va del
+    // 11/08 al 10/09 se coteja contra los gastos de la app de ese rango aunque
+    // abarque dos meses, para que los consumos del mes anterior no aparezcan
+    // como faltantes solo por estar en otro bucket mensual.
+    const stmtTimes = statementTxs
+      .map(t => new Date(t.date).getTime())
+      .filter(n => !isNaN(n));
+    const PAD_MS = 4 * 24 * 60 * 60 * 1000;
+    const windowStart = stmtTimes.length ? Math.min(...stmtTimes) - PAD_MS : -Infinity;
+    const windowEnd = stmtTimes.length ? Math.max(...stmtTimes) + PAD_MS : Infinity;
+    const appTxs = appTxsAll.filter(a => {
+      const t = new Date(a.date).getTime();
+      return isNaN(t) ? false : t >= windowStart && t <= windowEnd;
     });
 
     appTxs.forEach(at => {
@@ -294,8 +328,8 @@ export class ReconciliationService {
 
         if (dayDiff > 4) continue;
 
-        // Diferencia de monto
-        const amtDiff = Math.abs(stmt.amount - app.amountPen);
+        // Diferencia de monto (consciente de moneda: US$ del banco vs S/ de la app)
+        const amtDiff = this.amountDiffPen(stmt, app);
 
         // Similitud de texto inteligente (Substrings + Token Overlap sin stopwords bancarias)
         const sNorm = stmt.description.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -336,11 +370,12 @@ export class ReconciliationService {
         matchedStmtIds.add(stmt.id);
         matchedCount++;
 
+        const matchDiff = this.amountDiffPen(stmt, bestAppMatch);
         let matchNote = 'Conciliado con tolerancia de fecha bancaria.';
         if (highestScore === 100) {
           matchNote = 'Coincidencia exacta de fecha, comercio e importe.';
-        } else if (highestScore >= 80 && Math.abs(stmt.amount - bestAppMatch.amountPen) <= 0.05) {
-          matchNote = `Emparejado por monto exacto (${stmt.amount.toFixed(2)}) y fecha cercana (${bestAppMatch.description}).`;
+        } else if (highestScore >= 80 && matchDiff <= 0.05) {
+          matchNote = `Emparejado por monto exacto (${this.formatStmtAmount(stmt)}) y fecha cercana (${bestAppMatch.description}).`;
         }
 
         items.push({
@@ -349,7 +384,7 @@ export class ReconciliationService {
           statementTx: stmt,
           appTx: bestAppMatch,
           confidence: highestScore / 100,
-          difference: Math.abs(stmt.amount - bestAppMatch.amountPen),
+          difference: matchDiff,
           notes: matchNote
         });
       }
@@ -380,14 +415,15 @@ export class ReconciliationService {
         matchedStmtIds.add(stmt.id);
         mismatchCount++;
 
+        const diff = this.amountDiffPen(stmt, discrepancyMatch);
         items.push({
           id: `rec-mismatch-${stmt.id}`,
           status: 'amount_mismatch',
           statementTx: stmt,
           appTx: discrepancyMatch,
           confidence: 0.75,
-          difference: Math.abs(stmt.amount - discrepancyMatch.amountPen),
-          notes: `Diferencia de S/ ${Math.abs(stmt.amount - discrepancyMatch.amountPen).toFixed(2)} entre el banco (S/ ${stmt.amount.toFixed(2)}) y la app (S/ ${discrepancyMatch.amountPen.toFixed(2)}).`
+          difference: diff,
+          notes: `Diferencia entre el banco (${this.formatStmtAmount(stmt)}) y la app (S/ ${discrepancyMatch.amountPen.toFixed(2)}).`
         });
       }
     }
@@ -422,6 +458,21 @@ export class ReconciliationService {
           confidence: 0.9,
           notes: 'Registrado en FinTrack pero no figura en el estado de cuenta (posible cargo diferido para el siguiente mes o cancelado).'
         });
+      }
+    }
+
+    // Total del extracto en soles: los cargos en dólares se convierten a PEN.
+    // Si el cargo casó con un gasto de la app, se usa el tipo de cambio real de
+    // ese gasto (así el par no genera una diferencia falsa); si no, el de respaldo.
+    let totalStatementAmount = 0;
+    for (const it of items) {
+      const st = it.statementTx;
+      if (!st || st.type !== 'debit') continue;
+      if ((st.currency || 'PEN') === 'USD') {
+        const rate = it.appTx && it.appTx.exchangeRate > 0 ? it.appTx.exchangeRate : FALLBACK_USD_PEN_RATE;
+        totalStatementAmount += st.amount * rate;
+      } else {
+        totalStatementAmount += st.amount;
       }
     }
 

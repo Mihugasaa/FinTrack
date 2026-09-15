@@ -58,7 +58,6 @@ export const IncomeModal: React.FC = () => {
               required
               value={incomeDesc}
               onChange={e => setIncomeDesc(e.target.value)}
-              autoFocus
             />
           </div>
 

@@ -75,7 +75,6 @@ export const PayableModal: React.FC = () => {
               required
               value={payableCreditorName}
               onChange={e => setPayableCreditorName(e.target.value)}
-              autoFocus
             />
           </div>
 

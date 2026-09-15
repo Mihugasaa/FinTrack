@@ -108,7 +108,6 @@ export const PaymentModal: React.FC = () => {
               required
               value={paymentAmount}
               onChange={e => setPaymentAmount(e.target.value)}
-              autoFocus
             />
           </div>
 

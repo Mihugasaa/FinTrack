@@ -101,7 +101,6 @@ export const AdjustDebitModal: React.FC = () => {
               required
               value={tempDebitBalance}
               onChange={e => setTempDebitBalance(e.target.value)}
-              autoFocus
             />
           </div>
 

@@ -207,7 +207,6 @@ export const CardModal: React.FC = () => {
               required
               value={newCardName}
               onChange={e => setNewCardName(e.target.value)}
-              autoFocus
             />
           </div>
 

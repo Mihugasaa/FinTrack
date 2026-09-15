@@ -183,7 +183,6 @@ export const EditCardModal: React.FC = () => {
               required
               value={editCardName}
               onChange={e => setEditCardName(e.target.value)}
-              autoFocus
             />
           </div>
 

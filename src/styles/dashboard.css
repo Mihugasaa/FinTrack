@@ -2214,11 +2214,14 @@ body.modal-open {
 @media (max-width: 600px) {
   .modal-backdrop, .modal-overlay {
     align-items: flex-end;
-    /* La hoja se apoya en el fondo del overlay; al abrir el teclado, --kb-overlap
-       (que publica el JS desde visualViewport) mete un padding-bottom igual a lo
-       que tapa el teclado, elevando la hoja justo encima. Sin transicion: sigue
-       la animacion nativa del teclado, sin brincos ni doble movimiento. */
-    padding: 0 0 var(--kb-overlap, 0px) 0;
+    padding: 0;
+    /* El overlay se dimensiona EXACTO al viewport visible que publica el JS desde
+       visualViewport (alto + offset). Asi su borde inferior queda justo en el
+       tope del teclado y la hoja (flex-end) se apoya ahi, sin hueco. Sin
+       transicion: sigue la animacion nativa del teclado, sin brincos. */
+    top: var(--kb-vv-top, 0px);
+    bottom: auto;
+    height: var(--kb-vv-h, 100dvh);
   }
   .modal-box {
     max-width: 100%;
@@ -2226,9 +2229,8 @@ body.modal-open {
     border-bottom: none;
     padding: 12px 18px 28px 18px;
     animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    /* Cabe siempre en el espacio libre sobre el teclado; el contenido scrollea
-       dentro de la hoja. */
-    max-height: min(90dvh, calc(100dvh - var(--kb-overlap, 0px) - 16px));
+    /* Cabe en el area visible; el contenido scrollea dentro de la hoja. */
+    max-height: min(90dvh, calc(var(--kb-vv-h, 100dvh) - 12px));
     overflow-y: auto;
     margin-bottom: 0;
   }

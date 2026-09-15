@@ -71,7 +71,6 @@ export const ReceivableModal: React.FC = () => {
               required
               value={debtorName}
               onChange={e => setDebtorName(e.target.value)}
-              autoFocus
             />
           </div>
 

@@ -56,7 +56,6 @@ export const SalaryModal: React.FC = () => {
               required
               value={salarySource}
               onChange={e => setSalarySource(e.target.value)}
-              autoFocus
             />
           </div>
 

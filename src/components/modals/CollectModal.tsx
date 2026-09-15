@@ -93,7 +93,6 @@ export const CollectModal: React.FC = () => {
                     required
                     value={collectAmountInput}
                     onChange={e => setCollectAmountInput(e.target.value)}
-                    autoFocus
                   />
 
                 </div>

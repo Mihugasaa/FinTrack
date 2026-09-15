@@ -120,10 +120,11 @@ export function DashboardContent() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Con un modal abierto, publicamos SOLO cuanto tapa el teclado (--kb-overlap)
-  // leyendo visualViewport. El modal en movil usa ese valor como padding-bottom
-  // para elevar la hoja justo encima del teclado, sin transiciones CSS: asi sigue
-  // la animacion nativa del teclado en vez de pelearse con ella (nada de saltos).
+  // Con un modal abierto, publicamos el rectangulo VISIBLE real (visualViewport):
+  // alto y offset superior. El overlay del modal se dimensiona exacto a ese
+  // rectangulo, asi la hoja se apoya justo sobre el teclado sin hueco y funciona
+  // igual en Safari (con barra de direcciones) y en la PWA. Sin transiciones: la
+  // hoja sigue la animacion nativa del teclado en vez de pelearse con ella.
   useEffect(() => {
     if (!isAnyModalOpen) return;
     const vv = window.visualViewport;
@@ -131,8 +132,8 @@ export function DashboardContent() {
     const root = document.documentElement;
 
     const sync = () => {
-      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      root.style.setProperty('--kb-overlap', `${Math.round(overlap)}px`);
+      root.style.setProperty('--kb-vv-h', `${Math.round(vv.height)}px`);
+      root.style.setProperty('--kb-vv-top', `${Math.round(vv.offsetTop)}px`);
     };
     sync();
 
@@ -142,7 +143,8 @@ export function DashboardContent() {
     return () => {
       vv.removeEventListener('resize', sync);
       vv.removeEventListener('scroll', sync);
-      root.style.removeProperty('--kb-overlap');
+      root.style.removeProperty('--kb-vv-h');
+      root.style.removeProperty('--kb-vv-top');
     };
   }, [isAnyModalOpen]);
 

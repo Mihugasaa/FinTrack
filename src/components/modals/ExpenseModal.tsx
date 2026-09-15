@@ -242,7 +242,6 @@ export const ExpenseModal: React.FC = () => {
                   }
                 }
               }}
-              autoFocus
             />
             {!isRefundMode && aiSuggestion && (
               <div

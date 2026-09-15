@@ -100,6 +100,51 @@ export function DashboardContent() {
     };
   }, [isAnyModalOpen]);
 
+  // Cada pestaña se ve desde su inicio: al cambiar de tab reiniciamos el scroll
+  // arriba, en lugar de heredar el desplazamiento de la pestaña anterior.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
+
+  // Con un modal abierto seguimos el viewport visible (visualViewport) para que
+  // la hoja quede por encima del teclado y el campo enfocado sea visible, en vez
+  // de esconderse detras del teclado en iOS. Publicamos alto/offset como
+  // variables CSS que consume el overlay del modal en movil.
+  useEffect(() => {
+    if (!isAnyModalOpen) return;
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+
+    const sync = () => {
+      if (!vv) return;
+      root.style.setProperty('--kb-viewport-h', `${Math.round(vv.height)}px`);
+      root.style.setProperty('--kb-viewport-top', `${Math.round(vv.offsetTop)}px`);
+    };
+    sync();
+
+    const handleFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el || !el.closest('.modal-box')) return;
+      if (!/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      // Espera a que el teclado termine de abrir antes de centrar el campo.
+      window.setTimeout(() => {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }, 220);
+    };
+
+    vv?.addEventListener('resize', sync);
+    vv?.addEventListener('scroll', sync);
+    document.addEventListener('focusin', handleFocusIn);
+
+    return () => {
+      vv?.removeEventListener('resize', sync);
+      vv?.removeEventListener('scroll', sync);
+      document.removeEventListener('focusin', handleFocusIn);
+      root.style.removeProperty('--kb-viewport-h');
+      root.style.removeProperty('--kb-viewport-top');
+    };
+  }, [isAnyModalOpen]);
+
   return (
     <div className="dashboard-container">
       {/* 1. HEADER MODULAR CON CONTEXTO TEMPORAL GLOBAL */}

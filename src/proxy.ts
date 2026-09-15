@@ -5,12 +5,17 @@ import { createServerClient } from '@supabase/ssr';
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip static files, API routes and Next internals.
+  // Skip static files, API routes, Next internals y los assets públicos de la PWA
+  // (ícono, apple-icon, manifest). Estos los pide el navegador/SO sin sesión, así que
+  // NO deben pasar por la verificación de auth ni redirigir a /login.
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
     pathname.includes('.') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    pathname === '/icon' ||
+    pathname === '/apple-icon' ||
+    pathname === '/manifest.webmanifest'
   ) {
     return NextResponse.next();
   }
@@ -54,5 +59,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)']
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest).*)']
 };

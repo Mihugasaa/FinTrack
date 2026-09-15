@@ -52,7 +52,11 @@ export function useReconciliation({
       setReconciliationSummary(summary);
     } catch (err) {
       console.error('Error al procesar archivo bancario:', err);
-      alert('No se pudo leer el archivo bancario. Asegúrate de que sea un archivo Excel (.xlsx, .xls) o CSV válido.');
+      const detail = err instanceof Error && err.message ? err.message : '';
+      alert(
+        detail ||
+          'No se pudo leer el archivo. Sube un estado de cuenta en PDF, Excel (.xlsx, .xls) o CSV válido.'
+      );
     } finally {
       setIsParsingStatement(false);
     }

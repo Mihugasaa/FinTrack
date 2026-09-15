@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StatementTransaction } from '@/types';
-// @ts-ignore
-import { PDFParse } from 'pdf-parse';
 import { GEMINI_MODELS, geminiEndpoint } from '@/lib/aiConfig';
 
 export const runtime = 'nodejs';
@@ -144,6 +142,9 @@ Reglas estrictas:
     if (parsedTransactions.length === 0) {
       try {
         console.log('[Gemini Parse PDF] Usando fallback híbrido local con PDFParse...');
+        // Carga diferida: pdfjs solo se toca si Gemini no resolvió, y así su
+        // salud en serverless nunca afecta al camino principal ni al GET.
+        const { PDFParse } = await import('pdf-parse');
         const parser = new PDFParse({ data: buffer });
         const textResult = await parser.getText();
         const fullText = textResult?.text || '';

@@ -263,9 +263,9 @@ export function getBestCardRecommendation(
   const best = evaluated[0];
   let reason = `Te da ${best.creditDays} días sin intereses: su corte es el ${best.card.billingCloseDay} (en ${best.daysUntilClose} días) y pagas recién el ${formatDisplayDate(calculatePaymentDueDate(todayStr, best.card))}.`;
   if (best.utilization >= 80) {
-    reason += ` Ojo: ya usaste ${Math.round(best.utilization)}% de su línea; conviene bajarla antes de seguir cargando.`;
+    reason += ` Uso al ${Math.round(best.utilization)}%. Conviene reducir el saldo antes de seguir.`;
   } else if (best.utilization > 30) {
-    reason += ` Usa ${Math.round(best.utilization)}% de su línea; intenta dejarla bajo 30% para el corte y cuidar tu score.`;
+    reason += ` Vas al ${Math.round(best.utilization)}% de la línea. Bájala del 30% para el corte y cuidas tu historial.`;
   }
 
   return {

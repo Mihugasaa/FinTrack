@@ -243,7 +243,7 @@ export const ReceivablesTab: React.FC = () => {
             <div className="loans-info-banner-left">
               <AlertCircle size={16} color="var(--accent-brand)" />
               <span>
-                <strong>Lo que te deben no es un gasto.</strong> Ese dinero sigue siendo tuyo; cuando lo cobres, tu saldo en cuenta sube en <strong>{formatSoles(totalReceivablesRemaining)}{totalReceivablesRemainingUsd > 0 ? ` • $ ${totalReceivablesRemainingUsd.toFixed(2)} USD` : ''}</strong>.
+                Tienes <strong>{formatSoles(totalReceivablesRemaining)}{totalReceivablesRemainingUsd > 0 ? ` • $ ${totalReceivablesRemainingUsd.toFixed(2)} USD` : ''}</strong> por cobrar. Cuando te paguen, se debita directo a tu cuenta.
               </span>
             </div>
             <div className="loans-info-banner-right">
@@ -552,7 +552,7 @@ export const ReceivablesTab: React.FC = () => {
             <div className="loans-info-banner-left">
               <AlertCircle size={16} color="var(--accent-warning)" />
               <span>
-                <strong>Lo que debes.</strong> Cuando le pagas a alguien, se descuenta de tu saldo como pago de deuda, sin contarlo otra vez como gasto. Te queda por pagar <strong>{formatSoles(totalPayablesRemaining)}</strong>{totalPayablesRemainingUsd > 0 ? <> <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>· ya incluye $ {totalPayablesRemainingUsd.toFixed(2)} USD convertidos</span></> : ''}.
+                Te queda por pagar <strong>{formatSoles(totalPayablesRemaining)}</strong>{totalPayablesRemainingUsd > 0 ? <> <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>· ya incluye $ {totalPayablesRemainingUsd.toFixed(2)} USD convertidos</span></> : ''}. Al abonar, sale de tu cuenta como pago de deuda.
               </span>
             </div>
             <div className="loans-info-banner-right">

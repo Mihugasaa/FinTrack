@@ -66,7 +66,7 @@ Extrae TODOS los movimientos o transacciones financieras en un arreglo JSON con 
 ]
 
 Reglas estrictas:
-1. "date": usa la FECHA DE CONSUMO del movimiento (no la fecha de proceso si aparecen ambas), normalizada obligatoriamente a formato ISO "YYYY-MM-DD" (ejemplo: si dice 15/04/2024 -> "2024-04-15"). Si el año no aparece en la fila, dedúcelo del ciclo de facturación o del periodo del estado de cuenta.
+1. "date": usa la FECHA DE CONSUMO del movimiento (no la fecha de proceso si aparecen ambas), normalizada obligatoriamente a formato ISO "YYYY-MM-DD" (ejemplo: si dice 15/04/2024 -> "2024-04-15"). Si el año no aparece en la fila, dedúcelo del ciclo de facturación o del periodo del estado de cuenta. Interpreta los meses abreviados en español EXACTAMENTE así: Ene=01, Feb=02, Mar=03, Abr=04, May=05, Jun=06, Jul=07, Ago=08, Set/Sep=09, Oct=10, Nov=11, Dic=12. Cuidado: "Set" es SETIEMBRE (09), no confundas "Ago" (agosto, 08) con julio.
 2. "description": limpia códigos de terminales, números de operación repetitivos o sufijos de país (como "OP. 000342", "LIMA PE", "POS 4321"). Deja el nombre identificable del comercio o servicio.
 3. "amount": número positivo flotante/decimal de 2 cifras, en la moneda de ESE movimiento. Omite símbolos de moneda (S/, $, USD). NUNCA conviertas entre monedas: usa el número tal cual aparece en su columna.
 4. "currency": moneda del movimiento. Los estados de cuenta de tarjeta suelen tener DOS columnas de importe: "Soles" (S/) y "Dólares" (US$/$). Devuelve "USD" si el importe está en la columna de dólares, o "PEN" si está en la de soles. Si solo hay una moneda en todo el documento, usa esa.

@@ -273,6 +273,33 @@ export class ReconciliationService {
     return (stmt.currency || 'PEN') === 'USD' ? `US$ ${val}` : `S/ ${val}`;
   }
 
+  private static readonly BANK_STOPWORDS = new Set([
+    'de', 'la', 'el', 'en', 'y', 'del', 'los', 'las', 'por', 'con', 'para',
+    'sac', 'sa', 's.a.', 's.a.c.', 'pe', 'peru', 'lima', 'oper', 'pos',
+    'compra', 'pago', 'tarjeta', 'visa', 'mastercard'
+  ]);
+
+  /**
+   * Reconoce si el concepto del extracto y el de la app apuntan al mismo comercio,
+   * por inclusión de subcadena o por tokens compartidos (sin stopwords bancarias).
+   * Ej. "DLC*UBER RIDES LIMA PE" vs "Taxi a casa por Uber".
+   */
+  private static merchantMatches(stmtDesc: string, appDesc: string): boolean {
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    const sNorm = norm(stmtDesc);
+    const aNorm = norm(appDesc);
+    if (!sNorm || !aNorm) return false;
+
+    const textDirect = sNorm === aNorm || sNorm.includes(aNorm) || aNorm.includes(sNorm);
+    if (textDirect) return true;
+
+    const tokenize = (s: string) =>
+      s.split(/[\s\-_\/,\.*]+/).filter(w => w.length > 2 && !this.BANK_STOPWORDS.has(w));
+    const sTokens = tokenize(sNorm);
+    const aTokens = tokenize(aNorm);
+    return sTokens.some(st => aTokens.some(at => at.includes(st) || st.includes(at)));
+  }
+
   /**
    * Realiza la conciliación cruzada entre el estado de cuenta y las transacciones de la app
    */
@@ -331,21 +358,9 @@ export class ReconciliationService {
         // Diferencia de monto (consciente de moneda: US$ del banco vs S/ de la app)
         const amtDiff = this.amountDiffPen(stmt, app);
 
-        // Similitud de texto inteligente (Substrings + Token Overlap sin stopwords bancarias)
-        const sNorm = stmt.description.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-        const aNorm = app.description.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        // Similitud de comercio (inclusi\u00f3n de subcadena o tokens compartidos)
+        const textMatch = this.merchantMatches(stmt.description, app.description);
         
-        // 1. Coincidencia directa o inclusión de subcadena
-        const textDirect = sNorm === aNorm || sNorm.includes(aNorm) || aNorm.includes(sNorm);
-
-        // 2. Coincidencia por tokens (ej. "UBER TRIP LIMA PE" vs "Taxi a casa por Uber")
-        const bankStopwords = new Set(['de', 'la', 'el', 'en', 'y', 'del', 'los', 'las', 'por', 'con', 'para', 'sac', 'sa', 's.a.', 's.a.c.', 'pe', 'peru', 'lima', 'oper', 'pos', 'compra', 'pago', 'tarjeta', 'visa', 'mastercard']);
-        const sTokens = sNorm.split(/[\s\-_\/,\.]+/).filter(w => w.length > 2 && !bankStopwords.has(w));
-        const aTokens = aNorm.split(/[\s\-_\/,\.]+/).filter(w => w.length > 2 && !bankStopwords.has(w));
-        const hasCommonToken = sTokens.some(st => aTokens.some(at => at.includes(st) || st.includes(at)));
-
-        const textMatch = textDirect || hasCommonToken;
-
         let score = 0;
         // Prioridad 1: Monto (es la huella digital más precisa en finanzas)
         if (amtDiff <= 0.05) score += 60;
@@ -386,6 +401,42 @@ export class ReconciliationService {
           confidence: highestScore / 100,
           difference: matchDiff,
           notes: matchNote
+        });
+      }
+    }
+
+    // 1.5. Rescate por importe EXACTO + comercio con desfase de fecha mayor a la
+    // ventana bancaria. Cubre cuando el banco muestra la fecha de proceso y la app
+    // la de consumo, o cuando la IA leyó mal el mes. Solo dentro del periodo del
+    // extracto y exigiendo importe idéntico, para no generar falsos positivos.
+    for (const stmt of debitStatementTxs) {
+      if (matchedStmtIds.has(stmt.id)) continue;
+
+      let rescueMatch: Transaction | null = null;
+      for (const app of appTxs) {
+        if (matchedAppIds.has(app.id)) continue;
+        if (this.amountDiffPen(stmt, app) > 0.05) continue;
+        if (!this.merchantMatches(stmt.description, app.description)) continue;
+        rescueMatch = app;
+        break;
+      }
+
+      if (rescueMatch) {
+        matchedAppIds.add(rescueMatch.id);
+        matchedStmtIds.add(stmt.id);
+        matchedCount++;
+
+        const dayGap = Math.round(
+          Math.abs(new Date(stmt.date).getTime() - new Date(rescueMatch.date).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        items.push({
+          id: `rec-match-${stmt.id}`,
+          status: 'matched',
+          statementTx: stmt,
+          appTx: rescueMatch,
+          confidence: 0.8,
+          difference: this.amountDiffPen(stmt, rescueMatch),
+          notes: `Emparejado por importe exacto (${this.formatStmtAmount(stmt)}) y comercio; la fecha difiere ${dayGap} días (probable fecha de proceso vs consumo).`
         });
       }
     }

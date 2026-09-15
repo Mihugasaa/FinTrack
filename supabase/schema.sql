@@ -177,12 +177,12 @@ CREATE TABLE IF NOT EXISTS payable_payments (
 -- 11. FUNCIÓN DE CÁLCULO DE FECHA DE PAGO (CICLO DE TARJETAS)
 -- Réplica exacta de la fórmula matemática del Excel
 -- ==============================================================================
-CREATE OR REPLACE FUNCTION fn_calculate_payment_due_date(
+CREATE OR REPLACE FUNCTION public.fn_calculate_payment_due_date(
     p_date DATE,
     p_payment_method_id UUID
 ) RETURNS DATE AS $$
 DECLARE
-    v_type payment_method_type;
+    v_type public.payment_method_type;
     v_corte INT;
     v_pago INT;
     v_exp_day INT;
@@ -192,7 +192,7 @@ BEGIN
     -- Obtener datos del método de pago
     SELECT type, billing_close_day, payment_due_day
     INTO v_type, v_corte, v_pago
-    FROM payment_methods
+    FROM public.payment_methods
     WHERE id = p_payment_method_id;
 
     -- Si es débito o efectivo, el pago es inmediato
@@ -226,14 +226,14 @@ BEGIN
 
     RETURN v_due_date;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+$$ LANGUAGE plpgsql IMMUTABLE SET search_path = '';
 
 -- Trigger automático para calcular amount_pen y payment_due_date antes de insertar/actualizar
-CREATE OR REPLACE FUNCTION trg_calculate_transaction_fields()
+CREATE OR REPLACE FUNCTION public.trg_calculate_transaction_fields()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Calcular monto en soles
-    IF NEW.currency = 'USD' AND NEW.exchange_rate IS NOT NULL AND NEW.exchange_rate > 0 THEN
+    IF NEW.currency = 'USD'::public.currency_code AND NEW.exchange_rate IS NOT NULL AND NEW.exchange_rate > 0 THEN
         NEW.amount_pen := ROUND(NEW.original_amount * NEW.exchange_rate, 2);
     ELSE
         NEW.amount_pen := NEW.original_amount;
@@ -241,24 +241,26 @@ BEGIN
 
     -- Calcular fecha de pago si no viene explícita
     IF NEW.payment_due_date IS NULL THEN
-        NEW.payment_due_date := fn_calculate_payment_due_date(NEW.date, NEW.payment_method_id);
+        NEW.payment_due_date := public.fn_calculate_payment_due_date(NEW.date, NEW.payment_method_id);
     END IF;
 
     NEW.updated_at := NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = '';
 
 DROP TRIGGER IF EXISTS trg_transactions_before_upsert ON transactions;
 CREATE TRIGGER trg_transactions_before_upsert
 BEFORE INSERT OR UPDATE ON transactions
 FOR EACH ROW
-EXECUTE FUNCTION trg_calculate_transaction_fields();
+EXECUTE FUNCTION public.trg_calculate_transaction_fields();
 
 -- ==============================================================================
 -- 12. VISTA DE SALUD FINANCIERA MENSUAL (¿PUEDO CUBRIR ESTE MES?)
 -- ==============================================================================
-CREATE OR REPLACE VIEW view_monthly_summary AS
+-- security_invoker: la vista respeta las políticas RLS del usuario que consulta
+-- (cada quien ve solo sus filas), en lugar de las del creador de la vista.
+CREATE OR REPLACE VIEW view_monthly_summary WITH (security_invoker = true) AS
 WITH period_totals AS (
     SELECT 
         mp.id AS monthly_period_id,

@@ -5,6 +5,7 @@ import { useFinance } from '@/contexts/FinanceContext';
 import { Header } from '@/components/layout/Header';
 import { NavigationTabs } from '@/components/layout/NavigationTabs';
 import { MobileNav } from '@/components/layout/MobileNav';
+import { PullToRefresh } from '@/components/PullToRefresh';
 import { DeleteConfirmModal } from '@/components/modals/DeleteConfirmModal';
 import { AdjustDebitModal } from '@/components/modals/AdjustDebitModal';
 import { IncomeModal } from '@/components/modals/IncomeModal';
@@ -49,7 +50,8 @@ export function DashboardContent() {
     payingPayable,
     payingCreditorGroup,
     isSalaryModalOpen,
-    itemToDelete
+    itemToDelete,
+    reloadData
   } = useFinance();
 
   const isAnyModalOpen = Boolean(
@@ -118,30 +120,29 @@ export function DashboardContent() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Con un modal abierto seguimos el viewport visible (visualViewport) para que
-  // la hoja quede por encima del teclado y el campo enfocado sea visible, en vez
-  // de esconderse detras del teclado en iOS. Publicamos alto/offset como
-  // variables CSS que consume el overlay del modal en movil.
+  // Con un modal abierto, publicamos SOLO cuanto tapa el teclado (--kb-overlap)
+  // leyendo visualViewport. El modal en movil usa ese valor como padding-bottom
+  // para elevar la hoja justo encima del teclado, sin transiciones CSS: asi sigue
+  // la animacion nativa del teclado en vez de pelearse con ella (nada de saltos).
   useEffect(() => {
     if (!isAnyModalOpen) return;
     const vv = window.visualViewport;
+    if (!vv) return;
     const root = document.documentElement;
 
     const sync = () => {
-      if (!vv) return;
-      root.style.setProperty('--kb-viewport-h', `${Math.round(vv.height)}px`);
-      root.style.setProperty('--kb-viewport-top', `${Math.round(vv.offsetTop)}px`);
+      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--kb-overlap', `${Math.round(overlap)}px`);
     };
     sync();
 
-    vv?.addEventListener('resize', sync);
-    vv?.addEventListener('scroll', sync);
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
 
     return () => {
-      vv?.removeEventListener('resize', sync);
-      vv?.removeEventListener('scroll', sync);
-      root.style.removeProperty('--kb-viewport-h');
-      root.style.removeProperty('--kb-viewport-top');
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      root.style.removeProperty('--kb-overlap');
     };
   }, [isAnyModalOpen]);
 
@@ -150,6 +151,10 @@ export function DashboardContent() {
       {/* Tapa de la franja de la barra de estado, solo visible arriba del todo:
           evita el blur del borde superior sin quitar el blur al hacer scroll. */}
       <div className={`status-bar-cover ${atTop ? 'is-visible' : ''}`} aria-hidden="true" />
+
+      {/* Pull-to-refresh (movil): tiron hacia abajo estando arriba recarga la
+          vista. Se desactiva con un modal abierto para no interferir. */}
+      <PullToRefresh onRefresh={reloadData} disabled={isAnyModalOpen} />
 
       {/* 1. HEADER MODULAR CON CONTEXTO TEMPORAL GLOBAL */}
       <Header />

@@ -2086,6 +2086,36 @@ html.is-resizing *::after {
   opacity: 1;
 }
 
+/* Indicador de pull-to-refresh: chip circular con un arco que crece al tirar y
+   gira mientras recarga. Baja desde debajo de la barra de estado siguiendo el
+   dedo (la posicion y opacidad las controla el componente por estilo en linea). */
+.ptr-indicator {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 50%;
+  z-index: 935;
+  margin-top: 4px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+  color: var(--accent-brand);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.ptr-indicator .ptr-spin {
+  animation: ptrspin 0.7s linear infinite;
+}
+
+@keyframes ptrspin {
+  to { transform: rotate(360deg); }
+}
+
 /* Bloqueo de scroll en segundo plano al abrir modales. La posición del body la
    fija JS (position: fixed + top negativo) para no perder el scroll ni saltar;
    aquí solo reforzamos que no haya scroll ni rebote de fondo. */
@@ -2106,9 +2136,10 @@ body.modal-open {
   justify-content: center;
   z-index: 1000;
   padding: 16px;
-  overflow-y: auto;
+  /* El overlay NO scrollea: si lo hiciera, deslizar el fondo moveria la hoja.
+     El scroll vive dentro de .modal-box, no aqui. */
+  overflow: hidden;
   overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
   touch-action: pan-y;
 }
@@ -2126,6 +2157,8 @@ body.modal-open {
   position: relative;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   box-sizing: border-box;
   margin: auto;
   display: flex;
@@ -2181,15 +2214,11 @@ body.modal-open {
 @media (max-width: 600px) {
   .modal-backdrop, .modal-overlay {
     align-items: flex-end;
-    padding: 0;
-    /* Seguimos el viewport visible: cuando el teclado sube, --kb-viewport-h se
-       encoge y la hoja del modal queda por encima del teclado (JS lo publica).
-       La transicion suaviza el ajuste si iOS reporta el teclado de golpe, para
-       que la hoja suba fluida en vez de pegar un brinco. */
-    top: var(--kb-viewport-top, 0px);
-    bottom: auto;
-    height: var(--kb-viewport-h, 100dvh);
-    transition: height 0.2s ease-out, top 0.2s ease-out;
+    /* La hoja se apoya en el fondo del overlay; al abrir el teclado, --kb-overlap
+       (que publica el JS desde visualViewport) mete un padding-bottom igual a lo
+       que tapa el teclado, elevando la hoja justo encima. Sin transicion: sigue
+       la animacion nativa del teclado, sin brincos ni doble movimiento. */
+    padding: 0 0 var(--kb-overlap, 0px) 0;
   }
   .modal-box {
     max-width: 100%;
@@ -2197,10 +2226,11 @@ body.modal-open {
     border-bottom: none;
     padding: 12px 18px 28px 18px;
     animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    max-height: min(92vh, calc(var(--kb-viewport-h, 100dvh) - 12px));
+    /* Cabe siempre en el espacio libre sobre el teclado; el contenido scrollea
+       dentro de la hoja. */
+    max-height: min(90dvh, calc(100dvh - var(--kb-overlap, 0px) - 16px));
     overflow-y: auto;
     margin-bottom: 0;
-    transition: max-height 0.2s ease-out;
   }
   @keyframes slideUp {
     from { transform: translateY(100%); }

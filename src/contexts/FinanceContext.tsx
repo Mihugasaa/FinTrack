@@ -52,6 +52,10 @@ function useFinanceController() {
   // 1. Tema Claro / Oscuro (Predeterminado: Claro)
   const { theme, toggleTheme } = useTheme();
 
+  // Nonce de recarga: al subir, re-dispara todos los loaders de datos (pull-to-
+  // refresh) sin recargar la pagina, conservando mes, pestana y scroll.
+  const [reloadNonce, setReloadNonce] = useState(0);
+
   useEffect(() => {
     // Autenticación basada en la SESIÓN de Supabase (fuente de verdad), no solo en
     // localStorage: así el PWA instalado (con cookie válida pero sin localStorage) no
@@ -96,7 +100,7 @@ function useFinanceController() {
     SupabaseDataService.getCategories().then(cats => {
       if (cats && cats.length > 0) setCategories(cats);
     });
-  }, [currentUser]);
+  }, [currentUser, reloadNonce]);
 
   const handleLogout = async () => {
     await AuthService.logout();
@@ -305,7 +309,8 @@ function useFinanceController() {
     isCurrentActiveMonth,
     currentDateStr,
     paymentMethods,
-    categories
+    categories,
+    reloadNonce
   });
 
   // Ingresos: sueldo base e ingresos extra del mes (con sus formularios y modales)
@@ -538,7 +543,7 @@ function useFinanceController() {
         });
       }
     });
-  }, [monthKey, currentUser, currentYear, currentMonth]);
+  }, [monthKey, currentUser, currentYear, currentMonth, reloadNonce]);
 
   // Carga única del HISTORIAL COMPLETO (una vez por sesión autenticada). El resto
   // de la app trabaja mes a mes, pero las vistas consolidadas (Anual / Analítica)
@@ -616,7 +621,15 @@ function useFinanceController() {
         return { ...fromCloud, ...prev };
       });
     });
-  }, [currentUser, setTransactions, setExtraIncomes, setCardPayments]);
+  }, [currentUser, setTransactions, setExtraIncomes, setCardPayments, reloadNonce]);
+
+  // Recarga de datos desde la nube (pull-to-refresh) SIN recargar la pagina:
+  // reinicia el guard del historial y sube el nonce para re-disparar los loaders.
+  // Conserva mes seleccionado, pestana activa y posicion de scroll.
+  const reloadData = () => {
+    didLoadAllHistoryRef.current = false;
+    setReloadNonce(n => n + 1);
+  };
 
   // ==============================================================================
   // CADENA DE SALDOS DE DÉBITO (ARRASTRE AUTOMÁTICO MES A MES)
@@ -1488,6 +1501,9 @@ function useFinanceController() {
     // Usuario / sesión
     currentUser,
     handleLogout,
+
+    // Recarga de datos (pull-to-refresh)
+    reloadData,
 
     // Tema
     theme,

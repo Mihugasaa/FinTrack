@@ -31,6 +31,7 @@ interface UseTransactionsDeps {
   currentDateStr: string;
   paymentMethods: PaymentMethod[];
   categories: Category[];
+  reloadNonce: number;
 }
 
 /**
@@ -49,7 +50,8 @@ export function useTransactions({
   isCurrentActiveMonth,
   currentDateStr,
   paymentMethods,
-  categories
+  categories,
+  reloadNonce
 }: UseTransactionsDeps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
@@ -133,7 +135,7 @@ export function useTransactions({
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthKey, currentUser]);
+  }, [monthKey, currentUser, reloadNonce]);
 
   // Asegurar que el medio de pago seleccionado corresponda a una tarjeta activa del usuario actual
   useEffect(() => {

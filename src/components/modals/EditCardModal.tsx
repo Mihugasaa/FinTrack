@@ -4,6 +4,7 @@ import React from 'react';
 import { CreditCard, X, Check } from 'lucide-react';
 import { CARD_COLOR_PRESETS } from '@/lib/constants';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 export const EditCardModal: React.FC = () => {
   const {
@@ -26,10 +27,19 @@ export const EditCardModal: React.FC = () => {
   } = useFinance();
   const onClose = () => setIsEditCardModalOpen(false);
   const onSubmit = handleSaveEditCard;
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
   return (
-    <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-drag-handle" />
+    <div
+      className="modal-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick(onClose)}
+      onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
+    >
+      <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+        <div className="modal-drag-zone" {...dragHandleProps}>
+          <div className="modal-drag-handle" />
+        </div>
         <div className="modal-title-row">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <CreditCard size={18} color="var(--accent-brand)" />

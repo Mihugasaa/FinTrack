@@ -3,6 +3,7 @@
 import React from 'react';
 import { AlertTriangle, X, Repeat, Trash2 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 /** Registro que el usuario está por eliminar (gasto, ingreso o préstamo). */
 export interface DeleteConfirmItem {
@@ -28,20 +29,30 @@ export const DeleteConfirmModal: React.FC = () => {
     formatDisplayDate,
     formatSoles
   } = useFinance();
-  if (!itemToDelete) return null;
-  const item = itemToDelete;
   const onClose = () => setItemToDelete(null);
   const onConfirm = handleConfirmDelete;
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
+  if (!itemToDelete) return null;
+  const item = itemToDelete;
   return (
-    <div className="modal-overlay" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
+    <div
+      className="modal-overlay"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick(onClose)}
+      onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
+    >
       <div
+        ref={modalBoxRef}
         className="modal-box modal-confirm-delete"
         onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-delete-title"
       >
-        <div className="modal-drag-handle" />
+        <div className="modal-drag-zone" {...dragHandleProps}>
+          <div className="modal-drag-handle" />
+        </div>
         <div className="modal-header" style={{ marginBottom: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="delete-warning-icon">

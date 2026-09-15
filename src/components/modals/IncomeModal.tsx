@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 export const IncomeModal: React.FC = () => {
   const {
@@ -26,10 +27,19 @@ export const IncomeModal: React.FC = () => {
     e.preventDefault();
     addExtraIncome(incomeDesc, incomeAmount, incomeDate);
   };
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
   return (
-    <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-drag-handle" />
+    <div
+      className="modal-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick(onClose)}
+      onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
+    >
+      <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+        <div className="modal-drag-zone" {...dragHandleProps}>
+          <div className="modal-drag-handle" />
+        </div>
         <div className="modal-title-row">
           <span className="text-h2 font-bold">Registrar Ingreso Extra</span>
           <button id="btn-close-income-modal" className="month-nav-btn modal-close-btn" onClick={onClose}>

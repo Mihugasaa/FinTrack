@@ -32,9 +32,24 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   disabled = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(opt => opt.value === value);
+
+  const handleToggleOpen = () => {
+    if (disabled) return;
+    if (!isOpen) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const DROPDOWN_HEIGHT = 230;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        setOpenUp(spaceBelow < DROPDOWN_HEIGHT && spaceAbove > spaceBelow);
+      }
+    }
+    setIsOpen(prev => !prev);
+  };
 
   // Cerrar al hacer clic fuera
   useEffect(() => {
@@ -77,7 +92,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         type="button"
         id={id ? `${id}-btn` : undefined}
         className={`custom-select-trigger ${isOpen ? 'open' : ''}`}
-        onClick={() => !disabled && setIsOpen(prev => !prev)}
+        onClick={handleToggleOpen}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -115,7 +130,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       </button>
 
       {isOpen && (
-        <div className="custom-select-dropdown" role="listbox">
+        <div className={`custom-select-dropdown ${openUp ? 'open-up' : ''}`} role="listbox">
           <div className="custom-select-dropdown-list">
             {options.map(option => {
               const isSelected = option.value === value;

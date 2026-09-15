@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { Header } from '@/components/layout/Header';
 import { NavigationTabs } from '@/components/layout/NavigationTabs';
@@ -50,6 +51,33 @@ export function DashboardContent() {
     isSalaryModalOpen,
     itemToDelete
   } = useFinance();
+
+  const isAnyModalOpen = Boolean(
+    isExpenseModalOpen ||
+    isAdjustDebitModalOpen ||
+    isEditCardModalOpen ||
+    (isCollectModalOpen && (collectingRec || collectingDebtorGroup)) ||
+    isIncomeModalOpen ||
+    isCardModalOpen ||
+    isPaymentModalOpen ||
+    isReceivableModalOpen ||
+    isPayableModalOpen ||
+    (isPayablePaymentModalOpen && (payingPayable || payingCreditorGroup)) ||
+    isSalaryModalOpen ||
+    itemToDelete
+  );
+
+  // Bloqueo de scroll en segundo plano mientras haya un modal activo
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [isAnyModalOpen]);
 
   return (
     <div className="dashboard-container">

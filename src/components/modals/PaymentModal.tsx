@@ -5,6 +5,7 @@ import { X, CreditCard, Banknote, TrendingUp, DollarSign } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 type PaymentSourceType = 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT';
 
@@ -29,14 +30,19 @@ export const PaymentModal: React.FC = () => {
   const onClose = handleClosePaymentModal;
   const onSubmit = handleMakeCardPayment;
   const isEditing = editingCardPaymentIndex !== null;
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
   return (
     <div
       className="modal-backdrop"
       onMouseDown={handleBackdropMouseDown}
       onClick={handleBackdropClick(onClose)}
+      onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
     >
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-drag-handle" />
+      <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+        <div className="modal-drag-zone" {...dragHandleProps}>
+          <div className="modal-drag-handle" />
+        </div>
         <div className="modal-title-row">
           <span className="text-h2 font-bold">
             {isEditing ? 'Modificar Abono a Tarjeta' : 'Registrar Abono a Tarjeta'}

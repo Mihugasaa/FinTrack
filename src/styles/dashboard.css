@@ -2051,6 +2051,13 @@ html.is-resizing *::after {
   background: var(--bg-subtle);
 }
 
+/* Bloqueo de scroll en segundo plano al abrir modales */
+body.modal-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: none;
+}
+
 /* Modal Adaptativo (Desktop Dialog / Mobile Bottom Sheet) */
 .modal-backdrop, .modal-overlay {
   position: fixed;
@@ -2063,6 +2070,11 @@ html.is-resizing *::after {
   justify-content: center;
   z-index: 1000;
   padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  touch-action: pan-y;
 }
 
 .modal-box {
@@ -2071,15 +2083,50 @@ html.is-resizing *::after {
   border-radius: 16px;
   width: 100%;
   max-width: 530px;
-  padding: 26px 28px;
+  max-height: min(90vh, calc(100dvh - 32px));
+  padding: 22px 26px 26px 26px;
   box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
   animation: fadeIn 0.2s ease;
   position: relative;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar estética y discreta para el interior de modales */
+.modal-box::-webkit-scrollbar {
+  width: 6px;
+}
+.modal-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-box::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 999px;
+}
+.modal-box::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
+}
+
+.modal-drag-zone {
+  display: none;
+  width: 100%;
+  padding: 10px 0 8px 0;
+  margin-top: -12px;
+  margin-bottom: 4px;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  text-align: center;
 }
 
 .modal-drag-handle {
@@ -2104,22 +2151,50 @@ html.is-resizing *::after {
     max-width: 100%;
     border-radius: 20px 20px 0 0;
     border-bottom: none;
-    padding: 16px 20px 36px 20px;
+    padding: 12px 18px 28px 18px;
     animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    max-height: 90vh;
+    max-height: min(92vh, calc(100dvh - 16px));
     overflow-y: auto;
+    margin-bottom: 0;
   }
   @keyframes slideUp {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
   }
+  .modal-drag-zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   .modal-drag-handle {
     display: block;
-    width: 42px;
-    height: 4px;
+    width: 44px;
+    height: 5px;
     border-radius: 9999px;
     background: var(--border-medium);
-    margin: 0 auto 16px auto;
+    margin: 0 auto;
+    transition: background-color 0.15s ease;
+  }
+  .modal-drag-zone:active .modal-drag-handle {
+    background: var(--text-muted);
+  }
+}
+
+@media (max-height: 560px) {
+  .modal-backdrop, .modal-overlay {
+    padding: 8px;
+    align-items: center;
+  }
+  .modal-box {
+    max-height: calc(100dvh - 16px);
+    padding: 14px 18px;
+    border-radius: 12px;
+  }
+  .modal-title-row, .modal-header {
+    margin-bottom: 10px;
+  }
+  .modal-actions {
+    margin-top: 12px;
   }
 }
 
@@ -5291,6 +5366,11 @@ html.is-resizing *::after {
   box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.22), 0 8px 16px -4px rgba(0, 0, 0, 0.1);
   padding: 6px;
   animation: customSelectFadeIn 0.12s ease-out;
+}
+
+.custom-select-dropdown.open-up {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 
 @keyframes customSelectFadeIn {

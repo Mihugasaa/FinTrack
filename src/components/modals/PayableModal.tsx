@@ -7,6 +7,7 @@ import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import { CurrencyCode } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 export const PayableModal: React.FC = () => {
   const {
@@ -43,10 +44,19 @@ export const PayableModal: React.FC = () => {
   };
   const onSubmit = handleCreatePayable;
   const isEditing = !!editingPayableId;
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
   return (
-    <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-drag-handle" />
+    <div
+      className="modal-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick(onClose)}
+      onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
+    >
+      <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+        <div className="modal-drag-zone" {...dragHandleProps}>
+          <div className="modal-drag-handle" />
+        </div>
         <div className="modal-title-row">
           <span className="text-h2 font-bold">{isEditing ? 'Editar Deuda Mía' : 'Registrar Deuda Mía'}</span>
           <button id="btn-close-payable-modal" className="month-nav-btn modal-close-btn" onClick={onClose}>

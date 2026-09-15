@@ -3,6 +3,7 @@
 import React from 'react';
 import { Building2, X, Sparkles } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 export const SalaryModal: React.FC = () => {
   const {
@@ -22,10 +23,19 @@ export const SalaryModal: React.FC = () => {
   } = useFinance();
   const onClose = () => setIsSalaryModalOpen(false);
   const onSubmit = handleSaveSalary;
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
   return (
-    <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-drag-handle" />
+    <div
+      className="modal-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick(onClose)}
+      onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
+    >
+      <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+        <div className="modal-drag-zone" {...dragHandleProps}>
+          <div className="modal-drag-handle" />
+        </div>
         <div className="modal-title-row">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Building2 size={18} color="var(--accent-brand)" />

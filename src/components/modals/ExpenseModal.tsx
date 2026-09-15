@@ -7,6 +7,7 @@ import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { AIIntelligenceService } from '@/services/aiIntelligence.service';
 import { CurrencyCode } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 export const ExpenseModal: React.FC = () => {
   const {
@@ -66,10 +67,19 @@ export const ExpenseModal: React.FC = () => {
   } = useFinance();
   const onClose = () => setIsExpenseModalOpen(false);
   const onSubmit = handleCreateTransaction;
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
   return (
-    <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-drag-handle" />
+    <div
+      className="modal-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick(onClose)}
+      onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
+    >
+      <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+        <div className="modal-drag-zone" {...dragHandleProps}>
+          <div className="modal-drag-handle" />
+        </div>
         <div className="modal-title-row">
           <span className="text-h2 font-bold">
             {editingTransactionId ? 'Modificar Movimiento' : (isRefundMode ? 'Registrar Reembolso' : 'Nuevo Movimiento')}

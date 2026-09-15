@@ -5,6 +5,7 @@ import { X, CreditCard, Wallet, Check } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { CARD_COLOR_PRESETS } from '@/lib/constants';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 export const CardModal: React.FC = () => {
   const {
@@ -36,10 +37,19 @@ export const CardModal: React.FC = () => {
       initialDebt: newCardInitialDebt
     });
   };
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
   return (
-    <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick(onClose)}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-drag-handle" />
+    <div
+      className="modal-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick(onClose)}
+      onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
+    >
+      <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+        <div className="modal-drag-zone" {...dragHandleProps}>
+          <div className="modal-drag-handle" />
+        </div>
         <div className="modal-title-row">
           <span className="text-h2 font-bold">Agregar Tarjeta o Medio de Pago</span>
           <button className="month-nav-btn" onClick={onClose}>

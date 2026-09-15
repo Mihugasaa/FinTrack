@@ -13,6 +13,7 @@ import {
   CheckCheck
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 export const MobileNav: React.FC = () => {
   const {
@@ -30,6 +31,7 @@ export const MobileNav: React.FC = () => {
   const pendingPayablesCount = payables.filter(p => p.remainingAmount > 0).length;
   const totalPendingLoans = pendingReceivablesCount + pendingPayablesCount;
   const anomalyCount = aiAnomalies.length;
+  const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose: () => setIsMoreMenuOpen(false) });
 
   return (
     <>
@@ -96,9 +98,12 @@ export const MobileNav: React.FC = () => {
           className="modal-overlay mobile-only"
           onMouseDown={handleBackdropMouseDown}
           onClick={handleBackdropClick(() => setIsMoreMenuOpen(false))}
+          onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
         >
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <div className="modal-drag-handle" />
+          <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+            <div className="modal-drag-zone" {...dragHandleProps}>
+              <div className="modal-drag-handle" />
+            </div>
             <div className="modal-header">
               <h3 className="modal-title">Más Opciones y Vistas</h3>
               <button className="modal-close-btn" onClick={() => setIsMoreMenuOpen(false)}>

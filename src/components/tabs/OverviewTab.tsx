@@ -208,9 +208,10 @@ export const OverviewTab: React.FC = () => {
               className="btn-adjust-link"
               onClick={() => setIsAdjustDebitModalOpen(true)}
               title="Ajustar o fijar manualmente el saldo inicial de este mes"
-              style={{ marginLeft: '4px' }}
+              style={{ marginLeft: '4px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
             >
-              ✏️ Ajustar Saldo
+              <Pencil size={12} color="var(--text-muted)" />
+              <span>Ajustar Saldo</span>
             </button>
           </div>
         </div>

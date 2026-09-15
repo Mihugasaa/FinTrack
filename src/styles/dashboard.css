@@ -18,13 +18,20 @@ html.is-resizing *::after {
 .dashboard-container {
   max-width: min(1560px, 96vw);
   margin: 0 auto;
-  padding: 24px 28px 60px 28px;
+  /* env(safe-area-inset-top) reserva el espacio de la barra de estado / Dynamic
+     Island cuando la app corre instalada (standalone) con viewport-fit=cover;
+     en navegador vale 0, así que no cambia nada ahí. */
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 28px 60px 28px;
   box-sizing: border-box;
 }
 
 @media (max-width: 768px) {
   .dashboard-container {
-    padding: 16px 16px calc(90px + env(safe-area-inset-bottom, 20px)) 16px;
+    padding:
+      calc(16px + env(safe-area-inset-top, 0px))
+      calc(16px + env(safe-area-inset-right, 0px))
+      calc(90px + env(safe-area-inset-bottom, 20px))
+      calc(16px + env(safe-area-inset-left, 0px));
     overflow-x: hidden;
     max-width: 100vw;
     box-sizing: border-box;
@@ -33,7 +40,11 @@ html.is-resizing *::after {
 
 @media (max-width: 480px) {
   .dashboard-container {
-    padding: 12px 12px calc(90px + env(safe-area-inset-bottom, 20px)) 12px;
+    padding:
+      calc(12px + env(safe-area-inset-top, 0px))
+      calc(12px + env(safe-area-inset-right, 0px))
+      calc(90px + env(safe-area-inset-bottom, 20px))
+      calc(12px + env(safe-area-inset-left, 0px));
     overflow-x: hidden;
     max-width: 100vw;
     box-sizing: border-box;
@@ -2051,11 +2062,12 @@ html.is-resizing *::after {
   background: var(--bg-subtle);
 }
 
-/* Bloqueo de scroll en segundo plano al abrir modales */
+/* Bloqueo de scroll en segundo plano al abrir modales. La posición del body la
+   fija JS (position: fixed + top negativo) para no perder el scroll ni saltar;
+   aquí solo reforzamos que no haya scroll ni rebote de fondo. */
 body.modal-open {
   overflow: hidden !important;
   overscroll-behavior: none !important;
-  touch-action: none;
 }
 
 /* Modal Adaptativo (Desktop Dialog / Mobile Bottom Sheet) */

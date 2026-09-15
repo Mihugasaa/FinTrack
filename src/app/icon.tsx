@@ -1,38 +1,21 @@
 import { ImageResponse } from 'next/og';
+import { brandMarkDataUri } from '@/lib/brandMark';
 
-// Ícono (favicon + PWA): línea verde ascendente (tendencia) detrás de una F blanca
-// centrada, sobre el gradiente morado de la marca. Cuadrado a sangre completa.
+// Ícono (favicon + PWA any/maskable): marca oficial de FinTrack a sangre completa.
+// Cuadrado sin redondear (el SO aplica su propia máscara al instalarlo) y con la
+// marca dentro de la zona segura para que la máscara circular de Android no la corte.
 export const size = { width: 512, height: 512 };
 export const contentType = 'image/png';
-
-const logoSvg =
-  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>" +
-  "<polyline points='60,372 196,318 300,346 452,206' fill='none' stroke='#34d399' stroke-width='40' stroke-linecap='round' stroke-linejoin='round'/>" +
-  "<path d='M 205 385 L 205 145 L 320 145' fill='none' stroke='#ffffff' stroke-width='52' stroke-linecap='round' stroke-linejoin='round'/>" +
-  "<line x1='205' y1='265' x2='295' y2='265' stroke='#ffffff' stroke-width='52' stroke-linecap='round'/>" +
-  "</svg>";
 
 export default function Icon() {
   return new ImageResponse(
     (
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-          borderRadius: '112px',
-          overflow: 'hidden',
-        }}
-      >
+      <div style={{ display: 'flex', width: '100%', height: '100%' }}>
         <img
           width={512}
           height={512}
-          src={`data:image/svg+xml,${encodeURIComponent(logoSvg)}`}
-          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+          src={brandMarkDataUri({ cornerRadius: 0, inset: 48 })}
+          style={{ width: '100%', height: '100%' }}
         />
       </div>
     ),

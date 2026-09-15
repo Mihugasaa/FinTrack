@@ -67,15 +67,36 @@ export function DashboardContent() {
     itemToDelete
   );
 
-  // Bloqueo de scroll en segundo plano mientras haya un modal activo
+  // Bloqueo de scroll en segundo plano mientras haya un modal activo.
+  // Fija el body EXACTAMENTE en su posición de scroll (position: fixed + top
+  // negativo) y la restaura al cerrar. Así el fondo no salta ni se desliza al
+  // abrir el modal, algo que sí pasa con solo overflow:hidden en iOS standalone.
   useEffect(() => {
-    if (isAnyModalOpen) {
-      document.body.classList.add('modal-open');
-    } else {
-      document.body.classList.remove('modal-open');
-    }
+    if (!isAnyModalOpen) return;
+
+    const scrollY = window.scrollY;
+    const { body } = document;
+    // Al fijar el body desaparece la barra de scroll; compensamos su ancho con
+    // padding para que el contenido de escritorio no se corra hacia los lados.
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    body.classList.add('modal-open');
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+
     return () => {
-      document.body.classList.remove('modal-open');
+      body.classList.remove('modal-open');
+      body.style.position = '';
+      body.style.top = '';
+      body.style.left = '';
+      body.style.right = '';
+      body.style.width = '';
+      body.style.paddingRight = '';
+      window.scrollTo(0, scrollY);
     };
   }, [isAnyModalOpen]);
 

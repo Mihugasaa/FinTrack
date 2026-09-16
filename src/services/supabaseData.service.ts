@@ -415,6 +415,25 @@ export class SupabaseDataService {
     }
   }
 
+  // DELETE: Eliminar transacciones en lote (ej. cancelación de suscripciones futuras)
+  public static async deleteTransactions(ids: string[]): Promise<boolean> {
+    if (!supabase || !isSupabaseConfigured) return false;
+    const validIds = ids.filter(id => isUUID(id));
+    if (validIds.length === 0) return false;
+
+    try {
+      const { error } = await supabase.from('transactions').delete().in('id', validIds);
+      if (error) {
+        this.logSupabaseError('deleteTransactions (DELETE in)', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      this.logSupabaseError('deleteTransactions (catch)', e);
+      return false;
+    }
+  }
+
   // ============================================================================
   // 2. MEDIOS DE PAGO Y TARJETAS
   // ============================================================================

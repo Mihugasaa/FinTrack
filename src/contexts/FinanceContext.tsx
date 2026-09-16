@@ -189,6 +189,7 @@ function useFinanceController() {
     paymentMethodName?: string;
     paymentMethodColor?: string;
     isFixed?: boolean;
+    futureOccurrencesCount?: number;
   } | null>(null);
 
   // Evitar cierre accidental de modales al seleccionar texto y soltar fuera
@@ -300,7 +301,8 @@ function useFinanceController() {
     handleScanReceiptFile,
     handleParseNaturalExpense,
     handleCreateTransaction,
-    deleteTransactionById
+    deleteTransactionById,
+    deleteTransactionAndFuture
   } = useTransactions({
     monthKey,
     currentUser,
@@ -1378,6 +1380,17 @@ function useFinanceController() {
   const promptDeleteTransaction = (t: Transaction) => {
     const cat = categories.find(c => c.id === t.categoryId);
     const pm = resolvePaymentMethod(t, paymentMethods);
+    let futureCount = 0;
+    if (t.isFixedSubscription) {
+      const normDesc = t.description.trim().toLowerCase();
+      futureCount = transactions.filter(tx =>
+        tx.id !== t.id &&
+        tx.isFixedSubscription &&
+        tx.description.trim().toLowerCase() === normDesc &&
+        (tx.categoryId === t.categoryId || tx.paymentMethodId === t.paymentMethodId) &&
+        tx.date > t.date
+      ).length;
+    }
     setItemToDelete({
       id: t.id,
       type: 'transaction',
@@ -1388,7 +1401,8 @@ function useFinanceController() {
       categoryName: cat?.name,
       paymentMethodName: pm?.name,
       paymentMethodColor: pm?.color,
-      isFixed: t.isFixedSubscription
+      isFixed: t.isFixedSubscription,
+      futureOccurrencesCount: futureCount
     });
   };
 
@@ -1396,6 +1410,18 @@ function useFinanceController() {
     if (!itemToDelete) return;
     if (itemToDelete.type === 'transaction') {
       deleteTransactionById(itemToDelete.id);
+    } else if (itemToDelete.type === 'income') {
+      deleteExtraIncome(itemToDelete.id);
+    } else if (itemToDelete.type === 'receivable') {
+      deleteReceivable(itemToDelete.id);
+    }
+    setItemToDelete(null);
+  };
+
+  const handleConfirmDeleteFuture = () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.type === 'transaction') {
+      deleteTransactionAndFuture(itemToDelete.id);
     } else if (itemToDelete.type === 'income') {
       deleteExtraIncome(itemToDelete.id);
     } else if (itemToDelete.type === 'receivable') {
@@ -1574,6 +1600,7 @@ function useFinanceController() {
     itemToDelete,
     setItemToDelete,
     handleConfirmDelete,
+    handleConfirmDeleteFuture,
 
     // Backdrop de modales
     handleBackdropMouseDown,
@@ -1669,6 +1696,7 @@ function useFinanceController() {
     handleParseNaturalExpense,
     handleCreateTransaction,
     deleteTransactionById,
+    deleteTransactionAndFuture,
     handleDeleteTransaction,
     promptDeleteTransaction,
 

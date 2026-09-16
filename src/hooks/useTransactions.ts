@@ -560,6 +560,34 @@ export function useTransactions({
     SupabaseDataService.deleteTransaction(id);
   };
 
+  // Elimina una transacción recurrente y todas sus repeticiones futuras a partir de su fecha (local + nube).
+  const deleteTransactionAndFuture = (id: string): string[] => {
+    const baseTx = transactions.find(t => t.id === id);
+    if (!baseTx || !baseTx.isFixedSubscription) {
+      deleteTransactionById(id);
+      return [id];
+    }
+
+    const normDesc = baseTx.description.trim().toLowerCase();
+    // Encontrar todas las transacciones vinculadas a esta suscripción desde esta fecha en adelante
+    const matches = transactions.filter(t =>
+      t.id === baseTx.id ||
+      (
+        t.isFixedSubscription &&
+        t.description.trim().toLowerCase() === normDesc &&
+        (t.categoryId === baseTx.categoryId || t.paymentMethodId === baseTx.paymentMethodId) &&
+        t.date >= baseTx.date
+      )
+    );
+
+    const idsToDelete = matches.map(t => t.id);
+    const idSet = new Set(idsToDelete);
+
+    setTransactions(prev => prev.filter(t => !idSet.has(t.id)));
+    SupabaseDataService.deleteTransactions(idsToDelete);
+    return idsToDelete;
+  };
+
   return {
     transactions,
     setTransactions,
@@ -617,6 +645,7 @@ export function useTransactions({
     handleScanReceiptFile,
     handleParseNaturalExpense,
     handleCreateTransaction,
-    deleteTransactionById
+    deleteTransactionById,
+    deleteTransactionAndFuture
   };
 }

@@ -17,6 +17,7 @@ export interface DeleteConfirmItem {
   paymentMethodName?: string;
   paymentMethodColor?: string;
   isFixed?: boolean;
+  futureOccurrencesCount?: number;
 }
 
 export const DeleteConfirmModal: React.FC = () => {
@@ -24,6 +25,7 @@ export const DeleteConfirmModal: React.FC = () => {
     itemToDelete,
     setItemToDelete,
     handleConfirmDelete,
+    handleConfirmDeleteFuture,
     handleBackdropMouseDown,
     handleBackdropClick,
     formatDisplayDate,
@@ -35,6 +37,9 @@ export const DeleteConfirmModal: React.FC = () => {
 
   if (!itemToDelete) return null;
   const item = itemToDelete;
+  const futureCount = item.futureOccurrencesCount ?? 0;
+  const isRecurringWithFuture = item.type === 'transaction' && !!item.isFixed && futureCount > 0;
+
   return (
     <div
       className="modal-overlay"
@@ -117,28 +122,114 @@ export const DeleteConfirmModal: React.FC = () => {
           </div>
         </div>
 
+        {/* Aviso de repeticiones de suscripción recurrente */}
+        {isRecurringWithFuture && (
+          <div style={{
+            marginTop: '12px',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            background: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-danger)' }}>
+              <Repeat size={13} />
+              <span>Suscripción recurrente detectada</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.775rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+              Existen <strong>{futureCount} {futureCount === 1 ? 'repetición programada' : 'repeticiones programadas'}</strong> en los meses posteriores de este año. Puedes eliminar únicamente el registro de este mes o cancelar la suscripción de este mes en adelante.
+            </p>
+          </div>
+        )}
+
         {/* Botones de Acción */}
-        <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
-          <button
-            id="btn-cancel-delete"
-            type="button"
-            className="btn-secondary"
-            onClick={onClose}
-            style={{ minWidth: '95px' }}
-          >
-            Cancelar
-          </button>
-          <button
-            id="btn-confirm-delete"
-            type="button"
-            className="btn-danger-confirm"
-            onClick={onConfirm}
-            style={{ minWidth: '125px' }}
-          >
-            <Trash2 size={15} />
-            <span>Sí, Eliminar</span>
-          </button>
-        </div>
+        {isRecurringWithFuture ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
+              <button
+                id="btn-confirm-delete-single"
+                type="button"
+                className="btn-secondary"
+                onClick={onConfirm}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '10px 14px',
+                  fontSize: '0.825rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                title="Eliminar únicamente el registro de este mes puntual"
+              >
+                <Trash2 size={14} />
+                <span>Solo este mes</span>
+              </button>
+              <button
+                id="btn-confirm-delete-future"
+                type="button"
+                className="btn-danger-confirm"
+                onClick={handleConfirmDeleteFuture}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '10px 14px',
+                  fontSize: '0.825rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                title="Eliminar este gasto y todas sus repeticiones futuras hasta fin de año"
+              >
+                <Trash2 size={14} />
+                <span>De aquí en adelante ({futureCount + 1} meses)</span>
+              </button>
+            </div>
+            <button
+              id="btn-cancel-delete"
+              type="button"
+              className="btn-secondary"
+              onClick={onClose}
+              style={{
+                alignSelf: 'center',
+                fontSize: '0.8rem',
+                padding: '6px 18px',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer'
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+            <button
+              id="btn-cancel-delete"
+              type="button"
+              className="btn-secondary"
+              onClick={onClose}
+              style={{ minWidth: '95px' }}
+            >
+              Cancelar
+            </button>
+            <button
+              id="btn-confirm-delete"
+              type="button"
+              className="btn-danger-confirm"
+              onClick={onConfirm}
+              style={{ minWidth: '125px' }}
+            >
+              <Trash2 size={15} />
+              <span>Sí, Eliminar</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

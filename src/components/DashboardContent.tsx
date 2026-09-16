@@ -25,6 +25,7 @@ import { CardsTab } from '@/components/tabs/CardsTab';
 import { ReceivablesTab } from '@/components/tabs/ReceivablesTab';
 import { AnalysisTab } from '@/components/tabs/AnalysisTab';
 import { ReconciliationTab } from '@/components/tabs/ReconciliationTab';
+import { OverviewSkeleton } from '@/components/skeletons/OverviewSkeleton';
 
 /**
  * Maquetación del dashboard. Solo decide qué pestaña y qué modales están
@@ -51,7 +52,9 @@ export function DashboardContent() {
     payingCreditorGroup,
     isSalaryModalOpen,
     itemToDelete,
-    reloadData
+    reloadData,
+    isInitialLoading,
+    isRefreshingData
   } = useFinance();
 
   const isAnyModalOpen = Boolean(
@@ -169,6 +172,9 @@ export function DashboardContent() {
           vista. Se desactiva con un modal abierto para no interferir. */}
       <PullToRefresh onRefresh={reloadData} disabled={isAnyModalOpen} />
 
+      {/* Línea luminosa superior durante la recarga en vivo (stale-while-revalidate) */}
+      {isRefreshingData && <div className="refresh-progress-line" aria-hidden="true" />}
+
       {/* 1. HEADER MODULAR CON CONTEXTO TEMPORAL GLOBAL */}
       <Header />
 
@@ -178,27 +184,34 @@ export function DashboardContent() {
       {/* =========================================================================
           CONTENIDO DINÁMICO SEGÚN PESTAÑA MODULAR
           ========================================================================= */}
+      <div className={`tab-content-wrapper ${isRefreshingData ? 'is-refreshing-stale' : ''}`}>
+        {isInitialLoading ? (
+          <OverviewSkeleton />
+        ) : (
+          <>
+            {/* PESTAÑA 1: VISIÓN GENERAL & GRÁFICOS */}
+            {activeTab === 'overview' && <OverviewTab />}
 
-      {/* PESTAÑA 1: VISIÓN GENERAL & GRÁFICOS */}
-      {activeTab === 'overview' && <OverviewTab />}
+            {/* PESTAÑA 2: INGRESOS & SUELDOS */}
+            {activeTab === 'incomes' && <IncomesTab />}
 
-      {/* PESTAÑA 2: INGRESOS & SUELDOS */}
-      {activeTab === 'incomes' && <IncomesTab />}
+            {/* PESTAÑA 3: MOVIMIENTOS COMPLETOS */}
+            {activeTab === 'transactions' && <TransactionsTab />}
 
-      {/* PESTAÑA 3: MOVIMIENTOS COMPLETOS */}
-      {activeTab === 'transactions' && <TransactionsTab />}
+            {/* PESTAÑA 4: CUENTAS & TARJETAS (DÉBITO Y CRÉDITO) */}
+            {activeTab === 'cards' && <CardsTab />}
 
-      {/* PESTAÑA 4: CUENTAS & TARJETAS (DÉBITO Y CRÉDITO) */}
-      {activeTab === 'cards' && <CardsTab />}
+            {/* PESTAÑA 5: PRÉSTAMOS Y DEUDAS */}
+            {activeTab === 'receivables' && <ReceivablesTab />}
 
-      {/* PESTAÑA 5: PRÉSTAMOS Y DEUDAS */}
-      {activeTab === 'receivables' && <ReceivablesTab />}
+            {/* PESTAÑA 6: ANÁLISIS (Mes actual · Tendencia · Proyección) */}
+            {activeTab === 'analysis' && <AnalysisTab />}
 
-      {/* PESTAÑA 6: ANÁLISIS (Mes actual · Tendencia · Proyección) */}
-      {activeTab === 'analysis' && <AnalysisTab />}
-
-      {/* PESTAÑA 7: CONCILIACIÓN BANCARIA INTELIGENTE */}
-      {activeTab === 'reconciliation' && <ReconciliationTab />}
+            {/* PESTAÑA 7: CONCILIACIÓN BANCARIA INTELIGENTE */}
+            {activeTab === 'reconciliation' && <ReconciliationTab />}
+          </>
+        )}
+      </div>
 
       {/* =========================================================================
           MODALES DEL SISTEMA COMPLETO

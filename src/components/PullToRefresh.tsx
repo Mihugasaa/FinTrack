@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 interface PullToRefreshProps {
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<any>;
   disabled?: boolean;
 }
 
@@ -94,15 +94,18 @@ export function PullToRefresh({ onRefresh, disabled = false }: PullToRefreshProp
         refreshingRef.current = true;
         setRefreshing(true);
         setPull(THRESHOLD);
-        onRefreshRef.current();
-        window.setTimeout(() => {
+        
+        const refreshPromise = Promise.resolve(onRefreshRef.current());
+        const minTimerPromise = new Promise(resolve => window.setTimeout(resolve, REFRESH_MS));
+
+        Promise.all([refreshPromise, minTimerPromise]).finally(() => {
           refreshingRef.current = false;
           setRefreshing(false);
           setSettling(true);
           setPull(0);
           distRef.current = 0;
           window.setTimeout(() => setSettling(false), 220);
-        }, REFRESH_MS);
+        });
       } else {
         setSettling(true);
         setPull(0);

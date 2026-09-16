@@ -54,6 +54,10 @@ function useFinanceController() {
   // 1. Tema Claro / Oscuro (Predeterminado: Claro)
   const { theme, toggleTheme } = useTheme();
 
+  // Estados de carga (Esqueleto inicial y Refresco en vivo)
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
+
   // Nonce de recarga: al subir, re-dispara todos los loaders de datos (pull-to-
   // refresh) sin recargar la pagina, conservando mes, pestana y scroll.
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -245,6 +249,39 @@ function useFinanceController() {
     : isPastMonth
     ? getEndOfMonthDate(currentYear, currentMonth)
     : `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
+
+  // Coordinación de fin de carga inicial para ocultar el esqueleto
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let isMounted = true;
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setIsInitialLoading(false);
+    }, 6000);
+
+    Promise.allSettled([
+      SupabaseDataService.getPaymentMethods(),
+      SupabaseDataService.getReceivables(),
+      SupabaseDataService.getPayables(),
+      SupabaseDataService.getCategories(),
+      SupabaseDataService.getTransactions(monthKey),
+      SupabaseDataService.getOtherIncomes(monthKey),
+      SupabaseDataService.getMonthlyPeriod(currentYear, currentMonth),
+      SupabaseDataService.getCardPayments(monthKey)
+    ]).then(() => {
+      if (isMounted) {
+        clearTimeout(safetyTimer);
+        setTimeout(() => {
+          if (isMounted) setIsInitialLoading(false);
+        }, 120);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+    };
+  }, [currentUser, monthKey, currentYear, currentMonth]);
 
   // Transacciones: estado maestro, carga/sync del mes, formulario de gasto e IA
   const {
@@ -630,9 +667,29 @@ function useFinanceController() {
   // Recarga de datos desde la nube (pull-to-refresh) SIN recargar la pagina:
   // reinicia el guard del historial y sube el nonce para re-disparar los loaders.
   // Conserva mes seleccionado, pestana activa y posicion de scroll.
-  const reloadData = () => {
+  const reloadData = async () => {
+    setIsRefreshingData(true);
     didLoadAllHistoryRef.current = false;
     setReloadNonce(n => n + 1);
+
+    try {
+      await Promise.allSettled([
+        SupabaseDataService.getPaymentMethods(),
+        SupabaseDataService.getReceivables(),
+        SupabaseDataService.getPayables(),
+        SupabaseDataService.getCategories(),
+        SupabaseDataService.getTransactions(monthKey),
+        SupabaseDataService.getOtherIncomes(monthKey),
+        SupabaseDataService.getMonthlyPeriod(currentYear, currentMonth),
+        SupabaseDataService.getCardPayments(monthKey),
+        SupabaseDataService.getAllTransactions(),
+        SupabaseDataService.getAllOtherIncomes(),
+        SupabaseDataService.getAllCardPayments(),
+        SupabaseDataService.getAllMonthlyPeriods()
+      ]);
+    } finally {
+      setIsRefreshingData(false);
+    }
   };
 
   // ==============================================================================
@@ -1532,8 +1589,10 @@ function useFinanceController() {
     currentUser,
     handleLogout,
 
-    // Recarga de datos (pull-to-refresh)
+    // Recarga de datos (pull-to-refresh) y estados de carga
     reloadData,
+    isInitialLoading,
+    isRefreshingData,
 
     // Tema
     theme,

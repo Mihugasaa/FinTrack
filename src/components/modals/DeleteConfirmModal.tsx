@@ -68,7 +68,7 @@ export const DeleteConfirmModal: React.FC = () => {
                 ¿Eliminar este {item.type === 'transaction' ? 'gasto' : item.type === 'income' ? 'ingreso' : 'préstamo'}?
               </h2>
               <p style={{ margin: '3px 0 0 0', fontSize: '0.775rem', color: 'var(--text-muted)' }}>
-                Esta acción no se puede deshacer y se actualizará en la base de datos.
+                Esta acción no se puede deshacer.
               </p>
             </div>
           </div>
@@ -136,10 +136,10 @@ export const DeleteConfirmModal: React.FC = () => {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-danger)' }}>
               <Repeat size={13} />
-              <span>Suscripción recurrente detectada</span>
+              <span>Gasto recurrente detectado</span>
             </div>
             <p style={{ margin: 0, fontSize: '0.775rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-              Existen <strong>{futureCount} {futureCount === 1 ? 'repetición programada' : 'repeticiones programadas'}</strong> en los meses posteriores de este año. Puedes eliminar únicamente el registro de este mes o cancelar la suscripción de este mes en adelante.
+              Existen pagos programados en los meses posteriores. Puedes eliminar únicamente el registro de este mes o cancelar los pagos de este mes en adelante.
             </p>
           </div>
         )}
@@ -183,10 +183,10 @@ export const DeleteConfirmModal: React.FC = () => {
                   fontWeight: 600,
                   cursor: 'pointer'
                 }}
-                title="Eliminar este gasto y todas sus repeticiones futuras hasta fin de año"
+                title="Eliminar este gasto y todas sus repeticiones futuras"
               >
                 <Trash2 size={14} />
-                <span>De aquí en adelante ({futureCount + 1} meses)</span>
+                <span>De aquí en adelante</span>
               </button>
             </div>
             <button

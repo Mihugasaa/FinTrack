@@ -40,9 +40,17 @@ export function PullToRefresh({ onRefresh, disabled = false }: PullToRefreshProp
   useEffect(() => {
     if (disabled) return;
 
+    const getScrollTop = () => {
+      return Math.max(
+        window.scrollY || 0,
+        document.documentElement.scrollTop || 0,
+        document.body.scrollTop || 0
+      );
+    };
+
     const onStart = (e: TouchEvent) => {
       if (refreshingRef.current) return;
-      if (e.touches.length !== 1 || window.scrollY > 0) {
+      if (e.touches.length !== 1 || getScrollTop() > 3) {
         tracking.current = false;
         return;
       }
@@ -61,7 +69,7 @@ export function PullToRefresh({ onRefresh, disabled = false }: PullToRefreshProp
       if (!active.current) {
         // Aun decidiendo: si ya no estamos arriba, si va hacia arriba o si el
         // gesto es mas horizontal que vertical, soltamos (es scroll o swipe).
-        if (window.scrollY > 0 || Math.abs(dx) > Math.abs(dy) || dy < -4) {
+        if (getScrollTop() > 3 || Math.abs(dx) > Math.abs(dy) || dy < -4) {
           tracking.current = false;
           return;
         }

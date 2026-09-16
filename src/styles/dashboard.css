@@ -147,6 +147,17 @@ html.is-resizing *::after {
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.brand-section:hover {
+  opacity: 0.85;
+}
+
+.brand-section:active {
+  transform: scale(0.98);
 }
 
 .brand-logo-mark {

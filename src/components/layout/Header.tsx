@@ -33,7 +33,8 @@ export const Header: React.FC = () => {
     toggleTheme,
     currentUser,
     handleLogout,
-    formatSoles
+    formatSoles,
+    setActiveTab
   } = useFinance();
   const currentDebitBalance = isCurrentActiveMonth
     ? debitStats.currentDebitBalanceToday
@@ -42,7 +43,20 @@ export const Header: React.FC = () => {
     <header className="dashboard-header">
       {/* Grupo Izquierdo: Logotipo y Contexto Temporal Global */}
       <div className="header-left-group">
-        <div className="brand-section" title="FinTrack">
+        <div
+          id="brand-logo-btn"
+          className="brand-section"
+          title="Ir a Visión General"
+          role="button"
+          tabIndex={0}
+          onClick={() => setActiveTab('overview')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setActiveTab('overview');
+            }
+          }}
+        >
           <FinTrackLogo size={34} />
           <span className="brand-text-title">FinTrack</span>
         </div>

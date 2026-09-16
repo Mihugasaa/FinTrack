@@ -131,7 +131,7 @@ export const OverviewTab: React.FC = () => {
           <div className="zen-tag-row">
             <span className="zen-tag-pill">
               {isCurrentActiveMonth
-                ? 'Dinero Real Disponible'
+                ? 'Dinero Disponible'
                 : isPastMonth
                 ? `Cierre Cuenta Débito (${monthNames[currentMonth]} ${currentYear})`
                 : `Proyección Cuenta Débito (${monthNames[currentMonth]} ${currentYear})`}

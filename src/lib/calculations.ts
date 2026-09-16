@@ -85,6 +85,33 @@ export interface DueDateDetail {
 }
 
 /**
+ * Retorna la cantidad real de días en un mes específico (1-12) y año dado
+ * Ej: Febrero 2026 -> 28, Febrero 2024 -> 29, Abril -> 30, Enero -> 31
+ */
+export function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+/**
+ * Ajusta un día objetivo (ej. 29, 30, 31) al número máximo de días del mes.
+ * Si el usuario programó el día 31 y el mes tiene 28, retorna 28.
+ */
+export function getEffectiveDayOfMonth(year: number, month: number, targetDay: number): number {
+  const maxDays = getDaysInMonth(year, month);
+  return Math.max(1, Math.min(targetDay, maxDays));
+}
+
+/**
+ * Devuelve la fecha ISO exacta del último día del mes: YYYY-MM-DD
+ */
+export function getEndOfMonthDate(year: number, month: number): string {
+  const maxDays = getDaysInMonth(year, month);
+  const mStr = month.toString().padStart(2, '0');
+  const dStr = maxDays.toString().padStart(2, '0');
+  return `${year}-${mStr}-${dStr}`;
+}
+
+/**
  * Convierte cualquier fecha (YYYY-MM-DD o ISO timestamp) al formato legible DD/MM/YYYY
  */
 export function formatDisplayDate(dateStr?: string | null, fallback: string = 'Sin fecha'): string {
@@ -128,14 +155,17 @@ export function calculatePaymentDueDate(
   const month = parseInt(mStr, 10); // 1-12
   const day = parseInt(dStr, 10);
 
+  const daysInCurrentMonth = getDaysInMonth(year, month);
   const corte = method.billingCloseDay;
+  // En meses cortos (ej. febrero), el corte no puede exceder el fin de mes
+  const effectiveCorte = Math.min(corte, daysInCurrentMonth);
   const pago = method.paymentDueDay || corte;
 
   // 1. Determinar fecha de cierre de facturación
   let cierreYear = year;
   let cierreMonth = month;
 
-  if (day > corte) {
+  if (day > effectiveCorte) {
     // Si la compra fue después del corte, entra en el ciclo del mes siguiente
     cierreMonth += 1;
     if (cierreMonth > 12) {
@@ -158,7 +188,7 @@ export function calculatePaymentDueDate(
   }
 
   // Ajustar si el día excede el fin de mes (ej. día 30 en febrero)
-  const daysInDueMonth = new Date(dueYear, dueMonth, 0).getDate();
+  const daysInDueMonth = getDaysInMonth(dueYear, dueMonth);
   const finalDay = Math.min(pago, daysInDueMonth);
 
   const finalMonthStr = dueMonth.toString().padStart(2, '0');
@@ -231,10 +261,23 @@ export function getBestCardRecommendation(
     const diffTime = dueDate.getTime() - referenceDate.getTime();
     const creditDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
-    // Días hasta el próximo corte
-    let closeDateThisMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), card.billingCloseDay);
-    if (referenceDate.getDate() > (card.billingCloseDay || 0)) {
-      closeDateThisMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, card.billingCloseDay);
+    // Días hasta el próximo corte evitando desbordamiento de fin de mes en JS
+    const curYear = referenceDate.getFullYear();
+    const curMonth = referenceDate.getMonth(); // 0-11
+    const daysThisMonth = getDaysInMonth(curYear, curMonth + 1);
+    const effCloseDayThisMonth = Math.min(card.billingCloseDay || 1, daysThisMonth);
+
+    let closeDateThisMonth = new Date(curYear, curMonth, effCloseDayThisMonth);
+    if (referenceDate.getDate() > effCloseDayThisMonth) {
+      let nextMonthYear = curYear;
+      let nextMonth = curMonth + 1;
+      if (nextMonth > 11) {
+        nextMonth = 0;
+        nextMonthYear += 1;
+      }
+      const daysNextMonth = getDaysInMonth(nextMonthYear, nextMonth + 1);
+      const effCloseDayNextMonth = Math.min(card.billingCloseDay || 1, daysNextMonth);
+      closeDateThisMonth = new Date(nextMonthYear, nextMonth, effCloseDayNextMonth);
     }
     const daysUntilClose = Math.max(0, Math.ceil((closeDateThisMonth.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)));
 
@@ -313,15 +356,17 @@ export function calculateCurrentDebitBalance(
 ): DebitBalanceResult {
   const currentDay = parseInt(currentDateStr.split('-')[2], 10);
   const targetYM = currentDateStr.substring(0, 7);
+  const [targetYear, targetMonth] = targetYM.split('-').map(Number);
 
-  // 1. Sueldos
+  // 1. Sueldos: se acota el día de abono a los días reales del mes consultado
   let salariesReceivedToday = 0;
   let salariesPending = 0;
   const primarySalary = salaries[0] || { amount: 2126.49, payDay: 30 };
-  const salaryPayDay = primarySalary.payDay || 30;
+  const salaryPayDay = getEffectiveDayOfMonth(targetYear, targetMonth, primarySalary.payDay || 30);
 
   salaries.forEach(sal => {
-    if (currentDay >= sal.payDay) {
+    const effectivePayDay = getEffectiveDayOfMonth(targetYear, targetMonth, sal.payDay);
+    if (currentDay >= effectivePayDay) {
       salariesReceivedToday += sal.amount;
     } else {
       salariesPending += sal.amount;
@@ -569,7 +614,9 @@ export function computeMonthlyDebitChain(params: {
     const initial = hasOverride ? overrides[key] : carry;
 
     const salaryAmt = monthlySalaries[key] || currentSalaryTotal;
-    const salariesArr = [{ id: 'chain-salary', source: 'salary', amount: salaryAmt, payDay: primaryPayDay }];
+    const effectivePayDay = getEffectiveDayOfMonth(y, m, primaryPayDay);
+    const salariesArr = [{ id: 'chain-salary', source: 'salary', amount: salaryAmt, payDay: effectivePayDay }];
+    const endOfMonthDate = getEndOfMonthDate(y, m);
 
     const res = calculateCurrentDebitBalance(
       initial,
@@ -579,7 +626,7 @@ export function computeMonthlyDebitChain(params: {
       txByMonth.get(key) || [],
       debitMethodIds,
       cardByMonth.get(key) || 0,
-      `${key}-31`,
+      endOfMonthDate,
       payables
     );
 
@@ -871,17 +918,37 @@ export function calculateCardsDebtSummary(
     const creditBalanceAmount = hasPositiveBalance ? Math.abs(netBalance) : 0;
     const totalAccumulatedDebt = Math.max(0, netBalance);
 
-    // Días hasta corte y pago
-    let closeDate = new Date(currentYear, currentMonth - 1, card.billingCloseDay || 1);
-    if (now.getDate() > (card.billingCloseDay || 1)) {
-      closeDate = new Date(currentYear, currentMonth, card.billingCloseDay || 1);
+    // Días hasta corte y pago evitando desbordamiento de mes en JS
+    const daysInCurMonth = getDaysInMonth(currentYear, currentMonth);
+    const effCloseDay = Math.min(card.billingCloseDay || 1, daysInCurMonth);
+
+    let nextCloseYear = currentYear;
+    let nextCloseMonth = currentMonth; // 1-12
+    if (now.getDate() > effCloseDay) {
+      nextCloseMonth += 1;
+      if (nextCloseMonth > 12) {
+        nextCloseMonth = 1;
+        nextCloseYear += 1;
+      }
     }
+    const daysInCloseMonth = getDaysInMonth(nextCloseYear, nextCloseMonth);
+    const finalCloseDay = Math.min(card.billingCloseDay || 1, daysInCloseMonth);
+    const closeDate = new Date(nextCloseYear, nextCloseMonth - 1, finalCloseDay);
     const daysUntilClose = Math.max(0, Math.ceil((closeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 
-    let paymentDate = new Date(currentYear, currentMonth - 1, card.paymentDueDay || 1);
-    if (now.getDate() > (card.paymentDueDay || 1)) {
-      paymentDate = new Date(currentYear, currentMonth, card.paymentDueDay || 1);
+    const effPayDay = Math.min(card.paymentDueDay || 1, daysInCurMonth);
+    let nextPayYear = currentYear;
+    let nextPayMonth = currentMonth;
+    if (now.getDate() > effPayDay) {
+      nextPayMonth += 1;
+      if (nextPayMonth > 12) {
+        nextPayMonth = 1;
+        nextPayYear += 1;
+      }
     }
+    const daysInPayMonth = getDaysInMonth(nextPayYear, nextPayMonth);
+    const finalPayDay = Math.min(card.paymentDueDay || 1, daysInPayMonth);
+    const paymentDate = new Date(nextPayYear, nextPayMonth - 1, finalPayDay);
     const daysUntilPayment = Math.max(0, Math.ceil((paymentDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 
     const dueDateStr = calculatePaymentDueDate(todayStr, card);
@@ -978,8 +1045,7 @@ export function generateInstallmentTransactions(
 
   for (let i = 1; i <= totalInstallments; i++) {
     const monthStr = currentMonth.toString().padStart(2, '0');
-    const maxDays = new Date(currentYear, currentMonth, 0).getDate();
-    const actualDay = Math.min(day, maxDays).toString().padStart(2, '0');
+    const actualDay = getEffectiveDayOfMonth(currentYear, currentMonth, day).toString().padStart(2, '0');
     const txDate = `${currentYear}-${monthStr}-${actualDay}`;
 
     // Calcular la fecha de pago bancaria según el ciclo de la tarjeta

@@ -5,6 +5,7 @@ import { SupabaseDataService } from '@/services/supabaseData.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { generateUUID } from '@/lib/utils';
+import { getEffectiveDayOfMonth } from '@/lib/calculations';
 import { Payable, PayablePayment, CreditorGroup, OtherIncome, CurrencyCode } from '@/types';
 
 interface UsePayablesDeps {
@@ -344,7 +345,10 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
     setPayablePaymentAmount('');
     setPayablePaymentNotes('');
     const now = new Date();
-    setPayablePaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`);
+    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
+    const targetDay = isCurrentActiveMonth ? now.getDate() : 1;
+    const safeDay = getEffectiveDayOfMonth(currentYear, currentMonth, targetDay).toString().padStart(2, '0');
+    setPayablePaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${safeDay}`);
     setIsPayablePaymentModalOpen(true);
   };
 
@@ -407,7 +411,10 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
     setPayablePaymentAmount('');
     setPayablePaymentNotes('');
     const now = new Date();
-    setPayablePaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`);
+    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
+    const targetDay = isCurrentActiveMonth ? now.getDate() : 1;
+    const safeDay = getEffectiveDayOfMonth(currentYear, currentMonth, targetDay).toString().padStart(2, '0');
+    setPayablePaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${safeDay}`);
     setIsPayablePaymentModalOpen(true);
   };
 

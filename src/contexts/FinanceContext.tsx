@@ -28,7 +28,9 @@ import {
   getReceivableCollectionMonth,
   computeFinancialHealthScore,
   formatDisplayDate,
-  formatSoles
+  formatSoles,
+  getEffectiveDayOfMonth,
+  getEndOfMonthDate
 } from '@/lib/calculations';
 import {
   Transaction,
@@ -241,7 +243,7 @@ function useFinanceController() {
   const currentDateStr = isCurrentActiveMonth
     ? `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`
     : isPastMonth
-    ? `${currentYear}-${currentMonth.toString().padStart(2, '0')}-31`
+    ? getEndOfMonthDate(currentYear, currentMonth)
     : `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
 
   // Transacciones: estado maestro, carga/sync del mes, formulario de gasto e IA
@@ -1193,8 +1195,10 @@ function useFinanceController() {
 
     // 3. Ingresos del mes (Sueldos e Ingresos Extras)
     if (txTypeFilter === 'ALL' || txTypeFilter === 'INCOMES') {
+      const [y, m] = monthKey.split('-').map(Number);
       salaries.forEach(sal => {
-        const salDate = `${monthKey}-${sal.payDay.toString().padStart(2, '0')}`;
+        const effectivePayDay = getEffectiveDayOfMonth(y, m, sal.payDay);
+        const salDate = `${monthKey}-${effectivePayDay.toString().padStart(2, '0')}`;
         const searchMatches = !searchQuery || `sueldo ${sal.source}`.toLowerCase().includes(searchQuery.toLowerCase());
         if (searchMatches && selectedCategory === 'ALL' && selectedPaymentMethod === 'ALL') {
           items.push({

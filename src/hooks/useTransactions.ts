@@ -9,7 +9,9 @@ import { generateUUID, deduplicateTransactions, resolvePaymentMethod } from '@/l
 import {
   calculatePaymentDueDate,
   calculatePaymentDueDateDetail,
-  generateInstallmentTransactions
+  generateInstallmentTransactions,
+  getDaysInMonth,
+  getEffectiveDayOfMonth
 } from '@/lib/calculations';
 import { initialCategories } from '@/lib/defaults';
 import { FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
@@ -514,13 +516,23 @@ export function useTransactions({
 
       const newTxs: Transaction[] = [newTx];
 
-      // Si el usuario marcó 'Gasto fijo recurrente', replicar automáticamente en los meses siguientes de este año
+      // Si el usuario marcó 'Gasto fijo recurrente', replicar automáticamente en los siguientes 11 meses (ciclo anual completo)
       if (isRecurring) {
         const [y, m, d] = txDate.split('-').map(Number);
-        for (let nextM = m + 1; nextM <= 12; nextM++) {
-          const daysInNextM = new Date(y, nextM, 0).getDate();
-          const nextDay = Math.min(d, daysInNextM);
-          const nextDateStr = `${y}-${nextM.toString().padStart(2, '0')}-${nextDay.toString().padStart(2, '0')}`;
+        // El día ancla es el día numérico exacto de registro (ej. 28 siempre se mantiene en 28).
+        // Solo si el usuario registró en días 29, 30 o 31, actúa el ajuste en meses más cortos (ej. 31 -> 30 o 28).
+        const targetDay = d;
+
+        let curY = y;
+        let curM = m;
+        for (let i = 1; i <= 11; i++) {
+          curM += 1;
+          if (curM > 12) {
+            curM = 1;
+            curY += 1;
+          }
+          const nextDay = getEffectiveDayOfMonth(curY, curM, targetDay);
+          const nextDateStr = `${curY}-${curM.toString().padStart(2, '0')}-${nextDay.toString().padStart(2, '0')}`;
           const nextDueDate = calculatePaymentDueDate(nextDateStr, method);
           const recTx: Transaction = {
             ...newTx,

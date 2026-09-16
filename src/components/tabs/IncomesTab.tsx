@@ -10,6 +10,7 @@ import {
   PieChart
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
+import { getEffectiveDayOfMonth } from '@/lib/calculations';
 
 export const IncomesTab: React.FC = () => {
   const {
@@ -165,7 +166,7 @@ export const IncomesTab: React.FC = () => {
                         <span className="badge badge-success">Acreditado</span>
                       ) : (
                         <span className="badge badge-warning">
-                          Se abona {sal.payDay}/{currentMonth.toString().padStart(2, '0')}
+                          Se abona {getEffectiveDayOfMonth(currentYear, currentMonth, sal.payDay)}/{currentMonth.toString().padStart(2, '0')}
                         </span>
                       )}
                       <button

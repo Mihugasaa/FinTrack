@@ -6,7 +6,7 @@ import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { generateUUID } from '@/lib/utils';
 import { getEffectiveDayOfMonth } from '@/lib/calculations';
-import { Payable, PayablePayment, CreditorGroup, OtherIncome, CurrencyCode } from '@/types';
+import { Payable, PayablePayment, CreditorGroup, OtherIncome, CurrencyCode, DebtConfirmData } from '@/types';
 
 interface UsePayablesDeps {
   currentYear: number;
@@ -14,6 +14,7 @@ interface UsePayablesDeps {
   // Acredita a débito el ingreso generado cuando una deuda se marca "abonada a
   // cuenta débito"; lo provee el dominio de ingresos (useIncomes.creditLoanIncome).
   onCreditToDebit: (income: OtherIncome, date: string) => void;
+  setDebtConfirmData?: (data: DebtConfirmData | null) => void;
 }
 
 /**
@@ -23,7 +24,7 @@ interface UsePayablesDeps {
  * sobre todas las deudas de un acreedor—. La carga inicial desde Supabase vive en
  * el efecto de montaje de la página, que reusa setPayables.
  */
-export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UsePayablesDeps) {
+export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDebtConfirmData }: UsePayablesDeps) {
   const [payables, setPayables] = useState<Payable[]>([]);
 
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
@@ -418,12 +419,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
     setIsPayablePaymentModalOpen(true);
   };
 
-  const handlePayPayable = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!payablePaymentAmount) return;
-    const num = parseFloat(payablePaymentAmount);
-    if (isNaN(num) || num <= 0) return;
-
+  const executePayPayable = (num: number) => {
     if (payingCreditorGroup) {
       handleCascadePay(payingCreditorGroup.creditorName, num, payablePaymentDate, payablePaymentNotes);
       setIsPayablePaymentModalOpen(false);
@@ -468,6 +464,49 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit }: UseP
       setPayablePaymentAmount('');
       setPayablePaymentNotes('');
     }
+  };
+
+  const handlePayPayable = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payablePaymentAmount) return;
+    const num = parseFloat(payablePaymentAmount);
+    if (isNaN(num) || num <= 0) return;
+
+    if (setDebtConfirmData) {
+      const isUsd = payingPayable?.currency === 'USD' || (!!payingCreditorGroup?.hasUsd && !!payingCreditorGroup?.isPureUsd);
+      const rawRem = payingPayable
+        ? ((isUsd && payingPayable.originalAmount && payingPayable.remainingAmount > payingPayable.originalAmount)
+            ? Math.max(0, payingPayable.originalAmount - (payingPayable.paidAmount ?? 0))
+            : (payingPayable.remainingAmount || 0))
+        : (isUsd ? (payingCreditorGroup?.totalRemainingUsd || 0) : (payingCreditorGroup?.totalRemaining || 0));
+      const exRate = payingPayable?.exchangeRate || FALLBACK_USD_PEN_RATE;
+      const party = payingCreditorGroup ? payingCreditorGroup.creditorName : (payingPayable?.creditorName || 'Acreedor');
+      const desc = payingCreditorGroup
+        ? `Abono consolidado para ${payingCreditorGroup.items.length} ${payingCreditorGroup.items.length === 1 ? 'compromiso' : 'compromisos acumulados'}`
+        : (payingPayable?.description || 'Amortización de deuda');
+
+      setDebtConfirmData({
+        type: 'payable',
+        title: payingCreditorGroup ? 'Abono a Deuda Consolidada' : 'Amortización de Deuda',
+        partyName: party,
+        description: desc,
+        amount: num,
+        currency: isUsd ? 'USD' : 'PEN',
+        exchangeRate: exRate,
+        amountPen: isUsd ? num * exRate : num,
+        date: payablePaymentDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`,
+        currentRemaining: rawRem,
+        newRemaining: Math.max(0, rawRem - num),
+        notes: payablePaymentNotes || undefined,
+        onConfirm: () => {
+          executePayPayable(num);
+          setDebtConfirmData(null);
+        }
+      });
+      return;
+    }
+
+    executePayPayable(num);
   };
 
   const handleDeletePayable = (payableId: string) => {

@@ -1,4 +1,4 @@
-import { PaymentMethod, Transaction, MonthlyBudget, Receivable, LiquidityDiagnostic, CardDebtSummary, OtherIncome, Payable } from '@/types';
+import { PaymentMethod, Transaction, MonthlyBudget, Receivable, LiquidityDiagnostic, CardDebtSummary, OtherIncome, Payable, CardPayment } from '@/types';
 import { FALLBACK_USD_PEN_RATE } from './constants';
 
 /**
@@ -335,6 +335,7 @@ export interface DebitBalanceResult {
   debitExpenses: number;
   cardPaymentsPaidMonth: number;
   paidToCreditorsToday?: number;
+  paidToCreditorsMonth?: number;
   borrowedCreditedToDebitToday?: number;
 }
 
@@ -472,6 +473,7 @@ export function calculateCurrentDebitBalance(
     debitExpenses: debitExpensesTotalMonth,
     cardPaymentsPaidMonth: cardPaymentsThisMonthTotal,
     paidToCreditorsToday,
+    paidToCreditorsMonth,
     borrowedCreditedToDebitToday
   };
 }
@@ -575,7 +577,9 @@ export function computeMonthlyDebitChain(params: {
     if (!isMonthKey(k)) return;
     const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
     const pen = p.currency === 'USD' ? rem * (p.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
-    scheduledDueByMonth.set(k, (scheduledDueByMonth.get(k) || 0) + Math.max(0, pen));
+    // Si la deuda venció antes del mes en curso y sigue impaga, es un compromiso exigible hoy
+    const targetKey = k < realTodayKey ? realTodayKey : k;
+    scheduledDueByMonth.set(targetKey, (scheduledDueByMonth.get(targetKey) || 0) + Math.max(0, pen));
   });
 
   const recByMonth = new Map<string, Receivable[]>();
@@ -653,13 +657,26 @@ export function computeMonthlyDebitChain(params: {
 
 /**
  * Diagnóstico de Liquidez Mensual ("¿Puedo cubrir este mes?")
+ *
+ * Mide la capacidad de pago del mes unificando todos los flujos de caja reales y
+ * compromisos bancarios:
+ * - Entradas: saldo inicial + sueldos + otros ingresos + cobranzas + préstamos recibidos a débito.
+ * - Salidas ejecutadas: gastos en débito/efectivo + abonos a tarjeta + pagos a acreedores efectuados este mes.
+ * - Compromisos por vencer: cuotas de tarjeta pendientes del mes + deudas propias programadas por vencer.
+ *
+ * Conserva la invariancia contable: pagar una deuda anticipadamente dentro del mismo mes
+ * transfiere el saldo de "compromiso pendiente" a "salida pagada", manteniendo el
+ * Margen de fin de mes exactamente inalterado.
  */
 export function calculateMonthlyDiagnostic(
   budget: MonthlyBudget,
   transactions: Transaction[],
   receivables: Receivable[],
   allTransactions: Transaction[],
-  payables: Payable[] = []
+  payables: Payable[] = [],
+  cardPayments: CardPayment[] = [],
+  paymentMethods: PaymentMethod[] = [],
+  isPastMonth: boolean = false
 ): LiquidityDiagnostic {
   const targetYearMonth = `${budget.year}-${budget.month.toString().padStart(2, '0')}`;
 
@@ -692,26 +709,71 @@ export function calculateMonthlyDiagnostic(
   // 5. Total disponible en cuenta (incluye préstamos acreditados a débito)
   const totalAvailable = budget.initialDebitBalance + totalIncome + collectedReceivables + borrowedToDebit;
 
-  // 6. Salida Real de Dinero del Mes:
-  // Todos los pagos cuya FECHA DE PAGO calculada cae en este año y mes (descontando
-  // reembolsos). Incluye los vencimientos bancarios de tarjeta que caen este mes.
-  const realCashOutflow = allTransactions
-    .filter(t => t.paymentDueDate.startsWith(targetYearMonth))
-    .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
+  // 6.a Amortizaciones pagadas a acreedores en este mes (salida de caja real ejecutada):
+  let paidPayablesThisMonth = 0;
+  payables.forEach(p => {
+    const isUsd = p.currency === 'USD';
+    const exRate = p.exchangeRate || FALLBACK_USD_PEN_RATE;
+    (p.payments || []).forEach(pay => {
+      if ((pay.paymentDate || '').startsWith(targetYearMonth)) {
+        const amt = pay.amountPaid || pay.amount || 0;
+        paidPayablesThisMonth += isUsd ? amt * exRate : amt;
+      }
+    });
+  });
 
-  // 6.b Deudas propias con vencimiento programado este mes y saldo pendiente: son
-  // una salida de caja comprometida (aunque aún no la hayas pagado).
+  // 6.b Deudas propias pendientes con vencimiento este mes (o vencidas impagas de meses previos si no es mes cerrado):
   const scheduledPayablesDue = payables
-    .filter(p => (p.dueDate || '').startsWith(targetYearMonth) && p.status !== 'PAID')
+    .filter(p => {
+      if (p.status === 'PAID') return false;
+      const due = (p.dueDate || '');
+      if (due.startsWith(targetYearMonth)) return true;
+      if (!isPastMonth && due.length >= 7 && due < targetYearMonth) return true;
+      return false;
+    })
     .reduce((acc, p) => {
       const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
       const pen = p.currency === 'USD' ? rem * (p.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
       return acc + Math.max(0, pen);
     }, 0);
 
-  // 7. Margen de Liquidez = disponible - vencimientos del mes (tarjetas + débito) -
-  // deudas propias programadas para este mes.
-  const liquidityMargin = totalAvailable - realCashOutflow - scheduledPayablesDue;
+  // 6.c Salidas de tarjeta de crédito y gastos débito:
+  const creditCardIds = paymentMethods.filter(p => p.type === 'credit').map(p => p.id);
+  let debitExpensesThisMonth = 0;
+  let cardOutflowThisMonth = 0;
+
+  if (paymentMethods.length > 0) {
+    // Gastos pagados con débito o efectivo en el mes
+    debitExpensesThisMonth = transactions
+      .filter(t => !creditCardIds.includes(t.paymentMethodId))
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
+
+    // Abonos pagados a tarjeta en el mes (excluyendo reembolsos de banco o comercio)
+    const cardPaymentsTotal = cardPayments
+      .filter(p => p.paymentDate.startsWith(targetYearMonth) && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT')
+      .reduce((acc, curr) => acc + curr.amountPaid, 0);
+
+    // Vencimientos de tarjeta este mes (netos de reembolsos)
+    const cardBillsDue = allTransactions
+      .filter(t => creditCardIds.includes(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYearMonth))
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
+
+    // En mes cerrado manda lo efectivamente abonado. En mes en curso/futuro manda el mayor entre lo abonado y lo que vence
+    cardOutflowThisMonth = isPastMonth
+      ? cardPaymentsTotal
+      : Math.max(cardPaymentsTotal, Math.max(0, cardBillsDue));
+  } else {
+    // Fallback si no se pasan paymentMethods: usa cálculo por vencimiento de allTransactions
+    cardOutflowThisMonth = allTransactions
+      .filter(t => t.paymentDueDate.startsWith(targetYearMonth))
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
+  }
+
+  // Salida total de caja del mes (incluye pagos ya realizados a acreedores):
+  const realCashOutflow = debitExpensesThisMonth + cardOutflowThisMonth + paidPayablesThisMonth;
+
+  // 7. Margen de Liquidez = disponible - salidas del mes (débito + tarjetas + deudas pagadas) - deudas pendientes programadas
+  const liquidityMargin = Math.round((totalAvailable - realCashOutflow - scheduledPayablesDue) * 100) / 100;
   const isPositive = liquidityMargin >= 0;
 
   const statusText = isPositive
@@ -719,8 +781,8 @@ export function calculateMonthlyDiagnostic(
     : `NO ALCANZA: falta S/ ${Math.abs(liquidityMargin).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return {
-    totalAvailable,
-    realCashOutflow,
+    totalAvailable: Math.round(totalAvailable * 100) / 100,
+    realCashOutflow: Math.round(realCashOutflow * 100) / 100,
     liquidityMargin,
     isPositive,
     statusText,

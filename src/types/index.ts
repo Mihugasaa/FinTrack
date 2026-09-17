@@ -243,3 +243,20 @@ export interface CashflowForecastMonth {
   scheduledReceivableDue?: number;
 }
 
+export interface DebtConfirmData {
+  type: 'payable' | 'receivable';
+  title: string;
+  partyName: string;
+  description: string;
+  amount: number;
+  currency?: 'PEN' | 'USD';
+  exchangeRate?: number;
+  amountPen?: number;
+  date: string;
+  currentRemaining: number;
+  newRemaining: number;
+  notes?: string;
+  isDirectAction?: boolean;
+  onConfirm: () => void;
+}
+

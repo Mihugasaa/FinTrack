@@ -18,7 +18,9 @@ import {
   initialCategories,
   initialPaymentMethods
 } from '@/lib/defaults';
+import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 import { generateUUID, resolvePaymentMethod, deduplicateTransactions } from '@/lib/utils';
+import { DebtConfirmData } from '@/types';
 import {
   getBestCardRecommendation,
   calculateMonthlyDiagnostic,
@@ -197,6 +199,9 @@ function useFinanceController() {
     isFixed?: boolean;
     futureOccurrencesCount?: number;
   } | null>(null);
+
+  // Estado para modal de confirmación segura de abono/cobranza de deudas o préstamos
+  const [debtConfirmData, setDebtConfirmData] = useState<DebtConfirmData | null>(null);
 
   // Evitar cierre accidental de modales al seleccionar texto y soltar fuera
   const backdropMouseDownTarget = useRef<EventTarget | null>(null);
@@ -419,6 +424,10 @@ function useFinanceController() {
     collectingDebtorGroup,
     collectAmountInput,
     setCollectAmountInput,
+    collectPaymentDate,
+    setCollectPaymentDate,
+    collectPaymentNotes,
+    setCollectPaymentNotes,
     expandedDebtors,
     receivablesFilter,
     setReceivablesFilter,
@@ -451,7 +460,7 @@ function useFinanceController() {
     toggleDebtorExpanded,
     handleCreateReceivable,
     deleteReceivable
-  } = useReceivables({ currentYear, currentMonth });
+  } = useReceivables({ currentYear, currentMonth, setDebtConfirmData });
 
   // Mis deudas: dinero que me prestaron, agrupado por acreedor, con pagos
   const {
@@ -508,7 +517,7 @@ function useFinanceController() {
     handleOpenPayPayable,
     handlePayPayable,
     handleDeletePayable
-  } = usePayables({ currentYear, currentMonth, onCreditToDebit: creditLoanIncome });
+  } = usePayables({ currentYear, currentMonth, onCreditToDebit: creditLoanIncome, setDebtConfirmData });
 
   // Atajo PWA: si se entra con ?action=new-expense (acceso rápido del ícono en el
   // celular), abre directo el modal de registrar gasto. Solo una vez.
@@ -782,10 +791,16 @@ function useFinanceController() {
     // hoy (ese dinero sigue en cuenta hasta que efectivamente pagues). Se usa el
     // saldo pendiente, así lo ya abonado no se descuenta dos veces.
     const scheduledDebtDueThisMonth = payables
-      .filter(p => (p.dueDate || '').startsWith(monthKey) && p.status !== 'PAID')
+      .filter(p => {
+        if (p.status === 'PAID') return false;
+        const due = (p.dueDate || '');
+        if (due.startsWith(monthKey)) return true;
+        if (!isPastMonth && due.length >= 7 && due < monthKey && isCurrentActiveMonth) return true;
+        return false;
+      })
       .reduce((acc, p) => {
         const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
-        const pen = p.currency === 'USD' ? rem * (p.exchangeRate || 1) : rem;
+        const pen = p.currency === 'USD' ? rem * (p.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
         return acc + Math.max(0, pen);
       }, 0);
 
@@ -900,9 +915,12 @@ function useFinanceController() {
       currentMonthTransactions,
       monthReceivables,
       transactions,
-      payables
+      payables,
+      cardPayments,
+      paymentMethods,
+      isPastMonth
     );
-  }, [budget, currentMonthTransactions, monthReceivables, transactions, payables]);
+  }, [budget, currentMonthTransactions, monthReceivables, transactions, payables, cardPayments, paymentMethods, isPastMonth]);
 
   // Resumen de deuda por tarjeta
   const cardDebtSummary = useMemo(() => {
@@ -1144,6 +1162,30 @@ function useFinanceController() {
       }
     });
 
+    // Salidas por deudas propias a acreedores (pagos efectuados + deudas programadas no pagadas en meses actuales/futuros)
+    payables.forEach(p => {
+      const isUsd = p.currency === 'USD';
+      const exRate = p.exchangeRate || FALLBACK_USD_PEN_RATE;
+      (p.payments || []).forEach(pay => {
+        const payKey = (pay.paymentDate || '').slice(0, 7);
+        if (payKey.startsWith(yearPrefix)) {
+          const pen = isUsd ? (pay.amountPaid || pay.amount || 0) * exRate : (pay.amountPaid || pay.amount || 0);
+          outByMonth.set(payKey, (outByMonth.get(payKey) || 0) + pen);
+          consumedByMonth.set(payKey, (consumedByMonth.get(payKey) || 0) + pen);
+          candidateMonths.add(payKey);
+        }
+      });
+      if (p.status !== 'PAID') {
+        const dueKey = (p.dueDate || '').slice(0, 7);
+        if (dueKey.startsWith(yearPrefix) && dueKey >= realCurrentKey) {
+          const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
+          const pen = isUsd ? rem * exRate : rem;
+          outByMonth.set(dueKey, (outByMonth.get(dueKey) || 0) + pen);
+          candidateMonths.add(dueKey);
+        }
+      }
+    });
+
     // Meses candidatos del año: los que tienen actividad real (gastos vencidos,
     // gastos registrados o ingresos extra), más el mes en curso y el visible.
     Object.keys(extraIncomes).forEach(k => { if (k.startsWith(yearPrefix)) candidateMonths.add(k); });
@@ -1180,7 +1222,7 @@ function useFinanceController() {
       });
     }
     return items;
-  }, [salaries, monthlySalaries, extraIncomes, transactions, monthKey, currentYear]);
+  }, [salaries, monthlySalaries, extraIncomes, transactions, payables, monthKey, currentYear]);
 
   // Score de Salud Financiera DETERMINISTA (0-100). Se calcula en código para ser
   // reproducible; la IA solo lo explica/prioriza después. Reutiliza el diagnóstico
@@ -1664,6 +1706,8 @@ function useFinanceController() {
     setItemToDelete,
     handleConfirmDelete,
     handleConfirmDeleteFuture,
+    debtConfirmData,
+    setDebtConfirmData,
 
     // Backdrop de modales
     handleBackdropMouseDown,
@@ -1823,6 +1867,10 @@ function useFinanceController() {
     collectingDebtorGroup,
     collectAmountInput,
     setCollectAmountInput,
+    collectPaymentDate,
+    setCollectPaymentDate,
+    collectPaymentNotes,
+    setCollectPaymentNotes,
     expandedDebtors,
     receivablesFilter,
     setReceivablesFilter,

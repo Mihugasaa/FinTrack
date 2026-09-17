@@ -5,11 +5,13 @@ import { SupabaseDataService } from '@/services/supabaseData.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { generateUUID } from '@/lib/utils';
-import { Receivable, CurrencyCode } from '@/types';
+import { getEffectiveDayOfMonth } from '@/lib/calculations';
+import { Receivable, CurrencyCode, DebtConfirmData } from '@/types';
 
 interface UseReceivablesDeps {
   currentYear: number;
   currentMonth: number;
+  setDebtConfirmData?: (data: DebtConfirmData | null) => void;
 }
 
 /**
@@ -20,7 +22,7 @@ interface UseReceivablesDeps {
  * setReceivables; el borrado se expone como deleteReceivable para el confirmador
  * de eliminación compartido.
  */
-export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps) {
+export function useReceivables({ currentYear, currentMonth, setDebtConfirmData }: UseReceivablesDeps) {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
   // Id del préstamo en edición (null = alta nueva). Alterna el modal entre crear/editar.
@@ -34,6 +36,11 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
     items: Receivable[];
   } | null>(null);
   const [collectAmountInput, setCollectAmountInput] = useState('');
+  const [collectPaymentDate, setCollectPaymentDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+  });
+  const [collectPaymentNotes, setCollectPaymentNotes] = useState('');
   const [expandedDebtors, setExpandedDebtors] = useState<Set<string>>(new Set());
   const [receivablesFilter, setReceivablesFilter] = useState<'pending' | 'all' | 'paid'>('pending');
 
@@ -179,6 +186,12 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
     setCollectingDebtorGroup(null);
     setCollectingRec(rec);
     setCollectAmountInput('');
+    setCollectPaymentNotes('');
+    const now = new Date();
+    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
+    const targetDay = isCurrentActiveMonth ? now.getDate() : 1;
+    const safeDay = getEffectiveDayOfMonth(currentYear, currentMonth, targetDay).toString().padStart(2, '0');
+    setCollectPaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${safeDay}`);
     setIsCollectModalOpen(true);
   };
 
@@ -186,6 +199,12 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
     setCollectingDebtorGroup(group);
     setCollectingRec(null);
     setCollectAmountInput('');
+    setCollectPaymentNotes('');
+    const now = new Date();
+    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
+    const targetDay = isCurrentActiveMonth ? now.getDate() : 1;
+    const safeDay = getEffectiveDayOfMonth(currentYear, currentMonth, targetDay).toString().padStart(2, '0');
+    setCollectPaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${safeDay}`);
     setIsCollectModalOpen(true);
   };
 
@@ -249,15 +268,13 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
     );
   };
 
-  const handleSaveCollect = (e: React.FormEvent) => {
-    e.preventDefault();
-    const num = parseFloat(collectAmountInput);
-    if (isNaN(num) || num <= 0) return;
-
+  const executeSaveCollect = (num: number) => {
     if (collectingDebtorGroup) {
       handleCascadeCollect(collectingDebtorGroup.debtorName, num);
       setIsCollectModalOpen(false);
       setCollectingDebtorGroup(null);
+      setCollectAmountInput('');
+      setCollectPaymentNotes('');
       return;
     }
 
@@ -265,7 +282,45 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
       handleCollectReceivable(collectingRec.id, num);
       setIsCollectModalOpen(false);
       setCollectingRec(null);
+      setCollectAmountInput('');
+      setCollectPaymentNotes('');
     }
+  };
+
+  const handleSaveCollect = (e: React.FormEvent) => {
+    e.preventDefault();
+    const num = parseFloat(collectAmountInput);
+    if (isNaN(num) || num <= 0) return;
+
+    if (setDebtConfirmData) {
+      const rawRem = collectingDebtorGroup ? collectingDebtorGroup.totalRemaining : (collectingRec?.remainingAmount || 0);
+      const party = collectingDebtorGroup ? collectingDebtorGroup.debtorName : (collectingRec?.debtorName || 'Deudor');
+      const desc = collectingDebtorGroup
+        ? `Abono consolidado para ${collectingDebtorGroup.items.length} ${collectingDebtorGroup.items.length === 1 ? 'préstamo' : 'préstamos acumulados'}`
+        : (collectingRec?.description || 'Cobranza de préstamo');
+      const todayStr = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
+
+      setDebtConfirmData({
+        type: 'receivable',
+        title: collectingDebtorGroup ? 'Registrar Abono a Deudor' : 'Registrar Abono a Préstamo',
+        partyName: party,
+        description: desc,
+        amount: num,
+        currency: 'PEN',
+        amountPen: num,
+        date: collectPaymentDate || todayStr,
+        notes: collectPaymentNotes.trim() || undefined,
+        currentRemaining: rawRem,
+        newRemaining: Math.max(0, rawRem - num),
+        onConfirm: () => {
+          executeSaveCollect(num);
+          setDebtConfirmData(null);
+        }
+      });
+      return;
+    }
+
+    executeSaveCollect(num);
   };
 
   const handleOpenAddLoanForDebtor = (name: string) => {
@@ -395,6 +450,10 @@ export function useReceivables({ currentYear, currentMonth }: UseReceivablesDeps
     collectingDebtorGroup,
     collectAmountInput,
     setCollectAmountInput,
+    collectPaymentDate,
+    setCollectPaymentDate,
+    collectPaymentNotes,
+    setCollectPaymentNotes,
     expandedDebtors,
     receivablesFilter,
     setReceivablesFilter,

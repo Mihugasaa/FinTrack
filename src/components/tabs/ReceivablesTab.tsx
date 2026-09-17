@@ -57,9 +57,72 @@ export const ReceivablesTab: React.FC = () => {
     handleOpenAddLoanForCreditor,
     handleOpenPayPayable,
     handleDeletePayable,
+    currentYear,
+    currentMonth,
+    setDebtConfirmData,
     formatDisplayDate,
     formatSoles
   } = useFinance();
+
+  // Confirmación previa de Cobro Total en cascada
+  const handleTriggerCascadeCollect = (group: (typeof debtorGroups)[number]) => {
+    const isPureUsd = Boolean(group.hasUsd && group.isPureUsd);
+    const totalRem = isPureUsd ? (group.totalRemainingUsd || 0) : group.totalRemaining;
+    const exRate = group.items[0]?.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const amountPen = isPureUsd ? totalRem * exRate : totalRem;
+    const now = new Date();
+    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
+    const dayStr = (isCurrentActiveMonth ? now.getDate() : 1).toString().padStart(2, '0');
+    const dateStr = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${dayStr}`;
+
+    setDebtConfirmData({
+      type: 'receivable',
+      title: `¿Confirmar Cobro Total a ${group.debtorName}?`,
+      partyName: group.debtorName,
+      description: `Cobranza del 100% de la deuda (${group.items.length} ${group.items.length === 1 ? 'préstamo' : 'préstamos acumulados'})`,
+      amount: totalRem,
+      currency: isPureUsd ? 'USD' : 'PEN',
+      amountPen,
+      date: dateStr,
+      currentRemaining: totalRem,
+      newRemaining: 0,
+      isDirectAction: true,
+      onConfirm: () => {
+        handleCascadeCollect(group.debtorName, totalRem);
+        setDebtConfirmData(null);
+      }
+    });
+  };
+
+  // Confirmación previa de Pago Total en cascada
+  const handleTriggerCascadePay = (group: (typeof creditorGroups)[number]) => {
+    const isPureUsd = Boolean(group.hasUsd && group.isPureUsd);
+    const totalRem = isPureUsd ? (group.totalRemainingUsd || 0) : group.totalRemaining;
+    const exRate = group.items[0]?.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const amountPen = isPureUsd ? totalRem * exRate : totalRem;
+    const now = new Date();
+    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
+    const dayStr = (isCurrentActiveMonth ? now.getDate() : 1).toString().padStart(2, '0');
+    const dateStr = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${dayStr}`;
+
+    setDebtConfirmData({
+      type: 'payable',
+      title: `¿Confirmar Pago Total a ${group.creditorName}?`,
+      partyName: group.creditorName,
+      description: `Liquidación del 100% de la deuda (${group.items.length} ${group.items.length === 1 ? 'compromiso' : 'compromisos acumulados'})`,
+      amount: totalRem,
+      currency: isPureUsd ? 'USD' : 'PEN',
+      amountPen,
+      date: dateStr,
+      currentRemaining: totalRem,
+      newRemaining: 0,
+      isDirectAction: true,
+      onConfirm: () => {
+        handleCascadePay(group.creditorName, totalRem, dateStr, 'Liquidación total de deuda');
+        setDebtConfirmData(null);
+      }
+    });
+  };
   // Cálculos consolidados para los 4 KPIs superiores
   const pendingReceivablesCount = receivables.filter(r => r.remainingAmount > 0).length;
   const activePayablesCount = payables.filter(p => (p.remainingAmount ?? (p.totalAmount ?? p.originalAmount)) > 0).length;
@@ -223,10 +286,10 @@ export const ReceivablesTab: React.FC = () => {
             </button>
           ) : (
             <button
-              id="btn-open-payable-modal"
+              id="btn-open-create-payable-modal"
               className="btn-primary"
               onClick={handleOpenCreatePayable}
-              title="Registrar un nuevo dinero que te prestaron para devolver"
+              title="Registrar un nuevo compromiso o deuda que debes devolver"
             >
               <Plus size={15} />
               <span>Registrar Deuda Mía</span>
@@ -390,7 +453,7 @@ export const ReceivablesTab: React.FC = () => {
                             <button
                               className="btn-secondary"
                               style={{ padding: '6px 10px', fontSize: '0.78rem' }}
-                              onClick={() => handleCascadeCollect(group.debtorName, group.totalRemaining)}
+                              onClick={() => handleTriggerCascadeCollect(group)}
                               title="Cobrar la deuda restante completa de todos sus préstamos"
                             >
                               <span>Cobrar Todo</span>
@@ -699,7 +762,7 @@ export const ReceivablesTab: React.FC = () => {
                             <button
                               className="btn-secondary"
                               style={{ padding: '6px 10px', fontSize: '0.78rem' }}
-                              onClick={() => handleCascadePay(group.creditorName, group.totalRemaining)}
+                              onClick={() => handleTriggerCascadePay(group)}
                               title="Pagar la totalidad pendiente a este acreedor"
                             >
                               <span>Pagar Todo</span>

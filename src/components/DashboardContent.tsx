@@ -7,6 +7,7 @@ import { NavigationTabs } from '@/components/layout/NavigationTabs';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { DeleteConfirmModal } from '@/components/modals/DeleteConfirmModal';
+import { DebtConfirmModal } from '@/components/modals/DebtConfirmModal';
 import { AdjustDebitModal } from '@/components/modals/AdjustDebitModal';
 import { IncomeModal } from '@/components/modals/IncomeModal';
 import { SalaryModal } from '@/components/modals/SalaryModal';
@@ -52,6 +53,7 @@ export function DashboardContent() {
     payingCreditorGroup,
     isSalaryModalOpen,
     itemToDelete,
+    debtConfirmData,
     reloadData,
     isInitialLoading,
     isRefreshingData
@@ -69,7 +71,8 @@ export function DashboardContent() {
     isPayableModalOpen ||
     (isPayablePaymentModalOpen && (payingPayable || payingCreditorGroup)) ||
     isSalaryModalOpen ||
-    itemToDelete
+    itemToDelete ||
+    Boolean(debtConfirmData)
   );
 
   // Bloqueo de scroll en segundo plano mientras haya un modal activo.
@@ -252,6 +255,9 @@ export function DashboardContent() {
 
       {/* 3.6 MODAL DE CONFIRMACIÓN DE ELIMINACIÓN SEGURA */}
       {itemToDelete && <DeleteConfirmModal />}
+
+      {/* 3.7 MODAL DE CONFIRMACIÓN DE ABONO / COBRO DE DEUDA O PRÉSTAMO */}
+      {debtConfirmData && <DebtConfirmModal />}
 
       {/* 4. NAVEGACIÓN MÓVIL MODULAR */}
       <MobileNav />

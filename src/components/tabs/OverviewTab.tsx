@@ -9,9 +9,13 @@ import {
   Trash2,
   Tag,
   AlertTriangle,
-  X
+  X,
+  ExternalLink,
+  CreditCard,
+  TrendingUp
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
+import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 
 export const OverviewTab: React.FC = () => {
   const {
@@ -31,6 +35,8 @@ export const OverviewTab: React.FC = () => {
     setIsAdjustDebitModalOpen,
     diagnostic,
     currentMonthTransactions,
+    combinedMovements,
+    monthMovementsTotal,
     categoryBreakdown,
     monthlyComparison,
     setActiveTab,
@@ -52,23 +58,29 @@ export const OverviewTab: React.FC = () => {
   // (evita saturar sin ocultar información: el badge indica el total real).
   const [showAllCats, setShowAllCats] = React.useState(false);
 
-  // Últimos movimientos "a la fecha": en el mes en curso solo mostramos gastos con
-  // fecha hasta hoy (no los programados a futuro dentro del mismo mes). En meses
-  // pasados/futuros se muestra el mes completo. Ya vienen ordenados por fecha desc.
-  const recentTransactions = React.useMemo(() => {
-    const list = isCurrentActiveMonth
-      ? currentMonthTransactions.filter(t => t.date <= currentDateStr)
-      : currentMonthTransactions;
+  // Últimos movimientos "a la fecha": mostramos los movimientos reales efectuados hasta hoy
+  // (gastos, pagos a tarjeta, pagos de deudas e ingresos). Excluimos vencimientos programados
+  // para reflejar solo movimientos reales de caja. En meses pasados/futuros se muestra el mes completo.
+  const recentMovements = React.useMemo(() => {
+    const list = combinedMovements.filter(m => {
+      if (m.kind === 'scheduled_payable') return false;
+      if (isCurrentActiveMonth) {
+        return m.sortDate <= currentDateStr;
+      }
+      return true;
+    });
     return list.slice(0, 5);
-  }, [currentMonthTransactions, isCurrentActiveMonth, currentDateStr]);
+  }, [combinedMovements, isCurrentActiveMonth, currentDateStr]);
 
   // Flujo del mes visible (para las tarjetas Entradas/Salidas, según el mes sea en
   // curso, pasado o futuro). Los "previstos" incluyen sueldo + ingresos extra del mes.
   const monthIncome = totalSalaryAmount + debitStats.otherIncomesTotalMonth;
   const expectedInflow = monthIncome + debitStats.collectedFromDebtors;
   const realizedInflow = debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday + debitStats.collectedFromDebtors;
-  const realizedOutflow = debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidMonth;
-  const pastOutflow = debitStats.debitExpensesTotalMonth + debitStats.cardPaymentsPaidMonth;
+  const debtPaidToday = debitStats.paidToCreditorsToday || 0;
+  const debtPaidMonth = debitStats.paidToCreditorsMonth || 0;
+  const realizedOutflow = debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidMonth + debtPaidToday;
+  const pastOutflow = debitStats.debitExpensesTotalMonth + debitStats.cardPaymentsPaidMonth + debtPaidMonth;
   // Salida programada del mes futuro: gastos débito registrados + cuotas de tarjeta
   // por vencer + deudas propias programadas de ese mes.
   const scheduledOutflow = debitStats.debitExpensesTotalMonth + debitStats.cardBillsDueThisMonth + debitStats.scheduledDebtDueThisMonth;
@@ -196,8 +208,9 @@ export const OverviewTab: React.FC = () => {
             <span
               className="zen-context-item"
               style={{ color: diagnostic.isPositive ? 'var(--accent-success)' : 'var(--accent-danger)' }}
+              title="Margen proyectado con el que cerrarás el mes (se arrastra automáticamente como saldo inicial al mes siguiente)"
             >
-              Margen:{' '}
+              Margen fin de mes:{' '}
               <strong>
                 {diagnostic.isPositive
                   ? `Alcanza ${formatSoles(diagnostic.liquidityMargin)} ✅`
@@ -248,10 +261,10 @@ export const OverviewTab: React.FC = () => {
             </span>
             <span className="zen-flow-sub">
               {isCurrentActiveMonth
-                ? `Débito ${formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${pendingThisMonth > 0 ? ` • Por pagar ${formatSoles(pendingThisMonth)}` : ''}`
+                ? `Débito ${formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidToday > 0 ? ` • Deudas ${formatSoles(debtPaidToday)}` : ''}${pendingThisMonth > 0 ? ` • Por pagar ${formatSoles(pendingThisMonth)}` : ''}`
                 : isFutureMonth
                 ? `Tarjetas ${formatSoles(debitStats.cardBillsDueThisMonth)} • Deudas ${formatSoles(debitStats.scheduledDebtDueThisMonth)}${debitStats.debitExpensesTotalMonth > 0 ? ` • Débito ${formatSoles(debitStats.debitExpensesTotalMonth)}` : ''}`
-                : `Débito ${formatSoles(debitStats.debitExpensesTotalMonth)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}`}
+                : `Débito ${formatSoles(debitStats.debitExpensesTotalMonth)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidMonth > 0 ? ` • Deudas ${formatSoles(debtPaidMonth)}` : ''}`}
             </span>
           </div>
         </div>
@@ -416,7 +429,7 @@ export const OverviewTab: React.FC = () => {
               style={{ padding: '4px 10px', fontSize: '0.75rem' }}
               onClick={() => setActiveTab('transactions')}
             >
-              Ver todos ({currentMonthTransactions.length})
+              Ver todos ({monthMovementsTotal})
             </button>
           </div>
 
@@ -425,69 +438,213 @@ export const OverviewTab: React.FC = () => {
             <table className="tx-table">
               <thead>
                 <tr>
-                  <th>Fecha</th>
+                  <th style={{ width: '95px', whiteSpace: 'nowrap' }}>Fecha</th>
                   <th>Concepto</th>
-                  <th>Medio</th>
-                  <th className="text-right">Monto (S/)</th>
-                  <th className="text-right">Acciones</th>
+                  <th style={{ width: '135px', whiteSpace: 'nowrap' }}>Medio</th>
+                  <th className="text-right" style={{ width: '130px', whiteSpace: 'nowrap' }}>Monto (S/)</th>
+                  <th className="text-right" style={{ width: '70px', whiteSpace: 'nowrap' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {recentTransactions.map(t => {
-                  const pm = resolvePaymentMethod(t, paymentMethods);
-                  return (
-                    <tr key={t.id} className={t.isFixedSubscription ? 'row-fixed-expense' : ''}>
-                      <td className="card-item-meta tabular-nums">
-                        {formatDisplayDate(t.date)}
-                      </td>
-                      <td className="font-semibold text-primary">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span
-                            style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
-                            title={t.description}
-                          >
-                            {t.description}
-                          </span>
-                          {t.isFixedSubscription && (
-                            <span className="badge-fixed-tag" title="Gasto Fijo Recurrente">
-                              <Repeat size={10} />
-                              <span>Fijo</span>
+                {recentMovements.map(m => {
+                  if (m.kind === 'transaction') {
+                    const t = m.data;
+                    const pm = resolvePaymentMethod(t, paymentMethods);
+                    return (
+                      <tr key={`tx-${t.id}`} className={t.isFixedSubscription ? 'row-fixed-expense' : ''}>
+                        <td className="card-item-meta tabular-nums">
+                          {formatDisplayDate(t.date)}
+                        </td>
+                        <td className="font-semibold text-primary">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span
+                              style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                              title={t.description}
+                            >
+                              {t.description}
                             </span>
+                            {t.isFixedSubscription && (
+                              <span className="badge-fixed-tag" title="Gasto Fijo Recurrente">
+                                <Repeat size={10} />
+                                <span>Fijo</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td title={pm?.name || 'Débito / Efectivo'}>
+                          <span
+                            className="badge badge-neutral"
+                            style={{ color: pm?.color || 'var(--text-secondary)', display: 'inline-block', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={pm?.name || 'Débito / Efectivo'}
+                          >
+                            {pm?.name || 'Débito / Efectivo'}
+                          </span>
+                        </td>
+                        <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ whiteSpace: 'nowrap' }}>
+                          {formatSoles(t.amountPen)}
+                        </td>
+                        <td className="text-right">
+                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                            <button
+                              className="btn-action-icon"
+                              onClick={() => handleOpenEditTransaction(t)}
+                              title="Editar gasto"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              className="btn-action-icon"
+                              onClick={() => promptDeleteTransaction(t)}
+                              title="Eliminar gasto"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  if (m.kind === 'payable_payment') {
+                    const pay = m.data;
+                    return (
+                      <tr key={`pay-${pay.id}`} style={{ background: 'rgba(245, 158, 11, 0.03)' }}>
+                        <td className="card-item-meta tabular-nums">
+                          {formatDisplayDate(pay.paymentDate)}
+                        </td>
+                        <td className="font-semibold text-primary">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span
+                              style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                              title={`Amortización a ${pay.creditorName}`}
+                            >
+                              Amortización a {pay.creditorName}
+                            </span>
+                            <span className="badge badge-warning" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>
+                              Deuda Mía
+                            </span>
+                          </div>
+                        </td>
+                        <td title="Cuenta Débito">
+                          <span className="badge badge-neutral" style={{ color: '#10b981' }}>
+                            Cuenta Débito
+                          </span>
+                        </td>
+                        <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ color: 'var(--accent-danger)', whiteSpace: 'nowrap' }}>
+                          {pay.currency === 'USD' ? (
+                            <div style={{ whiteSpace: 'nowrap' }}>
+                              <span className="tabular-nums" style={{ fontWeight: 600 }}>-$ {pay.amount.toFixed(2)} USD</span>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', whiteSpace: 'nowrap' }}>
+                                -{formatSoles(pay.amount * (pay.exchangeRate || FALLBACK_USD_PEN_RATE))}
+                              </span>
+                            </div>
+                          ) : (
+                            `-${formatSoles(pay.amount)}`
                           )}
-                        </div>
-                      </td>
-                      <td title={pm?.name || 'Débito / Efectivo'}>
-                        <span
-                          className="badge badge-neutral"
-                          style={{ color: pm?.color || 'var(--text-secondary)', display: 'inline-block', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                          title={pm?.name || 'Débito / Efectivo'}
-                        >
-                          {pm?.name || 'Débito / Efectivo'}
-                        </span>
-                      </td>
-                      <td className="tabular-nums text-right font-semibold">
-                        {formatSoles(t.amountPen)}
-                      </td>
-                      <td className="text-right">
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                          <button
-                            className="btn-action-icon"
-                            onClick={() => handleOpenEditTransaction(t)}
-                            title="Editar gasto"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            className="btn-action-icon"
-                            onClick={() => promptDeleteTransaction(t)}
-                            title="Eliminar gasto"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
+                        </td>
+                        <td className="text-right">
+                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                            <button
+                              className="btn-action-icon"
+                              onClick={() => setActiveTab('receivables', 'payables')}
+                              title="Ver en Mis Deudas"
+                            >
+                              <ExternalLink size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  if (m.kind === 'card_payment') {
+                    const cp = m.data;
+                    const pm = resolvePaymentMethod({ paymentMethodId: cp.paymentMethodId }, paymentMethods) || paymentMethods.find(p => p.id === cp.paymentMethodId);
+                    return (
+                      <tr key={`cp-${cp.id || m.sortDate}`} style={{ background: 'rgba(167, 139, 250, 0.03)' }}>
+                        <td className="card-item-meta tabular-nums">
+                          {formatDisplayDate(cp.paymentDate)}
+                        </td>
+                        <td className="font-semibold text-primary">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span
+                              style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                              title={`Abono a ${pm?.name || 'Tarjeta'}`}
+                            >
+                              Abono a {pm?.name || 'Tarjeta'}
+                            </span>
+                            <span className="badge badge-neutral" style={{ fontSize: '0.625rem', color: '#a78bfa', padding: '1px 5px' }}>
+                              Abono TC
+                            </span>
+                          </div>
+                        </td>
+                        <td title="Cuenta Débito">
+                          <span className="badge badge-neutral" style={{ color: '#10b981' }}>
+                            Cuenta Débito
+                          </span>
+                        </td>
+                        <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ color: 'var(--accent-danger)', whiteSpace: 'nowrap' }}>
+                          -{formatSoles(cp.amountPaid)}
+                        </td>
+                        <td className="text-right">
+                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                            <button
+                              className="btn-action-icon"
+                              onClick={() => setActiveTab('cards')}
+                              title="Ver en Tarjetas"
+                            >
+                              <ExternalLink size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  if (m.kind === 'income') {
+                    const inc = m.data;
+                    return (
+                      <tr key={`inc-${inc.id}`} style={{ background: 'rgba(16, 185, 129, 0.03)' }}>
+                        <td className="card-item-meta tabular-nums">
+                          {formatDisplayDate(inc.date)}
+                        </td>
+                        <td className="font-semibold text-primary">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span
+                              style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                              title={inc.description}
+                            >
+                              {inc.description}
+                            </span>
+                            <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>
+                              Ingreso
+                            </span>
+                          </div>
+                        </td>
+                        <td title="Cuenta Débito">
+                          <span className="badge badge-neutral" style={{ color: '#10b981' }}>
+                            Cuenta Débito
+                          </span>
+                        </td>
+                        <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ color: 'var(--accent-success)', whiteSpace: 'nowrap' }}>
+                          +{formatSoles(inc.amount)}
+                        </td>
+                        <td className="text-right">
+                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                            <button
+                              className="btn-action-icon"
+                              onClick={() => setActiveTab('incomes')}
+                              title="Ver en Ingresos"
+                            >
+                              <ExternalLink size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return null;
                 })}
               </tbody>
             </table>
@@ -495,53 +652,170 @@ export const OverviewTab: React.FC = () => {
 
           {/* Vista Móvil: Feed de Tarjetas Táctiles */}
           <div className="mobile-only mobile-tx-feed" style={{ marginTop: '8px' }}>
-            {recentTransactions.map(t => {
-              const cat = categories.find(c => c.id === t.categoryId);
-              const pm = resolvePaymentMethod(t, paymentMethods);
-              const isDeferred = pm?.type === 'credit';
-              return (
-                <div key={t.id} className={`mobile-tx-card ${t.isFixedSubscription ? 'mobile-tx-card-fixed' : ''}`}>
-                  <div className="mobile-tx-main-row">
-                    <div className="mobile-tx-left">
-                      <div className="mobile-tx-icon-wrap" style={{ background: `${cat?.color || '#6366f1'}18`, color: cat?.color || '#6366f1' }}>
-                        <Tag size={16} />
-                      </div>
-                      <div className="mobile-tx-info">
-                        <div className="mobile-tx-title-row">
-                          <span className="mobile-tx-title" title={t.description}>{t.description}</span>
-                          {t.isFixedSubscription && (
-                            <span className="badge-fixed-tag">
-                              <Repeat size={9} /> Fijo
-                            </span>
-                          )}
+            {recentMovements.map(m => {
+              if (m.kind === 'transaction') {
+                const t = m.data;
+                const cat = categories.find(c => c.id === t.categoryId);
+                const pm = resolvePaymentMethod(t, paymentMethods);
+                const isDeferred = pm?.type === 'credit';
+                return (
+                  <div key={`mob-tx-${t.id}`} className={`mobile-tx-card ${t.isFixedSubscription ? 'mobile-tx-card-fixed' : ''}`}>
+                    <div className="mobile-tx-main-row">
+                      <div className="mobile-tx-left">
+                        <div className="mobile-tx-icon-wrap" style={{ background: `${cat?.color || '#6366f1'}18`, color: cat?.color || '#6366f1' }}>
+                          <Tag size={16} />
                         </div>
-                        <div className="mobile-tx-meta" title={`${formatDisplayDate(t.date)} • ${pm?.name || 'Débito / Efectivo'}`}>
-                          <span>{formatDisplayDate(t.date)}</span>
-                          <span>•</span>
-                          <span style={{ color: pm?.color || 'var(--text-secondary)', fontWeight: 500 }}>{pm?.name || 'Débito / Efectivo'}</span>
+                        <div className="mobile-tx-info">
+                          <div className="mobile-tx-title-row">
+                            <span className="mobile-tx-title" title={t.description}>{t.description}</span>
+                            {t.isFixedSubscription && (
+                              <span className="badge-fixed-tag">
+                                <Repeat size={9} /> Fijo
+                              </span>
+                            )}
+                          </div>
+                          <div className="mobile-tx-meta" title={`${formatDisplayDate(t.date)} • ${pm?.name || 'Débito / Efectivo'}`}>
+                            <span>{formatDisplayDate(t.date)}</span>
+                            <span>•</span>
+                            <span style={{ color: pm?.color || 'var(--text-secondary)', fontWeight: 500 }}>{pm?.name || 'Débito / Efectivo'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mobile-tx-right">
+                        <span className="mobile-tx-amount tabular-nums">{formatSoles(t.amountPen)}</span>
+                        <div className="mobile-tx-actions">
+                          <button className="btn-action-icon" onClick={() => handleOpenEditTransaction(t)} title="Editar gasto">
+                            <Pencil size={13} />
+                          </button>
+                          <button className="btn-action-icon" onClick={() => promptDeleteTransaction(t)} title="Eliminar gasto">
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </div>
                     </div>
-                    <div className="mobile-tx-right">
-                      <span className="mobile-tx-amount tabular-nums">{formatSoles(t.amountPen)}</span>
-                      <div className="mobile-tx-actions">
-                        <button className="btn-action-icon" onClick={() => handleOpenEditTransaction(t)} title="Editar gasto">
-                          <Pencil size={13} />
-                        </button>
-                        <button className="btn-action-icon" onClick={() => promptDeleteTransaction(t)} title="Eliminar gasto">
-                          <Trash2 size={13} />
-                        </button>
+                    {isDeferred && (
+                      <div className="mobile-tx-footer-row">
+                        <span className="badge badge-warning" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>Diferido</span>
+                        <span className="mobile-tx-due">Vence el {formatDisplayDate(t.paymentDueDate)}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              if (m.kind === 'payable_payment') {
+                const pay = m.data;
+                return (
+                  <div key={`mob-pay-${pay.id}`} className="mobile-tx-card" style={{ borderLeft: '3px solid var(--accent-warning)' }}>
+                    <div className="mobile-tx-main-row">
+                      <div className="mobile-tx-left">
+                        <div className="mobile-tx-icon-wrap" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-warning)' }}>
+                          <ArrowUpRight size={16} />
+                        </div>
+                        <div className="mobile-tx-info">
+                          <div className="mobile-tx-title-row">
+                            <span className="mobile-tx-title">Amortización a {pay.creditorName}</span>
+                            <span className="badge badge-warning" style={{ fontSize: '0.625rem', padding: '1px 4px' }}>Deuda Mía</span>
+                          </div>
+                          <div className="mobile-tx-meta">
+                            <span>{formatDisplayDate(pay.paymentDate)}</span>
+                            <span>•</span>
+                            <span style={{ color: '#10b981', fontWeight: 500 }}>Cuenta Débito</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mobile-tx-right">
+                        {pay.currency === 'USD' ? (
+                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            <span className="mobile-tx-amount tabular-nums text-danger" style={{ whiteSpace: 'nowrap' }}>-$ {pay.amount.toFixed(2)} USD</span>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', whiteSpace: 'nowrap' }}>
+                              -{formatSoles(pay.amount * (pay.exchangeRate || FALLBACK_USD_PEN_RATE))}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="mobile-tx-amount tabular-nums text-danger" style={{ whiteSpace: 'nowrap' }}>-{formatSoles(pay.amount)}</span>
+                        )}
+                        <div className="mobile-tx-actions">
+                          <button className="btn-action-icon" onClick={() => setActiveTab('receivables', 'payables')} title="Ver en Mis Deudas">
+                            <ExternalLink size={13} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  {isDeferred && (
-                    <div className="mobile-tx-footer-row">
-                      <span className="badge badge-warning" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>Diferido</span>
-                      <span className="mobile-tx-due">Vence el {formatDisplayDate(t.paymentDueDate)}</span>
+                );
+              }
+
+              if (m.kind === 'card_payment') {
+                const cp = m.data;
+                const pm = resolvePaymentMethod({ paymentMethodId: cp.paymentMethodId }, paymentMethods) || paymentMethods.find(p => p.id === cp.paymentMethodId);
+                return (
+                  <div key={`mob-cp-${cp.id || m.sortDate}`} className="mobile-tx-card" style={{ borderLeft: '3px solid #a78bfa' }}>
+                    <div className="mobile-tx-main-row">
+                      <div className="mobile-tx-left">
+                        <div className="mobile-tx-icon-wrap" style={{ background: 'rgba(167, 139, 250, 0.15)', color: '#a78bfa' }}>
+                          <CreditCard size={16} />
+                        </div>
+                        <div className="mobile-tx-info">
+                          <div className="mobile-tx-title-row">
+                            <span className="mobile-tx-title">Abono a {pm?.name || 'Tarjeta'}</span>
+                            <span className="badge badge-neutral" style={{ fontSize: '0.625rem', color: '#a78bfa', padding: '1px 4px' }}>Abono TC</span>
+                          </div>
+                          <div className="mobile-tx-meta">
+                            <span>{formatDisplayDate(cp.paymentDate)}</span>
+                            <span>•</span>
+                            <span style={{ color: '#10b981', fontWeight: 500 }}>Cuenta Débito</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mobile-tx-right">
+                        <span className="mobile-tx-amount tabular-nums text-danger">-{formatSoles(cp.amountPaid)}</span>
+                        <div className="mobile-tx-actions">
+                          <button className="btn-action-icon" onClick={() => setActiveTab('cards')} title="Ver en Tarjetas">
+                            <ExternalLink size={13} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-              );
+                  </div>
+                );
+              }
+
+              if (m.kind === 'income') {
+                const inc = m.data;
+                return (
+                  <div key={`mob-inc-${inc.id}`} className="mobile-tx-card" style={{ borderLeft: '3px solid var(--accent-success)' }}>
+                    <div className="mobile-tx-main-row">
+                      <div className="mobile-tx-left">
+                        <div className="mobile-tx-icon-wrap" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-success)' }}>
+                          <TrendingUp size={16} />
+                        </div>
+                        <div className="mobile-tx-info">
+                          <div className="mobile-tx-title-row">
+                            <span className="mobile-tx-title">{inc.description}</span>
+                            <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '1px 4px' }}>Ingreso</span>
+                          </div>
+                          <div className="mobile-tx-meta">
+                            <span>{formatDisplayDate(inc.date)}</span>
+                            <span>•</span>
+                            <span style={{ color: '#10b981', fontWeight: 500 }}>Cuenta Débito</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mobile-tx-right">
+                        <span className="mobile-tx-amount tabular-nums text-success">+{formatSoles(inc.amount)}</span>
+                        <div className="mobile-tx-actions">
+                          <button className="btn-action-icon" onClick={() => setActiveTab('incomes')} title="Ver en Ingresos">
+                            <ExternalLink size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return null;
             })}
           </div>
         </div>

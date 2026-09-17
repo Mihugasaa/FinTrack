@@ -643,8 +643,9 @@ html.is-resizing *::after {
   .advisor-card,
   .schedule-card {
     padding: 16px 14px;
-    overflow-x: clip;
+    overflow-x: hidden;
     max-width: 100%;
+    min-width: 0;
     box-sizing: border-box;
   }
 
@@ -1041,15 +1042,25 @@ html.is-resizing *::after {
 /* Grids Simétricos 50/50 con Altura Nivelada */
 .overview-grid-balanced {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 24px;
   align-items: stretch;
   margin-bottom: 24px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.overview-grid-balanced > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 1040px) {
   .overview-grid-balanced {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 18px;
   }
 }
@@ -1393,6 +1404,15 @@ html.is-resizing *::after {
 /* Tabla de Movimientos */
 .transactions-panel {
   padding: 20px 24px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  .transactions-panel {
+    padding: 16px 14px;
+  }
 }
 
 /* Nivel 1: Título y Acción Primaria (Exportar) */
@@ -1777,6 +1797,26 @@ html.is-resizing *::after {
   color: var(--text-primary);
 }
 
+/* Tabla ejecutiva compacta de Últimos Movimientos en Visión General (Widget 50%) */
+.transactions-panel .table-responsive {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+.transactions-panel .tx-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.transactions-panel .tx-table th {
+  padding: 8px 10px;
+}
+
+.transactions-panel .tx-table td {
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+
 .btn-action-icon {
   background: transparent;
   border: none;
@@ -1801,6 +1841,15 @@ html.is-resizing *::after {
 
 .advisor-card {
   padding: 20px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  .advisor-card {
+    padding: 16px 14px;
+  }
 }
 
 .card-pill-hero {
@@ -1809,6 +1858,9 @@ html.is-resizing *::after {
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
   margin-top: 12px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Tarjetas de Crédito y Cuentas Físicas Visuales */
@@ -1914,6 +1966,10 @@ html.is-resizing *::after {
   flex-direction: column;
   gap: 10px;
   padding-bottom: 32px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .mobile-tx-card {
@@ -1925,6 +1981,10 @@ html.is-resizing *::after {
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   transition: all 0.15s ease;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .mobile-tx-card:active {
@@ -1938,13 +1998,16 @@ html.is-resizing *::after {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .mobile-tx-left {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1962,7 +2025,7 @@ html.is-resizing *::after {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1971,6 +2034,7 @@ html.is-resizing *::after {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  width: 100%;
 }
 
 .mobile-tx-title {
@@ -2001,6 +2065,7 @@ html.is-resizing *::after {
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .mobile-tx-right {
@@ -2009,6 +2074,7 @@ html.is-resizing *::after {
   align-items: flex-end;
   gap: 4px;
   flex-shrink: 0;
+  max-width: 48%;
 }
 
 /* Tags de tipo (Fijo, Ingreso, Deuda, Cuota, Reembolso...) alineados en la esquina

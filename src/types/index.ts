@@ -58,6 +58,8 @@ export interface Receivable {
   loanDate?: string;
   status: 'pending' | 'partial' | 'paid';
   dueDate?: string;
+  isDebitedFromAccount?: boolean;
+  fundingPaymentMethodId?: string;
   createdAt: string;
 }
 

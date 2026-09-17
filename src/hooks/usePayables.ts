@@ -552,6 +552,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
     setHasUserManuallyEditedPayableTc,
     fetchPayableSunatRate,
     expandedCreditors,
+    setExpandedCreditors,
     payablesFilter,
     setPayablesFilter,
     payingCreditorGroup,

@@ -41,6 +41,8 @@ export const OverviewTab: React.FC = () => {
     monthlyComparison,
     setActiveTab,
     setCardsSubTab,
+    navigateToPayableCreditor,
+    creditorGroups,
     aiAnomalies,
     handleDismissAnomaly,
     paymentMethods,
@@ -438,11 +440,10 @@ export const OverviewTab: React.FC = () => {
             <table className="tx-table">
               <thead>
                 <tr>
-                  <th style={{ width: '95px', whiteSpace: 'nowrap' }}>Fecha</th>
-                  <th>Concepto</th>
-                  <th style={{ width: '135px', whiteSpace: 'nowrap' }}>Medio</th>
-                  <th className="text-right" style={{ width: '130px', whiteSpace: 'nowrap' }}>Monto (S/)</th>
-                  <th className="text-right" style={{ width: '70px', whiteSpace: 'nowrap' }}>Acciones</th>
+                  <th style={{ width: '96px', paddingRight: '14px', whiteSpace: 'nowrap' }}>Fecha</th>
+                  <th style={{ paddingLeft: '6px' }}>Concepto & Medio</th>
+                  <th className="text-right" style={{ width: '120px', whiteSpace: 'nowrap' }}>Monto (S/)</th>
+                  <th className="text-right" style={{ width: '50px', whiteSpace: 'nowrap' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -452,33 +453,30 @@ export const OverviewTab: React.FC = () => {
                     const pm = resolvePaymentMethod(t, paymentMethods);
                     return (
                       <tr key={`tx-${t.id}`} className={t.isFixedSubscription ? 'row-fixed-expense' : ''}>
-                        <td className="card-item-meta tabular-nums">
+                        <td className="card-item-meta tabular-nums" style={{ paddingRight: '14px', whiteSpace: 'nowrap' }}>
                           {formatDisplayDate(t.date)}
                         </td>
-                        <td className="font-semibold text-primary">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <td className="font-semibold text-primary" style={{ paddingLeft: '6px', minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                             <span
-                              style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', minWidth: 0 }}
                               title={t.description}
                             >
                               {t.description}
                             </span>
                             {t.isFixedSubscription && (
-                              <span className="badge-fixed-tag" title="Gasto Fijo Recurrente">
+                              <span className="badge-fixed-tag" title="Gasto Fijo Recurrente" style={{ flexShrink: 0 }}>
                                 <Repeat size={10} />
                                 <span>Fijo</span>
                               </span>
                             )}
                           </div>
-                        </td>
-                        <td title={pm?.name || 'Débito / Efectivo'}>
-                          <span
-                            className="badge badge-neutral"
-                            style={{ color: pm?.color || 'var(--text-secondary)', display: 'inline-block', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                            title={pm?.name || 'Débito / Efectivo'}
-                          >
-                            {pm?.name || 'Débito / Efectivo'}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', fontSize: '0.72rem', color: pm?.color || 'var(--text-muted)' }}>
+                            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: pm?.color || 'var(--text-muted)', flexShrink: 0 }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {pm?.name || 'Débito / Efectivo'}
+                            </span>
+                          </div>
                         </td>
                         <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ whiteSpace: 'nowrap' }}>
                           {formatSoles(t.amountPen)}
@@ -507,28 +505,33 @@ export const OverviewTab: React.FC = () => {
 
                   if (m.kind === 'payable_payment') {
                     const pay = m.data;
+                    const credGroup = creditorGroups.find(
+                      g => g.creditorName?.trim().toLowerCase() === pay.creditorName?.trim().toLowerCase()
+                    );
+                    const isPaid = credGroup ? credGroup.isFullyPaid : false;
                     return (
                       <tr key={`pay-${pay.id}`} style={{ background: 'rgba(245, 158, 11, 0.03)' }}>
-                        <td className="card-item-meta tabular-nums">
+                        <td className="card-item-meta tabular-nums" style={{ paddingRight: '14px', whiteSpace: 'nowrap' }}>
                           {formatDisplayDate(pay.paymentDate)}
                         </td>
-                        <td className="font-semibold text-primary">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <td className="font-semibold text-primary" style={{ paddingLeft: '6px', minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                             <span
-                              style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', minWidth: 0 }}
                               title={`Amortización a ${pay.creditorName}`}
                             >
                               Amortización a {pay.creditorName}
                             </span>
-                            <span className="badge badge-warning" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>
+                            <span className="badge badge-warning" style={{ fontSize: '0.625rem', padding: '1px 5px', flexShrink: 0 }}>
                               Deuda Mía
                             </span>
                           </div>
-                        </td>
-                        <td title="Cuenta Débito">
-                          <span className="badge badge-neutral" style={{ color: '#10b981' }}>
-                            Cuenta Débito
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', fontSize: '0.72rem', color: '#10b981' }}>
+                            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              Cuenta Débito
+                            </span>
+                          </div>
                         </td>
                         <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ color: 'var(--accent-danger)', whiteSpace: 'nowrap' }}>
                           {pay.currency === 'USD' ? (
@@ -546,8 +549,8 @@ export const OverviewTab: React.FC = () => {
                           <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
                             <button
                               className="btn-action-icon"
-                              onClick={() => setActiveTab('receivables', 'payables')}
-                              title="Ver en Mis Deudas"
+                              onClick={() => navigateToPayableCreditor(pay.creditorName)}
+                              title={isPaid ? 'Ver en Historial Pagados (Deuda saldada)' : 'Ver saldo pendiente en Mis Deudas'}
                             >
                               <ExternalLink size={13} />
                             </button>
@@ -562,26 +565,27 @@ export const OverviewTab: React.FC = () => {
                     const pm = resolvePaymentMethod({ paymentMethodId: cp.paymentMethodId }, paymentMethods) || paymentMethods.find(p => p.id === cp.paymentMethodId);
                     return (
                       <tr key={`cp-${cp.id || m.sortDate}`} style={{ background: 'rgba(167, 139, 250, 0.03)' }}>
-                        <td className="card-item-meta tabular-nums">
+                        <td className="card-item-meta tabular-nums" style={{ paddingRight: '14px', whiteSpace: 'nowrap' }}>
                           {formatDisplayDate(cp.paymentDate)}
                         </td>
-                        <td className="font-semibold text-primary">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <td className="font-semibold text-primary" style={{ paddingLeft: '6px', minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                             <span
-                              style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', minWidth: 0 }}
                               title={`Abono a ${pm?.name || 'Tarjeta'}`}
                             >
                               Abono a {pm?.name || 'Tarjeta'}
                             </span>
-                            <span className="badge badge-neutral" style={{ fontSize: '0.625rem', color: '#a78bfa', padding: '1px 5px' }}>
+                            <span className="badge badge-neutral" style={{ fontSize: '0.625rem', color: '#a78bfa', padding: '1px 5px', flexShrink: 0 }}>
                               Abono TC
                             </span>
                           </div>
-                        </td>
-                        <td title="Cuenta Débito">
-                          <span className="badge badge-neutral" style={{ color: '#10b981' }}>
-                            Cuenta Débito
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', fontSize: '0.72rem', color: '#10b981' }}>
+                            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              Cuenta Débito
+                            </span>
+                          </div>
                         </td>
                         <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ color: 'var(--accent-danger)', whiteSpace: 'nowrap' }}>
                           -{formatSoles(cp.amountPaid)}
@@ -605,26 +609,27 @@ export const OverviewTab: React.FC = () => {
                     const inc = m.data;
                     return (
                       <tr key={`inc-${inc.id}`} style={{ background: 'rgba(16, 185, 129, 0.03)' }}>
-                        <td className="card-item-meta tabular-nums">
+                        <td className="card-item-meta tabular-nums" style={{ paddingRight: '14px', whiteSpace: 'nowrap' }}>
                           {formatDisplayDate(inc.date)}
                         </td>
-                        <td className="font-semibold text-primary">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <td className="font-semibold text-primary" style={{ paddingLeft: '6px', minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                             <span
-                              style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', minWidth: 0 }}
                               title={inc.description}
                             >
                               {inc.description}
                             </span>
-                            <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>
+                            <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '1px 5px', flexShrink: 0 }}>
                               Ingreso
                             </span>
                           </div>
-                        </td>
-                        <td title="Cuenta Débito">
-                          <span className="badge badge-neutral" style={{ color: '#10b981' }}>
-                            Cuenta Débito
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', fontSize: '0.72rem', color: '#10b981' }}>
+                            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              Cuenta Débito
+                            </span>
+                          </div>
                         </td>
                         <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ color: 'var(--accent-success)', whiteSpace: 'nowrap' }}>
                           +{formatSoles(inc.amount)}
@@ -705,6 +710,10 @@ export const OverviewTab: React.FC = () => {
 
               if (m.kind === 'payable_payment') {
                 const pay = m.data;
+                const credGroup = creditorGroups.find(
+                  g => g.creditorName?.trim().toLowerCase() === pay.creditorName?.trim().toLowerCase()
+                );
+                const isPaid = credGroup ? credGroup.isFullyPaid : false;
                 return (
                   <div key={`mob-pay-${pay.id}`} className="mobile-tx-card" style={{ borderLeft: '3px solid var(--accent-warning)' }}>
                     <div className="mobile-tx-main-row">
@@ -736,7 +745,11 @@ export const OverviewTab: React.FC = () => {
                           <span className="mobile-tx-amount tabular-nums text-danger" style={{ whiteSpace: 'nowrap' }}>-{formatSoles(pay.amount)}</span>
                         )}
                         <div className="mobile-tx-actions">
-                          <button className="btn-action-icon" onClick={() => setActiveTab('receivables', 'payables')} title="Ver en Mis Deudas">
+                          <button
+                            className="btn-action-icon"
+                            onClick={() => navigateToPayableCreditor(pay.creditorName)}
+                            title={isPaid ? 'Ver en Historial Pagados (Deuda saldada)' : 'Ver saldo pendiente en Mis Deudas'}
+                          >
                             <ExternalLink size={13} />
                           </button>
                         </div>
@@ -831,11 +844,11 @@ export const OverviewTab: React.FC = () => {
 
           {cardAdvisor.recommendedCard && (
             <div className="card-pill-hero">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <span className="card-item-title" title={cardAdvisor.recommendedCard.name}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                <span className="card-item-title" title={cardAdvisor.recommendedCard.name} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   Usa hoy: {cardAdvisor.recommendedCard.name}
                 </span>
-                <span className="badge badge-success tabular-nums">
+                <span className="badge badge-success tabular-nums" style={{ flexShrink: 0 }}>
                   {cardAdvisor.creditDays} días libres
                 </span>
               </div>
@@ -883,11 +896,13 @@ export const OverviewTab: React.FC = () => {
                     padding: '8px 10px',
                     background: 'var(--bg-subtle)',
                     borderRadius: '8px',
-                    border: '1px solid var(--border-subtle)'
+                    border: '1px solid var(--border-subtle)',
+                    minWidth: 0,
+                    gap: '8px'
                   }}
                 >
-                  <span className="card-item-title" style={{ fontSize: '0.85rem' }} title={card.name}>{card.name}</span>
-                  <span className="card-item-meta tabular-nums" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span className="card-item-title" style={{ fontSize: '0.85rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={card.name}>{card.name}</span>
+                  <span className="card-item-meta tabular-nums" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
                     <span>{creditDays} días libres</span>
                     {utilization > 0 && (
                       <span style={{ color: utilization >= 80 ? 'var(--accent-danger)' : utilization > 30 ? 'var(--accent-warning)' : 'var(--text-muted)' }}>

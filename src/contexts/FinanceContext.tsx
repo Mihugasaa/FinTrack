@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTabNavigation } from '@/hooks/useTabNavigation';
 import { useMonthNavigation } from '@/hooks/useMonthNavigation';
@@ -429,6 +429,7 @@ function useFinanceController() {
     collectPaymentNotes,
     setCollectPaymentNotes,
     expandedDebtors,
+    setExpandedDebtors,
     receivablesFilter,
     setReceivablesFilter,
     debtorName,
@@ -443,6 +444,10 @@ function useFinanceController() {
     setLoanExchangeRate,
     loanDate,
     setLoanDate,
+    loanIsDebitedFromAccount,
+    setLoanIsDebitedFromAccount,
+    loanPaymentMethodId,
+    setLoanPaymentMethodId,
     isFetchingLoanTc,
     loanTcInfo,
     setHasUserManuallyEditedLoanTc,
@@ -460,7 +465,15 @@ function useFinanceController() {
     toggleDebtorExpanded,
     handleCreateReceivable,
     deleteReceivable
-  } = useReceivables({ currentYear, currentMonth, setDebtConfirmData });
+  } = useReceivables({
+    currentYear,
+    currentMonth,
+    setDebtConfirmData,
+    onDisburseLoan: (tx: Transaction) => {
+      setTransactions(prev => [tx, ...prev]);
+      SupabaseDataService.createTransaction(tx);
+    }
+  });
 
   // Mis deudas: dinero que me prestaron, agrupado por acreedor, con pagos
   const {
@@ -501,6 +514,7 @@ function useFinanceController() {
     setHasUserManuallyEditedPayableTc,
     fetchPayableSunatRate,
     expandedCreditors,
+    setExpandedCreditors,
     payablesFilter,
     setPayablesFilter,
     payingCreditorGroup,
@@ -518,6 +532,39 @@ function useFinanceController() {
     handlePayPayable,
     handleDeletePayable
   } = usePayables({ currentYear, currentMonth, onCreditToDebit: creditLoanIncome, setDebtConfirmData });
+
+  // Navegación inteligente a acreedor / deudor con auto-filtro según estado de pago y auto-expansión
+  const navigateToPayableCreditor = useCallback((creditorName: string) => {
+    const trimmed = creditorName.trim().toLowerCase();
+    const group = creditorGroups.find(
+      g => g.creditorName?.trim().toLowerCase() === trimmed
+    );
+    if (group && group.isFullyPaid) {
+      setPayablesFilter('paid');
+    } else {
+      setPayablesFilter('pending');
+    }
+    if (group) {
+      setExpandedCreditors(prev => new Set([...prev, group.key]));
+    }
+    setActiveTab('receivables', 'payables');
+  }, [creditorGroups, setPayablesFilter, setExpandedCreditors, setActiveTab]);
+
+  const navigateToDebtor = useCallback((debtorNameStr: string) => {
+    const trimmed = debtorNameStr.trim().toLowerCase();
+    const group = debtorGroups.find(
+      g => g.debtorName?.trim().toLowerCase() === trimmed
+    );
+    if (group && group.isFullyPaid) {
+      setReceivablesFilter('paid');
+    } else {
+      setReceivablesFilter('pending');
+    }
+    if (group) {
+      setExpandedDebtors(prev => new Set([...prev, group.key]));
+    }
+    setActiveTab('receivables', 'receivables');
+  }, [debtorGroups, setReceivablesFilter, setExpandedDebtors, setActiveTab]);
 
   // Atajo PWA: si se entra con ?action=new-expense (acceso rápido del ícono en el
   // celular), abre directo el modal de registrar gasto. Solo una vez.
@@ -1872,6 +1919,7 @@ function useFinanceController() {
     collectPaymentNotes,
     setCollectPaymentNotes,
     expandedDebtors,
+    setExpandedDebtors,
     receivablesFilter,
     setReceivablesFilter,
     debtorName,
@@ -1886,6 +1934,10 @@ function useFinanceController() {
     setLoanExchangeRate,
     loanDate,
     setLoanDate,
+    loanIsDebitedFromAccount,
+    setLoanIsDebitedFromAccount,
+    loanPaymentMethodId,
+    setLoanPaymentMethodId,
     isFetchingLoanTc,
     loanTcInfo,
     setHasUserManuallyEditedLoanTc,
@@ -1942,6 +1994,7 @@ function useFinanceController() {
     setHasUserManuallyEditedPayableTc,
     fetchPayableSunatRate,
     expandedCreditors,
+    setExpandedCreditors,
     payablesFilter,
     setPayablesFilter,
     payingCreditorGroup,
@@ -1958,6 +2011,8 @@ function useFinanceController() {
     handleOpenPayPayable,
     handlePayPayable,
     handleDeletePayable,
+    navigateToPayableCreditor,
+    navigateToDebtor,
 
     // Conciliación bancaria
     isParsingStatement,

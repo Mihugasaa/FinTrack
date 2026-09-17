@@ -4,7 +4,7 @@ import React from 'react';
 import { X, Banknote, DollarSign, Sparkles, Repeat } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
-import { FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
+import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
 import { CurrencyCode } from '@/types';
 import { useFinance } from '@/contexts/FinanceContext';
 import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
@@ -31,6 +31,11 @@ export const ReceivableModal: React.FC = () => {
     isFetchingLoanTc,
     setHasUserManuallyEditedLoanTc,
     fetchLoanSunatRate,
+    loanIsDebitedFromAccount,
+    setLoanIsDebitedFromAccount,
+    loanPaymentMethodId,
+    setLoanPaymentMethodId,
+    paymentMethods,
     handleBackdropMouseDown,
     handleBackdropClick
   } = useFinance();
@@ -40,6 +45,9 @@ export const ReceivableModal: React.FC = () => {
   };
   const onSubmit = handleCreateReceivable;
   const isEditing = !!editingReceivableId;
+  const debitMethods = React.useMemo(() => {
+    return (paymentMethods || []).filter(p => p.type === 'debit' || p.type === 'cash');
+  }, [paymentMethods]);
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
 
   return (
@@ -222,6 +230,71 @@ export const ReceivableModal: React.FC = () => {
                   Cotización oficial SUNAT para la fecha seleccionada. Puedes editarla manualmente si acordaron otra tasa.
                 </span>
               </div>
+            </div>
+          )}
+
+          {!isEditing && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                padding: '12px 14px',
+                background: 'var(--bg-subtle)',
+                borderRadius: '8px',
+                border: '1px solid var(--border-subtle)',
+                marginTop: '10px',
+                marginBottom: '16px',
+                cursor: 'pointer'
+              }}
+              onClick={() => setLoanIsDebitedFromAccount(prev => !prev)}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <input
+                  type="checkbox"
+                  id="loanIsDebitedFromAccount"
+                  checked={loanIsDebitedFromAccount}
+                  onChange={e => {
+                    e.stopPropagation();
+                    setLoanIsDebitedFromAccount(e.target.checked);
+                  }}
+                  onClick={e => e.stopPropagation()}
+                  style={{ accentColor: 'var(--accent-primary)', width: '18px', height: '18px', marginTop: '2px', cursor: 'pointer' }}
+                />
+                <label
+                  htmlFor="loanIsDebitedFromAccount"
+                  onClick={e => e.stopPropagation()}
+                  style={{ fontSize: '0.825rem', color: 'var(--text-primary)', cursor: 'pointer', margin: 0, lineHeight: 1.45 }}
+                >
+                  <strong>¿El dinero que presté sale de mi saldo en cuenta Débito?</strong>
+                  <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '2px' }}>
+                    {loanCurrency === 'USD' && loanAmount && !isNaN(parseFloat(loanAmount))
+                      ? `Se debitarán S/ ${(parseFloat(loanAmount) * (parseFloat(loanExchangeRate) || FALLBACK_USD_PEN_RATE)).toFixed(2)} • $${parseFloat(loanAmount).toFixed(2)} USD al cambio • de tu saldo disponible y se registrará la salida en tus movimientos.`
+                      : 'Marca esta opción si el dinero salió de tu cuenta bancaria para descontar de tu saldo disponible y registrarlo en tus movimientos.'}
+                  </span>
+                </label>
+              </div>
+
+              {loanIsDebitedFromAccount && debitMethods.length > 1 && (
+                <div
+                  style={{ marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed var(--border-subtle)' }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>
+                    Cuenta de débito de la cual salió el dinero:
+                  </label>
+                  <CustomSelect
+                    id="select-loan-payment-method"
+                    value={loanPaymentMethodId || debitMethods[0].id}
+                    onChange={val => setLoanPaymentMethodId(val)}
+                    options={debitMethods.map(pm => ({
+                      value: pm.id,
+                      label: pm.name,
+                      icon: <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: pm.color }} />
+                    }))}
+                  />
+                </div>
+              )}
             </div>
           )}
 

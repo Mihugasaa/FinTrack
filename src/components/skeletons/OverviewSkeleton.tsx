@@ -154,19 +154,20 @@ export const OverviewSkeleton: React.FC = () => {
             <table className="tx-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th><span className="skeleton-shimmer sk-box" style={{ width: '45px', height: '12px' }} /></th>
-                  <th><span className="skeleton-shimmer sk-box" style={{ width: '75px', height: '12px' }} /></th>
-                  <th><span className="skeleton-shimmer sk-box" style={{ width: '50px', height: '12px' }} /></th>
-                  <th className="text-right"><span className="skeleton-shimmer sk-box" style={{ width: '60px', height: '12px', marginLeft: 'auto' }} /></th>
-                  <th className="text-right"><span className="skeleton-shimmer sk-box" style={{ width: '40px', height: '12px', marginLeft: 'auto' }} /></th>
+                  <th style={{ width: '96px', paddingRight: '14px' }}><span className="skeleton-shimmer sk-box" style={{ width: '45px', height: '12px' }} /></th>
+                  <th style={{ paddingLeft: '6px' }}><span className="skeleton-shimmer sk-box" style={{ width: '110px', height: '12px' }} /></th>
+                  <th className="text-right" style={{ width: '120px' }}><span className="skeleton-shimmer sk-box" style={{ width: '60px', height: '12px', marginLeft: 'auto' }} /></th>
+                  <th className="text-right" style={{ width: '50px' }}><span className="skeleton-shimmer sk-box" style={{ width: '30px', height: '12px', marginLeft: 'auto' }} /></th>
                 </tr>
               </thead>
               <tbody>
                 {[1, 2, 3, 4, 5].map(i => (
                   <tr key={i}>
-                    <td><span className="skeleton-shimmer sk-box" style={{ width: '55px', height: '13px' }} /></td>
-                    <td><span className="skeleton-shimmer sk-box" style={{ width: `${100 + (i % 3) * 35}px`, height: '14px' }} /></td>
-                    <td><span className="skeleton-shimmer sk-pill" style={{ width: '85px', height: '20px' }} /></td>
+                    <td style={{ paddingRight: '14px' }}><span className="skeleton-shimmer sk-box" style={{ width: '55px', height: '13px' }} /></td>
+                    <td style={{ paddingLeft: '6px' }}>
+                      <span className="skeleton-shimmer sk-box" style={{ width: `${110 + (i % 3) * 35}px`, height: '14px', display: 'block', marginBottom: '4px' }} />
+                      <span className="skeleton-shimmer sk-box" style={{ width: '65px', height: '10px' }} />
+                    </td>
                     <td className="text-right"><span className="skeleton-shimmer sk-box" style={{ width: '65px', height: '14px', marginLeft: 'auto' }} /></td>
                     <td className="text-right"><span className="skeleton-shimmer sk-box" style={{ width: '38px', height: '20px', marginLeft: 'auto', borderRadius: '4px' }} /></td>
                   </tr>

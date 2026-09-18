@@ -386,8 +386,13 @@ export function calculateCurrentDebitBalance(
     }
   });
 
-  // 3. Cobranzas a terceros ya cobradas
-  const collectedFromDebtors = receivables.reduce((acc, curr) => acc + curr.paidAmount, 0);
+  // 3. Cobranzas a terceros ya cobradas (con paridad cambiaria en USD)
+  const collectedFromDebtors = receivables.reduce((acc, curr) => {
+    const isUsd = curr.currency === 'USD';
+    const exRate = curr.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const paidPen = isUsd ? curr.paidAmount * exRate : curr.paidAmount;
+    return acc + paidPen;
+  }, 0);
 
   // 3.b Deudas mías personales (Préstamos recibidos que entraron a débito, y pagos que hice)
   let borrowedCreditedToDebitToday = 0;
@@ -692,8 +697,13 @@ export function calculateMonthlyDiagnostic(
   const simpleRemaining = totalIncome - totalExpensesConsumed;
   const savingsRatePercentage = totalIncome > 0 ? (simpleRemaining / totalIncome) * 100 : 0;
 
-  // 4. Cobranzas a terceros cobradas
-  const collectedReceivables = receivables.reduce((acc, curr) => acc + curr.paidAmount, 0);
+  // 4. Cobranzas a terceros cobradas (con paridad cambiaria en USD)
+  const collectedReceivables = receivables.reduce((acc, curr) => {
+    const isUsd = curr.currency === 'USD';
+    const exRate = curr.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const paidPen = isUsd ? curr.paidAmount * exRate : curr.paidAmount;
+    return acc + paidPen;
+  }, 0);
 
   // 4.b Préstamos recibidos acreditados a débito ESTE mes: entran como caja real
   // disponible (mismo criterio que el saldo de débito).

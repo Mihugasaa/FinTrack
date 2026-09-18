@@ -132,9 +132,30 @@ export const ReceivablesTab: React.FC = () => {
   const pendingReceivablesCount = receivables.filter(r => r.remainingAmount > 0).length;
   const activePayablesCount = payables.filter(p => (p.remainingAmount ?? (p.totalAmount ?? p.originalAmount)) > 0).length;
 
-  const totalReceivablesOrig = receivables.reduce((a, b) => a + b.originalAmount, 0);
+  // Totales históricos originales con paridad cambiaria exacta (USD a PEN)
+  const totalReceivablesOrig = receivables.reduce((acc, curr) => {
+    const isUsd = curr.currency === 'USD';
+    const exRate = curr.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const pen = isUsd ? (curr.amountPen || curr.originalAmount * exRate) : curr.originalAmount;
+    return acc + pen;
+  }, 0);
+  const totalReceivablesOrigUsd = receivables
+    .filter(r => r.currency === 'USD')
+    .reduce((acc, curr) => acc + curr.originalAmount, 0);
 
-  const totalPayablesOrig = payables.reduce((a, b) => a + (b.totalAmount ?? b.originalAmount), 0);
+  const totalPayablesOrig = payables.reduce((acc, curr) => {
+    const isUsd = curr.currency === 'USD';
+    const orig = (isUsd && curr.originalAmount) ? curr.originalAmount : (curr.originalAmount ?? curr.totalAmount ?? 0);
+    const exRate = curr.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const pen = isUsd ? (curr.amountPen || orig * exRate) : orig;
+    return acc + pen;
+  }, 0);
+  const totalPayablesOrigUsd = payables
+    .filter(p => p.currency === 'USD')
+    .reduce((acc, curr) => {
+      const orig = (curr.currency === 'USD' && curr.originalAmount) ? curr.originalAmount : (curr.originalAmount ?? curr.totalAmount ?? 0);
+      return acc + orig;
+    }, 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -315,7 +336,7 @@ export const ReceivablesTab: React.FC = () => {
               </span>
             </div>
             <div className="loans-info-banner-right">
-              <span className="badge badge-neutral" title={`Total prestado históricamente: ${formatSoles(totalReceivablesOrig)}`}>
+              <span className="badge badge-neutral" title={`Total prestado históricamente: ${formatSoles(totalReceivablesOrig)}${totalReceivablesOrigUsd > 0 ? ` (incluye $ ${totalReceivablesOrigUsd.toFixed(2)} USD convertidos)` : ''}`}>
                 {formatSoles(totalReceivablesOrig)} prestado en total
               </span>
             </div>
@@ -674,7 +695,7 @@ export const ReceivablesTab: React.FC = () => {
               </span>
             </div>
             <div className="loans-info-banner-right">
-              <span className="badge badge-warning" title={`Total pasivo asumido: ${formatSoles(totalPayablesOrig)}`}>
+              <span className="badge badge-warning" title={`Total pasivo asumido: ${formatSoles(totalPayablesOrig)}${totalPayablesOrigUsd > 0 ? ` (incluye $ ${totalPayablesOrigUsd.toFixed(2)} USD convertidos)` : ''}`}>
                 {formatSoles(totalPayablesOrig)} total asumido
               </span>
             </div>

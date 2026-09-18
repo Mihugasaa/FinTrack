@@ -82,34 +82,6 @@ function useFinanceController() {
     return () => { cancelled = true; };
   }, [router]);
 
-  // Carga inicial de datos de cuenta (una vez que hay usuario autenticado). La data
-  // por mes (transacciones, ingresos, abonos, periodo) se carga en el efecto de mes.
-  useEffect(() => {
-    if (!currentUser) return;
-
-    SupabaseDataService.getPaymentMethods().then(methods => {
-      if (methods && methods.length > 0) {
-        setPaymentMethods(prev => methods.map(m => {
-          const known = prev.find(p => p.id === m.id);
-          // El valor de la nube (ya persistido) manda; caemos al local solo si la
-          // columna aún no existe en la BD y la nube no lo trajo.
-          return { ...m, initialDebt: m.initialDebt ?? known?.initialDebt ?? 0 };
-        }));
-      } else if (methods && methods.length === 0) {
-        // Brand-new account: seed the generic starter methods in the cloud.
-        initialPaymentMethods.forEach(pm => SupabaseDataService.createPaymentMethod(pm));
-      }
-    });
-    SupabaseDataService.getReceivables().then(recs => {
-      if (recs && recs.length > 0) setReceivables(recs);
-    });
-    SupabaseDataService.getPayables().then(pays => {
-      if (pays && pays.length > 0) setPayables(pays);
-    });
-    SupabaseDataService.getCategories().then(cats => {
-      if (cats && cats.length > 0) setCategories(cats);
-    });
-  }, [currentUser, reloadNonce]);
 
   const handleLogout = async () => {
     await AuthService.logout();
@@ -256,38 +228,6 @@ function useFinanceController() {
     ? getEndOfMonthDate(currentYear, currentMonth)
     : `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
 
-  // Coordinación de fin de carga inicial para ocultar el esqueleto
-  useEffect(() => {
-    if (!currentUser) return;
-
-    let isMounted = true;
-    const safetyTimer = setTimeout(() => {
-      if (isMounted) setIsInitialLoading(false);
-    }, 6000);
-
-    Promise.allSettled([
-      SupabaseDataService.getPaymentMethods(),
-      SupabaseDataService.getReceivables(),
-      SupabaseDataService.getPayables(),
-      SupabaseDataService.getCategories(),
-      SupabaseDataService.getTransactions(monthKey),
-      SupabaseDataService.getOtherIncomes(monthKey),
-      SupabaseDataService.getMonthlyPeriod(currentYear, currentMonth),
-      SupabaseDataService.getCardPayments(monthKey)
-    ]).then(() => {
-      if (isMounted) {
-        clearTimeout(safetyTimer);
-        setTimeout(() => {
-          if (isMounted) setIsInitialLoading(false);
-        }, 120);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      clearTimeout(safetyTimer);
-    };
-  }, [currentUser, monthKey, currentYear, currentMonth]);
 
   // Transacciones: estado maestro, carga/sync del mes, formulario de gasto e IA
   const {
@@ -596,6 +536,57 @@ function useFinanceController() {
     }
   }, [currentUser, handleOpenCreateTransaction]);
 
+  // Coordinación de carga inicial unificada de datos de cuenta y fin del esqueleto
+  // (se ejecuta una sola vez al autenticar, eliminando peticiones redundantes)
+  const initialLoadDoneRef = useRef(false);
+  useEffect(() => {
+    if (!currentUser || initialLoadDoneRef.current) return;
+    initialLoadDoneRef.current = true;
+
+    let isMounted = true;
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setIsInitialLoading(false);
+    }, 6000);
+
+    const pMethods = SupabaseDataService.getPaymentMethods().then(methods => {
+      if (!isMounted) return;
+      if (methods && methods.length > 0) {
+        setPaymentMethods(prev => methods.map(m => {
+          const known = prev.find(p => p.id === m.id);
+          return { ...m, initialDebt: m.initialDebt ?? known?.initialDebt ?? 0 };
+        }));
+      } else if (methods && methods.length === 0) {
+        initialPaymentMethods.forEach(pm => SupabaseDataService.createPaymentMethod(pm));
+      }
+    });
+
+    const pRecs = SupabaseDataService.getReceivables().then(recs => {
+      if (isMounted && recs && recs.length > 0) setReceivables(recs);
+    });
+
+    const pPays = SupabaseDataService.getPayables().then(pays => {
+      if (isMounted && pays && pays.length > 0) setPayables(pays);
+    });
+
+    const pCats = SupabaseDataService.getCategories().then(cats => {
+      if (isMounted && cats && cats.length > 0) setCategories(cats);
+    });
+
+    Promise.allSettled([pMethods, pRecs, pPays, pCats]).then(() => {
+      if (isMounted) {
+        clearTimeout(safetyTimer);
+        setTimeout(() => {
+          if (isMounted) setIsInitialLoading(false);
+        }, 120);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+    };
+  }, [currentUser]);
+
   // Sincronización de datos por mes desde Supabase (las transacciones se cargan
   // en useTransactions; aquí quedan ingresos, periodo y abonos, que comparten
   // el mismo disparo de mes/usuario)
@@ -736,27 +727,132 @@ function useFinanceController() {
   }, [currentUser, setTransactions, setExtraIncomes, setCardPayments, reloadNonce]);
 
   // Recarga de datos desde la nube (pull-to-refresh) SIN recargar la pagina:
-  // reinicia el guard del historial y sube el nonce para re-disparar los loaders.
-  // Conserva mes seleccionado, pestana activa y posicion de scroll.
+  // actualiza todos los datos directamente en una sola ronda de peticiones sin duplicados.
   const reloadData = async () => {
     setIsRefreshingData(true);
     didLoadAllHistoryRef.current = false;
-    setReloadNonce(n => n + 1);
 
     try {
       await Promise.allSettled([
-        SupabaseDataService.getPaymentMethods(),
-        SupabaseDataService.getReceivables(),
-        SupabaseDataService.getPayables(),
-        SupabaseDataService.getCategories(),
-        SupabaseDataService.getTransactions(monthKey),
-        SupabaseDataService.getOtherIncomes(monthKey),
-        SupabaseDataService.getMonthlyPeriod(currentYear, currentMonth),
-        SupabaseDataService.getCardPayments(monthKey),
-        SupabaseDataService.getAllTransactions(),
-        SupabaseDataService.getAllOtherIncomes(),
-        SupabaseDataService.getAllCardPayments(),
-        SupabaseDataService.getAllMonthlyPeriods()
+        SupabaseDataService.getPaymentMethods().then(methods => {
+          if (methods && methods.length > 0) {
+            setPaymentMethods(prev => methods.map(m => {
+              const known = prev.find(p => p.id === m.id);
+              return { ...m, initialDebt: m.initialDebt ?? known?.initialDebt ?? 0 };
+            }));
+          }
+        }),
+        SupabaseDataService.getReceivables().then(recs => {
+          if (recs && recs.length > 0) setReceivables(recs);
+        }),
+        SupabaseDataService.getPayables().then(pays => {
+          if (pays && pays.length > 0) setPayables(pays);
+        }),
+        SupabaseDataService.getCategories().then(cats => {
+          if (cats && cats.length > 0) setCategories(cats);
+        }),
+        SupabaseDataService.getTransactions(monthKey).then(cloudTxs => {
+          if (cloudTxs && cloudTxs.length > 0) {
+            setTransactions(prev => deduplicateTransactions([...prev, ...cloudTxs]));
+          }
+        }),
+        SupabaseDataService.getOtherIncomes(monthKey).then(cloudIncomes => {
+          if (cloudIncomes && cloudIncomes.length > 0) {
+            setExtraIncomes(prev => ({ ...prev, [monthKey]: cloudIncomes }));
+          }
+        }),
+        SupabaseDataService.getMonthlyPeriod(currentYear, currentMonth).then(period => {
+          if (period && period.initialDebitBalance !== undefined && period.initialDebitBalance > 0) {
+            setInitialDebitBalances(prev => ({ ...prev, [monthKey]: period.initialDebitBalance }));
+          }
+          if (period && period.baseSalary !== undefined && period.baseSalary > 0) {
+            setSalaries(prev => [
+              {
+                id: prev[0]?.id || 'sal-1',
+                source: prev[0]?.source || 'Empleo Principal',
+                amount: period.baseSalary,
+                payDay: prev[0]?.payDay || 30
+              }
+            ]);
+          }
+        }),
+        SupabaseDataService.getCardPayments(monthKey).then(cloudPayments => {
+          if (cloudPayments && cloudPayments.length > 0) {
+            setCardPayments(prev => {
+              const localThisMonth = prev.filter(p => p.paymentDate.startsWith(monthKey));
+              const enrichedCloud: CardPayment[] = cloudPayments.map((cp, idx) => {
+                const localMatch = localThisMonth.find(lp =>
+                  (lp.id && cp.id && lp.id === cp.id) ||
+                  (lp.paymentMethodId === cp.paymentMethodId && Math.abs(lp.amountPaid - cp.amountPaid) < 0.01 && lp.paymentDate === cp.paymentDate)
+                );
+                return {
+                  id: cp.id || localMatch?.id || `cp-${monthKey}-${idx}`,
+                  paymentMethodId: cp.paymentMethodId,
+                  amountPaid: cp.amountPaid,
+                  paymentDate: cp.paymentDate,
+                  sourceType: cp.sourceType !== 'DEBIT_ACCOUNT' && cp.sourceType ? cp.sourceType : (localMatch?.sourceType || 'DEBIT_ACCOUNT')
+                };
+              });
+              const localFiltered = prev.filter(p => !p.paymentDate.startsWith(monthKey));
+              return [...localFiltered, ...enrichedCloud];
+            });
+          }
+        }),
+        SupabaseDataService.getAllTransactions().then(allTxs => {
+          if (allTxs && allTxs.length > 0) {
+            setTransactions(prev => deduplicateTransactions([...allTxs, ...prev]));
+          }
+        }),
+        SupabaseDataService.getAllOtherIncomes().then(grouped => {
+          if (grouped) {
+            setExtraIncomes(prev => {
+              const merged = { ...prev };
+              Object.entries(grouped).forEach(([k, list]) => {
+                const byId = new Map((merged[k] || []).map(i => [i.id, i]));
+                list.forEach(i => byId.set(i.id, i));
+                merged[k] = Array.from(byId.values());
+              });
+              return merged;
+            });
+          }
+        }),
+        SupabaseDataService.getAllCardPayments().then(allPayments => {
+          if (allPayments && allPayments.length > 0) {
+            setCardPayments(prev => {
+              const keyOf = (p: CardPayment) => p.id || `${p.paymentMethodId}_${p.amountPaid}_${p.paymentDate}`;
+              const byKey = new Map<string, CardPayment>();
+              prev.forEach(p => byKey.set(keyOf(p), p));
+              allPayments.forEach(cp => {
+                const local = byKey.get(keyOf(cp));
+                byKey.set(keyOf(cp), {
+                  id: cp.id || local?.id,
+                  paymentMethodId: cp.paymentMethodId,
+                  amountPaid: cp.amountPaid,
+                  paymentDate: cp.paymentDate,
+                  sourceType: (cp.sourceType && cp.sourceType !== 'DEBIT_ACCOUNT') ? cp.sourceType : (local?.sourceType || 'DEBIT_ACCOUNT')
+                });
+              });
+              return Array.from(byKey.values());
+            });
+          }
+        }),
+        SupabaseDataService.getAllMonthlyPeriods().then(periods => {
+          if (!periods) return;
+          setInitialDebitBalances(prev => {
+            const fromCloud: Record<string, number> = {};
+            Object.entries(periods).forEach(([k, v]) => {
+              if (v.initialDebitBalance > 0) fromCloud[k] = v.initialDebitBalance;
+            });
+            return { ...fromCloud, ...prev };
+          });
+          setMonthlySalaries(prev => {
+            const fromCloud: Record<string, number> = {};
+            Object.entries(periods).forEach(([k, v]) => {
+              if (v.baseSalary > 0) fromCloud[k] = v.baseSalary;
+            });
+            return { ...fromCloud, ...prev };
+          });
+        })
       ]);
     } finally {
       setIsRefreshingData(false);

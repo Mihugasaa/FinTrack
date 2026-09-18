@@ -25,9 +25,34 @@ import { IncomesTab } from '@/components/tabs/IncomesTab';
 import { TransactionsTab } from '@/components/tabs/TransactionsTab';
 import { CardsTab } from '@/components/tabs/CardsTab';
 import { ReceivablesTab } from '@/components/tabs/ReceivablesTab';
-import { AnalysisTab } from '@/components/tabs/AnalysisTab';
-import { ReconciliationTab } from '@/components/tabs/ReconciliationTab';
+import dynamic from 'next/dynamic';
 import { OverviewSkeleton } from '@/components/skeletons/OverviewSkeleton';
+
+const AnalysisTab = dynamic(
+  () => import('@/components/tabs/AnalysisTab').then(mod => mod.AnalysisTab),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center min-h-[350px] text-slate-400">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mr-3"></div>
+        <span className="text-sm font-medium">Cargando análisis avanzado...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
+
+const ReconciliationTab = dynamic(
+  () => import('@/components/tabs/ReconciliationTab').then(mod => mod.ReconciliationTab),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center min-h-[350px] text-slate-400">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mr-3"></div>
+        <span className="text-sm font-medium">Cargando conciliación bancaria...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
 
 /**
  * Maquetación del dashboard. Solo decide qué pestaña y qué modales están

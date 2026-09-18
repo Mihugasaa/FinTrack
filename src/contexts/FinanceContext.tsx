@@ -32,7 +32,8 @@ import {
   formatDisplayDate,
   formatSoles,
   getEffectiveDayOfMonth,
-  getEndOfMonthDate
+  getEndOfMonthDate,
+  getFallbackReceivablePaymentDate
 } from '@/lib/calculations';
 import {
   Transaction,
@@ -464,7 +465,21 @@ function useFinanceController() {
     handleOpenAddLoanForDebtor,
     toggleDebtorExpanded,
     handleCreateReceivable,
-    deleteReceivable
+    deleteReceivable,
+    isEditCollectModalOpen,
+    setIsEditCollectModalOpen,
+    editingCollectRecId,
+    editingCollectPaymentId,
+    editCollectPaymentDate,
+    setEditCollectPaymentDate,
+    editCollectPaymentNotes,
+    setEditCollectPaymentNotes,
+    editCollectAmount,
+    setEditCollectAmount,
+    editCollectDebtorName,
+    handleOpenEditCollectPayment,
+    handleSaveEditCollectPayment,
+    handleDeleteCollectPayment
   } = useReceivables({
     currentYear,
     currentMonth,
@@ -1307,12 +1322,13 @@ function useFinanceController() {
     });
   }, [currentMonthTransactions, searchQuery, selectedCategory, txTypeFilter, selectedPaymentMethod, paymentMethods]);
 
-  // Movimientos unificados para la tabla y feed táctil (Gastos, Pagos Tarjeta, Ingresos y Pagos de Deudas)
+  // Movimientos unificados para la tabla y feed táctil (Gastos, Pagos Tarjeta, Ingresos, Pagos de Deudas y Cobros de Préstamos)
   type UnifiedMovement =
     | { kind: 'transaction'; data: Transaction; sortDate: string }
     | { kind: 'card_payment'; data: CardPayment; index: number; sortDate: string }
     | { kind: 'income'; data: { id: string; description: string; amount: number; date: string; type: 'salary' | 'extra' }; sortDate: string }
     | { kind: 'payable_payment'; data: { id: string; payableId: string; creditorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string }; sortDate: string }
+    | { kind: 'receivable_payment'; data: { id: string; receivableId: string; debtorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string }; sortDate: string }
     | { kind: 'scheduled_payable'; data: { id: string; payableId: string; creditorName: string; description: string; amountPen: number; currency?: 'PEN' | 'USD'; remaining: number; dueDate: string }; sortDate: string };
 
   const combinedMovements = useMemo<UnifiedMovement[]>(() => {
@@ -1436,14 +1452,56 @@ function useFinanceController() {
       });
     }
 
+    // 5. Cobros de Préstamos Otorgados (Ingresos recibidos por cobranzas a deudores)
+    if (txTypeFilter === 'ALL' || txTypeFilter === 'INCOMES') {
+      receivables.forEach(r => {
+        const effectivePayments = (r.payments && r.payments.length > 0)
+          ? r.payments
+          : (r.paidAmount > 0 ? [{
+              id: `legacy-rec-${r.id}`,
+              receivableId: r.id,
+              amount: r.paidAmount,
+              amountPaid: r.paidAmount,
+              paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr),
+              paymentMethodId: 'pm-1',
+              notes: 'Cobro de préstamo'
+            }] : []);
+
+        effectivePayments.forEach(pay => {
+          if (pay.paymentDate.startsWith(monthKey)) {
+            const searchMatches = !searchQuery || `cobro prestamo ${r.debtorName} ${r.description}`.toLowerCase().includes(searchQuery.toLowerCase());
+            const catMatches = selectedCategory === 'ALL';
+            const methodMatches = selectedPaymentMethod === 'ALL' || pay.paymentMethodId === selectedPaymentMethod;
+            if (searchMatches && catMatches && methodMatches) {
+              items.push({
+                kind: 'receivable_payment',
+                data: {
+                  id: pay.id,
+                  receivableId: r.id,
+                  debtorName: r.debtorName,
+                  description: r.description,
+                  amount: pay.amount,
+                  currency: r.currency,
+                  exchangeRate: r.exchangeRate,
+                  paymentDate: pay.paymentDate,
+                  notes: pay.notes
+                },
+                sortDate: pay.paymentDate
+              });
+            }
+          }
+        });
+      });
+    }
+
     // Orden determinista: por fecha descendente y, ante empate (mismo día), por un
-    // texto/id estable. Sin este desempate, el orden de pagos recurrentes del mismo
-    // día variaba entre meses (dependía del orden de llegada desde la nube).
+    // texto/id estable.
     const tieKey = (m: UnifiedMovement): string => {
       switch (m.kind) {
         case 'transaction': return `${m.data.description} ${m.data.id}`;
         case 'income': return `${m.data.description} ${m.data.id}`;
         case 'payable_payment': return `${m.data.creditorName} ${m.data.description} ${m.data.id}`;
+        case 'receivable_payment': return `${m.data.debtorName} ${m.data.description} ${m.data.id}`;
         case 'card_payment': return `${m.data.paymentMethodId} ${m.data.id || m.index}`;
         case 'scheduled_payable': return `${m.data.creditorName} ${m.data.id}`;
       }
@@ -1457,24 +1515,30 @@ function useFinanceController() {
       if (createdDiff !== 0) return createdDiff;
       return tieKey(a).localeCompare(tieKey(b));
     });
-  }, [txTypeFilter, filteredTransactions, currentMonthCardPayments, paymentMethods, searchQuery, selectedCategory, selectedPaymentMethod, salaries, monthKey, currentOtherIncomes, payables]);
+  }, [txTypeFilter, filteredTransactions, currentMonthCardPayments, paymentMethods, searchQuery, selectedCategory, selectedPaymentMethod, salaries, monthKey, currentOtherIncomes, payables, receivables, currentDateStr]);
 
   // Total de movimientos del mes SIN filtros — fuente única para el badge de "Movimientos"
-  // (pestaña de navegación y cabecera del listado). Cuenta los cuatro tipos que alimentan
-  // combinedMovements: gastos, pagos a tarjeta, ingresos (sueldos + extras) y pagos de deuda.
   const monthMovementsTotal = useMemo(() => {
     const payablePaymentsThisMonth = payables.reduce(
       (acc, p) => acc + (p.payments || []).filter(pay => pay.paymentDate.startsWith(monthKey)).length,
       0
     );
+    const receivablePaymentsThisMonth = receivables.reduce((acc, r) => {
+      const effPayments = (r.payments && r.payments.length > 0)
+        ? r.payments
+        : (r.paidAmount > 0 ? [{ paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr) }] : []);
+      return acc + effPayments.filter(pay => pay.paymentDate.startsWith(monthKey)).length;
+    }, 0);
+
     return (
       currentMonthTransactions.length +
       currentMonthCardPayments.length +
       salaries.length +
       currentOtherIncomes.length +
-      payablePaymentsThisMonth
+      payablePaymentsThisMonth +
+      receivablePaymentsThisMonth
     );
-  }, [currentMonthTransactions, currentMonthCardPayments, salaries, currentOtherIncomes, payables, monthKey]);
+  }, [currentMonthTransactions, currentMonthCardPayments, salaries, currentOtherIncomes, payables, receivables, monthKey, currentDateStr]);
 
   // Métricas Consolidadas de Préstamos y Deudas con Paridad Cambiaria
   const netLoansBalance = useMemo(() => {
@@ -1649,7 +1713,7 @@ function useFinanceController() {
 
   const renderTodayDividerRow = (keySuffix: string | number) => (
     <tr key={`today-divider-${keySuffix}`} className="today-divider-row">
-      <td colSpan={8}>
+      <td colSpan={6}>
         <div className="today-divider-container">
           <div className="today-divider-line" />
           <div className="today-divider-badge">
@@ -1955,6 +2019,20 @@ function useFinanceController() {
     toggleDebtorExpanded,
     handleCreateReceivable,
     deleteReceivable,
+    isEditCollectModalOpen,
+    setIsEditCollectModalOpen,
+    editingCollectRecId,
+    editingCollectPaymentId,
+    editCollectPaymentDate,
+    setEditCollectPaymentDate,
+    editCollectPaymentNotes,
+    setEditCollectPaymentNotes,
+    editCollectAmount,
+    setEditCollectAmount,
+    editCollectDebtorName,
+    handleOpenEditCollectPayment,
+    handleSaveEditCollectPayment,
+    handleDeleteCollectPayment,
 
     // Mis deudas
     payables,

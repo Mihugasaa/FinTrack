@@ -42,7 +42,9 @@ export const OverviewTab: React.FC = () => {
     setActiveTab,
     setCardsSubTab,
     navigateToPayableCreditor,
+    navigateToDebtor,
     creditorGroups,
+    debtorGroups,
     aiAnomalies,
     handleDismissAnomaly,
     paymentMethods,
@@ -560,6 +562,63 @@ export const OverviewTab: React.FC = () => {
                     );
                   }
 
+                  if (m.kind === 'receivable_payment') {
+                    const pay = m.data;
+                    const dGroup = debtorGroups.find(
+                      g => g.debtorName?.trim().toLowerCase() === pay.debtorName?.trim().toLowerCase()
+                    );
+                    const isPaid = dGroup ? dGroup.isFullyPaid : false;
+                    return (
+                      <tr key={`recpay-${pay.id}`} style={{ background: 'rgba(16, 185, 129, 0.03)' }}>
+                        <td className="card-item-meta tabular-nums" style={{ paddingRight: '14px', whiteSpace: 'nowrap' }}>
+                          {formatDisplayDate(pay.paymentDate)}
+                        </td>
+                        <td className="font-semibold text-primary" style={{ paddingLeft: '6px', minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                            <span
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', minWidth: 0 }}
+                              title={`Cobro a ${pay.debtorName}`}
+                            >
+                              Cobro a {pay.debtorName}
+                            </span>
+                            <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '1px 5px', flexShrink: 0 }}>
+                              Cobro Préstamo
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', fontSize: '0.72rem', color: '#10b981' }}>
+                            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              Cuenta Débito
+                            </span>
+                          </div>
+                        </td>
+                        <td className="tx-amount-cell tabular-nums text-right font-semibold" style={{ color: 'var(--accent-success)', whiteSpace: 'nowrap' }}>
+                          {pay.currency === 'USD' ? (
+                            <div style={{ whiteSpace: 'nowrap' }}>
+                              <span className="tabular-nums" style={{ fontWeight: 600 }}>+$ {pay.amount.toFixed(2)} USD</span>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', whiteSpace: 'nowrap' }}>
+                                +{formatSoles(pay.amount * (pay.exchangeRate || FALLBACK_USD_PEN_RATE))}
+                              </span>
+                            </div>
+                          ) : (
+                            `+${formatSoles(pay.amount)}`
+                          )}
+                        </td>
+                        <td className="text-right">
+                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                            <button
+                              className="btn-action-icon"
+                              onClick={() => navigateToDebtor(pay.debtorName)}
+                              title={isPaid ? 'Ver en Historial Cobrados (Préstamo saldado)' : 'Ver saldo pendiente en Préstamos'}
+                            >
+                              <ExternalLink size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   if (m.kind === 'card_payment') {
                     const cp = m.data;
                     const pm = resolvePaymentMethod({ paymentMethodId: cp.paymentMethodId }, paymentMethods) || paymentMethods.find(p => p.id === cp.paymentMethodId);
@@ -749,6 +808,57 @@ export const OverviewTab: React.FC = () => {
                             className="btn-action-icon"
                             onClick={() => navigateToPayableCreditor(pay.creditorName)}
                             title={isPaid ? 'Ver en Historial Pagados (Deuda saldada)' : 'Ver saldo pendiente en Mis Deudas'}
+                          >
+                            <ExternalLink size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (m.kind === 'receivable_payment') {
+                const pay = m.data;
+                const dGroup = debtorGroups.find(
+                  g => g.debtorName?.trim().toLowerCase() === pay.debtorName?.trim().toLowerCase()
+                );
+                const isPaid = dGroup ? dGroup.isFullyPaid : false;
+                return (
+                  <div key={`mob-recpay-${pay.id}`} className="mobile-tx-card" style={{ borderLeft: '3px solid var(--accent-success)' }}>
+                    <div className="mobile-tx-main-row">
+                      <div className="mobile-tx-left">
+                        <div className="mobile-tx-icon-wrap" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-success)' }}>
+                          <TrendingUp size={16} />
+                        </div>
+                        <div className="mobile-tx-info">
+                          <div className="mobile-tx-title-row">
+                            <span className="mobile-tx-title">Cobro a {pay.debtorName}</span>
+                            <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '1px 4px' }}>Cobro Préstamo</span>
+                          </div>
+                          <div className="mobile-tx-meta">
+                            <span>{formatDisplayDate(pay.paymentDate)}</span>
+                            <span>•</span>
+                            <span style={{ color: '#10b981', fontWeight: 500 }}>Cuenta Débito</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mobile-tx-right">
+                        {pay.currency === 'USD' ? (
+                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            <span className="mobile-tx-amount tabular-nums text-success" style={{ whiteSpace: 'nowrap', color: 'var(--accent-success)' }}>+$ {pay.amount.toFixed(2)} USD</span>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', whiteSpace: 'nowrap' }}>
+                              +{formatSoles(pay.amount * (pay.exchangeRate || FALLBACK_USD_PEN_RATE))}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="mobile-tx-amount tabular-nums text-success" style={{ whiteSpace: 'nowrap', color: 'var(--accent-success)' }}>+{formatSoles(pay.amount)}</span>
+                        )}
+                        <div className="mobile-tx-actions">
+                          <button
+                            className="btn-action-icon"
+                            onClick={() => navigateToDebtor(pay.debtorName)}
+                            title={isPaid ? 'Ver en Historial Cobrados (Préstamo saldado)' : 'Ver saldo pendiente en Préstamos'}
                           >
                             <ExternalLink size={13} />
                           </button>

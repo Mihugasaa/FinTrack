@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
+import { getFallbackReceivablePaymentDate } from '@/lib/calculations';
 import { useFinance } from '@/contexts/FinanceContext';
 import {
   Search,
@@ -16,7 +17,8 @@ import {
   Pencil,
   Trash2,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 
@@ -34,6 +36,9 @@ export const TransactionsTab: React.FC = () => {
     salaries,
     currentOtherIncomes,
     payables,
+    receivables,
+    navigateToDebtor,
+    navigateToPayableCreditor,
     monthKey,
     selectedPaymentMethod,
     setSelectedPaymentMethod,
@@ -58,8 +63,18 @@ export const TransactionsTab: React.FC = () => {
     formatSoles,
     currentDateStr,
     handleParseNaturalExpense,
-    isParsingNaturalExpense
+    isParsingNaturalExpense,
+    handleOpenEditCollectPayment
   } = useFinance();
+
+  const currentMonthReceivablePaymentsCount = React.useMemo(() => {
+    return receivables.reduce((acc, r) => {
+      const eff = (r.payments && r.payments.length > 0)
+        ? r.payments
+        : (r.paidAmount > 0 ? [{ paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr) }] : []);
+      return acc + eff.filter(pay => pay.paymentDate.startsWith(monthKey)).length;
+    }, 0);
+  }, [receivables, monthKey, currentDateStr]);
   const [naturalText, setNaturalText] = useState('');
   const isItemFuture = (sortDate: string) => {
     if (isCurrentMonthViewed) {
@@ -235,7 +250,7 @@ export const TransactionsTab: React.FC = () => {
               },
               {
                 value: 'INCOMES',
-                label: `Ingresos • ${salaries.length + currentOtherIncomes.length}`,
+                label: `Ingresos • ${salaries.length + currentOtherIncomes.length + currentMonthReceivablePaymentsCount}`,
                 icon: <TrendingUp size={14} style={{ color: '#10b981' }} />
               },
               {
@@ -438,8 +453,89 @@ export const TransactionsTab: React.FC = () => {
                               </span>
                             )}
                           </td>
-                          <td className="text-center text-muted" style={{ fontSize: '0.75rem' }}>
-                            Amortizado
+                          <td className="text-center">
+                            <button
+                              type="button"
+                              className="btn-action-icon"
+                              title="Ver en Mis Deudas"
+                              onClick={() => navigateToPayableCreditor(pay.creditorName)}
+                            >
+                              <ExternalLink size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    );
+                  }
+
+                  if (item.kind === 'receivable_payment') {
+                    const pay = item.data;
+                    const isFuture = isItemFuture(pay.paymentDate);
+                    return (
+                      <React.Fragment key={pay.id}>
+                        {isDividerHere && renderTodayDividerRow(idx)}
+                        <tr style={{ background: 'rgba(16, 185, 129, 0.03)' }}>
+                          <td className="tabular-nums text-body-sm text-muted">{formatDisplayDate(pay.paymentDate)}</td>
+                          <td>
+                            <div className="tx-concept-main">
+                              <span>Cobro de préstamo: {pay.debtorName}</span>
+                              <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>Cobro Préstamo</span>
+                            </div>
+                            <div className="tx-concept-sub">
+                              {pay.description || 'Abono recibido'}{pay.notes ? ` • ${pay.notes}` : ''}
+                            </div>
+                          </td>
+                          <td>
+                            <span className="badge badge-neutral" style={{ color: '#10b981' }}>
+                              Cuenta Débito / Bancos
+                            </span>
+                          </td>
+                          <td className="tx-amount-cell" style={{ color: 'var(--accent-success)' }}>
+                            {pay.currency === 'USD' ? (
+                              <div>
+                                <span className="tabular-nums nowrap" style={{ fontWeight: 600 }}>+$ {pay.amount.toFixed(2)} USD</span>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>+{formatSoles(pay.amount * (pay.exchangeRate || FALLBACK_USD_PEN_RATE))}</span>
+                              </div>
+                            ) : (
+                              `+${formatSoles(pay.amount)}`
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {isFuture ? (
+                              <span className="badge badge-scheduled" title="Cobro programado. Se acreditará al llegar la fecha.">
+                                ⏳ Programado
+                              </span>
+                            ) : (
+                              <span className="badge badge-immediate" title={`Acreditado en el acto a tu cuenta débito el ${formatDisplayDate(pay.paymentDate)}`}>
+                                ⚡ Inmediato
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-center" style={{ whiteSpace: 'nowrap' }}>
+                            <button
+                              type="button"
+                              className="btn-action-icon"
+                              title="Editar fecha o notas de este cobro"
+                              style={{ marginRight: '4px' }}
+                              onClick={() => handleOpenEditCollectPayment(pay.receivableId, {
+                                id: pay.id,
+                                receivableId: pay.receivableId,
+                                amount: pay.amount,
+                                amountPaid: pay.amount,
+                                paymentDate: pay.paymentDate,
+                                notes: pay.notes
+                              }, pay.debtorName)}
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-action-icon"
+                              title="Ver en Préstamos (Me Deben)"
+                              onClick={() => navigateToDebtor(pay.debtorName)}
+                            >
+                              <ExternalLink size={13} />
+                            </button>
                           </td>
                         </tr>
                       </React.Fragment>
@@ -768,6 +864,95 @@ export const TransactionsTab: React.FC = () => {
                             <span className="mobile-tx-due">Debitado el {formatDisplayDate(pay.paymentDate)}</span>
                           </>
                         )}
+                        <button
+                          type="button"
+                          className="btn-action-icon"
+                          style={{ marginLeft: 'auto' }}
+                          title="Ver en Mis Deudas"
+                          onClick={() => navigateToPayableCreditor(pay.creditorName)}
+                        >
+                          <ExternalLink size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              }
+
+              if (item.kind === 'receivable_payment') {
+                const pay = item.data;
+                const isFuture = isItemFuture(pay.paymentDate);
+                return (
+                  <React.Fragment key={pay.id}>
+                    {isDividerHere && renderTodayDividerMobile(idx)}
+                    <div className="mobile-tx-card" style={{ borderLeft: '4px solid #10b981' }}>
+                      <div className="mobile-tx-main-row">
+                        <div className="mobile-tx-left">
+                          <div className="mobile-tx-icon-wrap" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                            <TrendingUp size={16} />
+                          </div>
+                          <div className="mobile-tx-info">
+                            <div className="mobile-tx-title-row">
+                              <span className="mobile-tx-title" title={`Cobro a ${pay.debtorName}`}>Cobro a {pay.debtorName}</span>
+                            </div>
+                            <div className="mobile-tx-meta" title={`${formatDisplayDate(pay.paymentDate)} • ${pay.description}`}>
+                              <span>{formatDisplayDate(pay.paymentDate)}</span>
+                              <span>•</span>
+                              <span>{pay.description || 'Abono recibido'}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mobile-tx-right">
+                          <div className="mobile-tx-tags">
+                            <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>Cobro</span>
+                          </div>
+                          {pay.currency === 'USD' ? (
+                            <div style={{ textAlign: 'right' }}>
+                              <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-success)' }}>+$ {pay.amount.toFixed(2)} USD</span>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>+{formatSoles(pay.amount * (pay.exchangeRate || FALLBACK_USD_PEN_RATE))}</span>
+                            </div>
+                          ) : (
+                            <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--accent-success)' }}>+{formatSoles(pay.amount)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mobile-tx-footer-row">
+                        {isFuture ? (
+                          <>
+                            <span className="badge badge-scheduled" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>⏳ Programado</span>
+                            <span className="mobile-tx-due">Se acredita el {formatDisplayDate(pay.paymentDate)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="badge badge-immediate" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>⚡ Inmediato</span>
+                            <span className="mobile-tx-due">Acreditado el {formatDisplayDate(pay.paymentDate)}</span>
+                          </>
+                        )}
+                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            type="button"
+                            className="btn-action-icon"
+                            title="Editar fecha o notas de este cobro"
+                            onClick={() => handleOpenEditCollectPayment(pay.receivableId, {
+                              id: pay.id,
+                              receivableId: pay.receivableId,
+                              amount: pay.amount,
+                              amountPaid: pay.amount,
+                              paymentDate: pay.paymentDate,
+                              notes: pay.notes
+                            }, pay.debtorName)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-action-icon"
+                            title="Ver en Préstamos (Me Deben)"
+                            onClick={() => navigateToDebtor(pay.debtorName)}
+                          >
+                            <ExternalLink size={13} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </React.Fragment>

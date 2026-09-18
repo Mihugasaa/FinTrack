@@ -45,6 +45,16 @@ export interface Transaction {
   notes?: string;
 }
 
+export interface ReceivablePayment {
+  id: string;
+  receivableId?: string;
+  amountPaid: number;
+  amount: number;
+  paymentDate: string;
+  paymentMethodId?: string;
+  notes?: string;
+}
+
 export interface Receivable {
   id: string;
   debtorName: string;
@@ -61,6 +71,8 @@ export interface Receivable {
   isDebitedFromAccount?: boolean;
   fundingPaymentMethodId?: string;
   createdAt: string;
+  updatedAt?: string;
+  payments?: ReceivablePayment[];
 }
 
 export interface SalaryIncome {

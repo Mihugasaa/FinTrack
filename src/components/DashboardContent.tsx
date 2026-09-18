@@ -13,6 +13,7 @@ import { IncomeModal } from '@/components/modals/IncomeModal';
 import { SalaryModal } from '@/components/modals/SalaryModal';
 import { PaymentModal } from '@/components/modals/PaymentModal';
 import { CollectModal } from '@/components/modals/CollectModal';
+import { EditCollectModal } from '@/components/modals/EditCollectModal';
 import { EditCardModal } from '@/components/modals/EditCardModal';
 import { CardModal } from '@/components/modals/CardModal';
 import { ReceivableModal } from '@/components/modals/ReceivableModal';
@@ -41,6 +42,7 @@ export function DashboardContent() {
     isAdjustDebitModalOpen,
     isEditCardModalOpen,
     isCollectModalOpen,
+    isEditCollectModalOpen,
     collectingRec,
     collectingDebtorGroup,
     isIncomeModalOpen,
@@ -64,6 +66,7 @@ export function DashboardContent() {
     isAdjustDebitModalOpen ||
     isEditCardModalOpen ||
     (isCollectModalOpen && (collectingRec || collectingDebtorGroup)) ||
+    isEditCollectModalOpen ||
     isIncomeModalOpen ||
     isCardModalOpen ||
     isPaymentModalOpen ||
@@ -231,6 +234,9 @@ export function DashboardContent() {
 
       {/* MODAL: REGISTRAR ABONO O COBRO PARCIAL A PRÉSTAMO */}
       {isCollectModalOpen && (collectingRec || collectingDebtorGroup) && <CollectModal />}
+
+      {/* MODAL: EDITAR FECHA DE COBRO DE PRÉSTAMO */}
+      {isEditCollectModalOpen && <EditCollectModal />}
 
       {/* MODAL 3: REGISTRAR INGRESO EXTRA A DÉBITO */}
       {isIncomeModalOpen && <IncomeModal />}

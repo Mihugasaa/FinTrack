@@ -1145,3 +1145,22 @@ export function formatSoles(amount?: number | null): string {
   const num = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
   return `S/ ${num.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+/**
+ * Determina la fecha de cobro para préstamos históricos que no cuenten con tabla
+ * de amortizaciones hija (receivable_payments).
+ * Si updatedAt coincide con la fecha de desembolso (loanDate) o de creación,
+ * NO es la fecha de pago (es solo la fecha en que se registró el préstamo original);
+ * en tal caso retorna currentDateStr.
+ */
+export function getFallbackReceivablePaymentDate(r: Receivable, monthKey: string, currentDateStr: string): string {
+  const upDay = r.updatedAt ? r.updatedAt.split('T')[0] : '';
+  const loanDay = r.loanDate || '';
+  const createdDay = r.createdAt ? r.createdAt.split('T')[0] : '';
+
+  if (upDay && upDay !== loanDay && upDay !== createdDay && upDay.startsWith(monthKey)) {
+    return upDay;
+  }
+  return currentDateStr;
+}
+

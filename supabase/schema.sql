@@ -126,7 +126,16 @@ CREATE TABLE IF NOT EXISTS receivables (
     loan_date DATE DEFAULT CURRENT_DATE,
     due_date DATE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9B. TABLA DE COBROS Y AMORTIZACIONES DE PRÉSTAMOS
+CREATE TABLE IF NOT EXISTS receivable_payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    receivable_id UUID NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,
+    amount NUMERIC(12, 2) NOT NULL,
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 10. TABLA DE PAGOS Y ABONOS A TARJETAS
@@ -339,6 +348,7 @@ ALTER TABLE receivables ENABLE ROW LEVEL SECURITY;
 ALTER TABLE card_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payables ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payable_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE receivable_payments ENABLE ROW LEVEL SECURITY;
 
 -- Políticas para que cada usuario solo acceda a su información
 CREATE POLICY "Users can manage their own profile" ON profiles FOR ALL USING (auth.uid() = id);
@@ -348,6 +358,9 @@ CREATE POLICY "Users can manage their monthly periods" ON monthly_periods FOR AL
 CREATE POLICY "Users can manage their other incomes" ON other_incomes FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage their transactions" ON transactions FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage their receivables" ON receivables FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage their receivable payments" ON receivable_payments FOR ALL USING (
+    EXISTS (SELECT 1 FROM receivables WHERE receivables.id = receivable_payments.receivable_id AND receivables.user_id = auth.uid())
+);
 CREATE POLICY "Users can manage their card payments" ON card_payments FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage their payables" ON payables FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage their payable payments" ON payable_payments FOR ALL USING (

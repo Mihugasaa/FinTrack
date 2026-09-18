@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
+import { getFallbackReceivablePaymentDate } from '@/lib/calculations';
 import { useFinance } from '@/contexts/FinanceContext';
 import {
   ArrowDownLeft,
@@ -43,6 +44,8 @@ export const ReceivablesTab: React.FC = () => {
     handleOpenCollectModal,
     handleOpenEditReceivable,
     setEditingReceivableId,
+    handleOpenEditCollectPayment,
+    handleDeleteCollectPayment,
     handleOpenEditPayable,
     setItemToDelete,
     handleOpenCreatePayable,
@@ -59,6 +62,8 @@ export const ReceivablesTab: React.FC = () => {
     handleDeletePayable,
     currentYear,
     currentMonth,
+    monthKey,
+    currentDateStr,
     setDebtConfirmData,
     formatDisplayDate,
     formatSoles
@@ -591,6 +596,56 @@ export const ReceivablesTab: React.FC = () => {
                                     </button>
                                   </div>
                                 </div>
+
+                                {/* Historial de abonos recibidos para este préstamo */}
+                                {(() => {
+                                  const effPayments = (item.payments && item.payments.length > 0)
+                                    ? item.payments
+                                    : (item.paidAmount > 0 ? [{
+                                        id: `legacy-${item.id}`,
+                                        amount: item.paidAmount,
+                                        amountPaid: item.paidAmount,
+                                        paymentDate: getFallbackReceivablePaymentDate(item, monthKey, currentDateStr),
+                                        notes: 'Cobro registrado'
+                                      }] : []);
+                                  if (effPayments.length === 0) return null;
+                                  return (
+                                    <div style={{ marginTop: '4px', paddingTop: '6px', borderTop: '1px dashed var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+                                      {effPayments.map((pRecord, pIdx) => (
+                                        <div key={pRecord.id || pIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-secondary)' }} title={`Abono de ${item.currency === 'USD' ? `$ ${pRecord.amount.toFixed(2)} USD` : formatSoles(pRecord.amount)} recibido el ${formatDisplayDate(pRecord.paymentDate)}`}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <span>• Cobro: {formatDisplayDate(pRecord.paymentDate)} {pRecord.notes ? `• ${pRecord.notes}` : ''}</span>
+                                            <button
+                                              type="button"
+                                              className="btn-action-icon"
+                                              style={{ padding: '2px', width: '18px', height: '18px' }}
+                                              title="Editar fecha o notas de este cobro"
+                                              onClick={() => handleOpenEditCollectPayment(item.id, pRecord, item.debtorName)}
+                                            >
+                                              <Pencil size={11} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="btn-action-icon"
+                                              style={{ padding: '2px', width: '18px', height: '18px', color: 'var(--accent-danger)' }}
+                                              title="Revertir este cobro"
+                                              onClick={() => {
+                                                if (window.confirm(`¿Revertir este cobro de ${item.currency === 'USD' ? `$ ${pRecord.amount.toFixed(2)} USD` : formatSoles(pRecord.amount)} a ${item.debtorName}? El saldo pendiente se restablecerá.`)) {
+                                                  handleDeleteCollectPayment(item.id, pRecord.id, pRecord.amount || pRecord.amountPaid);
+                                                }
+                                              }}
+                                            >
+                                              <Trash2 size={11} />
+                                            </button>
+                                          </div>
+                                          <span className="tabular-nums font-semibold" style={{ color: 'var(--accent-success)' }}>
+                                            +{item.currency === 'USD' ? `$ ${pRecord.amount.toFixed(2)} USD` : formatSoles(pRecord.amount)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             );
                           })}

@@ -6,7 +6,7 @@ import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { generateUUID } from '@/lib/utils';
 import { getEffectiveDayOfMonth } from '@/lib/calculations';
-import { Receivable, CurrencyCode, DebtConfirmData, Transaction } from '@/types';
+import { Receivable, ReceivablePayment, CurrencyCode, DebtConfirmData, Transaction } from '@/types';
 
 interface UseReceivablesDeps {
   currentYear: number;
@@ -44,6 +44,15 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
   const [collectPaymentNotes, setCollectPaymentNotes] = useState('');
   const [expandedDebtors, setExpandedDebtors] = useState<Set<string>>(new Set());
   const [receivablesFilter, setReceivablesFilter] = useState<'pending' | 'all' | 'paid'>('pending');
+
+  // Estado para Edición de Fecha/Detalles de un Cobro ya registrado
+  const [isEditCollectModalOpen, setIsEditCollectModalOpen] = useState(false);
+  const [editingCollectRecId, setEditingCollectRecId] = useState<string | null>(null);
+  const [editingCollectPaymentId, setEditingCollectPaymentId] = useState<string | null>(null);
+  const [editCollectPaymentDate, setEditCollectPaymentDate] = useState('');
+  const [editCollectPaymentNotes, setEditCollectPaymentNotes] = useState('');
+  const [editCollectAmount, setEditCollectAmount] = useState(0);
+  const [editCollectDebtorName, setEditCollectDebtorName] = useState('');
 
   // Form Préstamo (Dinero que presté)
   const [debtorName, setDebtorName] = useState('');
@@ -211,14 +220,15 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     setIsCollectModalOpen(true);
   };
 
-  const handleCascadeCollect = (debtorName: string, amountToCollect: number) => {
+  const handleCascadeCollect = (debtorName: string, amountToCollect: number, collectDate?: string, collectNotes?: string) => {
     let remainingToApply = amountToCollect;
     const targetGroup = debtorGroups.find(g => g.debtorName.toLowerCase() === debtorName.toLowerCase());
     if (!targetGroup) return;
 
     // Préstamos con saldo pendiente (ordenados del más antiguo al más reciente)
     const itemsToPay = targetGroup.items.filter(i => i.remainingAmount > 0);
-    const updates = new Map<string, { newPaid: number; isDone: boolean }>();
+    const dateStr = collectDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
+    const updates = new Map<string, { newPaid: number; isDone: boolean; paymentRecord: ReceivablePayment }>();
 
     for (const item of itemsToPay) {
       if (remainingToApply <= 0) break;
@@ -227,9 +237,17 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       const newRem = Math.max(0, item.originalAmount - newPaid);
       const isDone = newRem <= 0;
 
-      updates.set(item.id, { newPaid, isDone });
-      // Guardar en Supabase
-      SupabaseDataService.recordReceivablePayment(item.id, newPaid, isDone);
+      const pRecord: ReceivablePayment = {
+        id: `rpay-${Date.now()}-${item.id}`,
+        receivableId: item.id,
+        amountPaid: pay,
+        amount: pay,
+        paymentDate: dateStr,
+        paymentMethodId: 'pm-1',
+        notes: collectNotes || 'Abono en cascada a préstamo'
+      };
+
+      updates.set(item.id, { newPaid, isDone, paymentRecord: pRecord });
       remainingToApply -= pay;
     }
 
@@ -242,38 +260,61 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
             ...r,
             paidAmount: upd.newPaid,
             remainingAmount: Math.max(0, r.originalAmount - upd.newPaid),
-            status: upd.isDone ? 'paid' : 'partial'
+            status: upd.isDone ? 'paid' : 'partial',
+            payments: [...(r.payments || []), upd.paymentRecord]
           };
         }
         return r;
       })
     );
+
+    // Guardar en Supabase
+    updates.forEach((upd, itemId) => {
+      SupabaseDataService.recordReceivablePayment(itemId, upd.newPaid, upd.isDone, upd.paymentRecord);
+    });
   };
 
-  const handleCollectReceivable = (id: string, amountToCollect: number) => {
+  const handleCollectReceivable = (id: string, amountToCollect: number, collectDate?: string, collectNotes?: string) => {
+    const targetRec = receivables.find(r => r.id === id);
+    if (!targetRec) return;
+
+    const dateStr = collectDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
+    const newPaid = targetRec.paidAmount + amountToCollect;
+    const newRemaining = Math.max(0, targetRec.originalAmount - newPaid);
+    const isDone = newRemaining === 0;
+
+    const pRecord: ReceivablePayment = {
+      id: `rpay-${Date.now()}-${id}`,
+      receivableId: id,
+      amountPaid: amountToCollect,
+      amount: amountToCollect,
+      paymentDate: dateStr,
+      paymentMethodId: 'pm-1',
+      notes: collectNotes || undefined
+    };
+
     setReceivables(prev =>
       prev.map(r => {
         if (r.id === id) {
-          const newPaid = r.paidAmount + amountToCollect;
-          const newRemaining = Math.max(0, r.originalAmount - newPaid);
-          const isDone = newRemaining === 0;
-          // PUT a Supabase en la nube
-          SupabaseDataService.recordReceivablePayment(id, newPaid, isDone);
           return {
             ...r,
             paidAmount: newPaid,
             remainingAmount: newRemaining,
-            status: isDone ? 'paid' : 'partial'
+            status: isDone ? 'paid' : 'partial',
+            payments: [...(r.payments || []), pRecord]
           };
         }
         return r;
       })
     );
+
+    // PUT a Supabase en la nube
+    SupabaseDataService.recordReceivablePayment(id, newPaid, isDone, pRecord);
   };
 
   const executeSaveCollect = (num: number) => {
     if (collectingDebtorGroup) {
-      handleCascadeCollect(collectingDebtorGroup.debtorName, num);
+      handleCascadeCollect(collectingDebtorGroup.debtorName, num, collectPaymentDate, collectPaymentNotes.trim() || undefined);
       setIsCollectModalOpen(false);
       setCollectingDebtorGroup(null);
       setCollectAmountInput('');
@@ -282,7 +323,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     }
 
     if (collectingRec) {
-      handleCollectReceivable(collectingRec.id, num);
+      handleCollectReceivable(collectingRec.id, num, collectPaymentDate, collectPaymentNotes.trim() || undefined);
       setIsCollectModalOpen(false);
       setCollectingRec(null);
       setCollectAmountInput('');
@@ -464,6 +505,78 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     SupabaseDataService.deleteReceivable(id);
   };
 
+  const handleOpenEditCollectPayment = (recId: string, payment: ReceivablePayment, debtorName?: string) => {
+    setEditingCollectRecId(recId);
+    setEditingCollectPaymentId(payment.id);
+    setEditCollectPaymentDate(payment.paymentDate);
+    setEditCollectPaymentNotes(payment.notes || '');
+    setEditCollectAmount(payment.amount || payment.amountPaid);
+    setEditCollectDebtorName(debtorName || 'Deudor');
+    setIsEditCollectModalOpen(true);
+  };
+
+  const handleSaveEditCollectPayment = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingCollectRecId || !editingCollectPaymentId || !editCollectPaymentDate) return;
+
+    setReceivables(prev => prev.map(r => {
+      if (r.id === editingCollectRecId) {
+        const updatedPayments = (r.payments && r.payments.length > 0)
+          ? r.payments.map(p => (p.id === editingCollectPaymentId ? { ...p, paymentDate: editCollectPaymentDate, notes: editCollectPaymentNotes.trim() || undefined } : p))
+          : [{
+              id: editingCollectPaymentId,
+              receivableId: r.id,
+              amount: editCollectAmount,
+              amountPaid: editCollectAmount,
+              paymentDate: editCollectPaymentDate,
+              notes: editCollectPaymentNotes.trim() || undefined
+            }];
+
+        return {
+          ...r,
+          payments: updatedPayments
+        };
+      }
+      return r;
+    }));
+
+    SupabaseDataService.updateReceivablePayment(
+      editingCollectRecId,
+      editingCollectPaymentId,
+      editCollectPaymentDate,
+      editCollectPaymentNotes.trim() || undefined,
+      editCollectAmount
+    );
+
+    setIsEditCollectModalOpen(false);
+    setEditingCollectRecId(null);
+    setEditingCollectPaymentId(null);
+  };
+
+  const handleDeleteCollectPayment = (recId: string, paymentId: string, amount: number) => {
+    const targetRec = receivables.find(r => r.id === recId);
+    if (!targetRec) return;
+
+    const newPaid = Math.max(0, targetRec.paidAmount - amount);
+    const newRem = Math.max(0, targetRec.originalAmount - newPaid);
+    const newStatus = newRem <= 0 ? 'paid' : (newPaid > 0 ? 'partial' : 'pending');
+
+    setReceivables(prev => prev.map(r => {
+      if (r.id === recId) {
+        return {
+          ...r,
+          paidAmount: newPaid,
+          remainingAmount: newRem,
+          status: newStatus,
+          payments: (r.payments || []).filter(p => p.id !== paymentId)
+        };
+      }
+      return r;
+    }));
+
+    SupabaseDataService.deleteReceivablePayment(recId, paymentId, newPaid);
+  };
+
   return {
     receivables,
     setReceivables,
@@ -518,6 +631,20 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     handleOpenAddLoanForDebtor,
     toggleDebtorExpanded,
     handleCreateReceivable,
-    deleteReceivable
+    deleteReceivable,
+    isEditCollectModalOpen,
+    setIsEditCollectModalOpen,
+    editingCollectRecId,
+    editingCollectPaymentId,
+    editCollectPaymentDate,
+    setEditCollectPaymentDate,
+    editCollectPaymentNotes,
+    setEditCollectPaymentNotes,
+    editCollectAmount,
+    setEditCollectAmount,
+    editCollectDebtorName,
+    handleOpenEditCollectPayment,
+    handleSaveEditCollectPayment,
+    handleDeleteCollectPayment
   };
 }

@@ -6,7 +6,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { Transaction, PaymentMethod, Receivable, Category, OtherIncome, Payable, PayablePayment } from '@/types';
+import { Transaction, PaymentMethod, Receivable, ReceivablePayment, Category, OtherIncome, Payable, PayablePayment } from '@/types';
 
 const isUUID = (str?: string | null): boolean =>
   typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
@@ -580,33 +580,62 @@ export class SupabaseDataService {
   // 3. CUENTAS POR COBRAR A TERCEROS
   // ============================================================================
 
-  // GET: Obtener préstamos por cobrar
+  // GET: Obtener préstamos por cobrar con su historial de pagos
   public static async getReceivables(): Promise<Receivable[] | null> {
     const sb = supabase;
     if (!sb || !isSupabaseConfigured) return null;
 
     try {
-      const { data, error } = await this.executeWithRetry<any[]>(
-        () => sb.from('receivables').select('*'),
-        'getReceivables'
+      let data: any[] | null = null;
+      // 1. Intentar consultar con relación a receivable_payments
+      const resWithPayments = await this.executeWithRetry<any[]>(
+        () => sb.from('receivables').select('*, receivable_payments(*)'),
+        'getReceivablesWithPayments'
       );
-      if (error || !data || data.length === 0) return null;
 
-      return data.map((row: any) => ({
-        id: row.id,
-        debtorName: row.debtor_name,
-        description: row.description || '',
-        originalAmount: parseFloat(row.original_amount),
-        paidAmount: parseFloat(row.paid_amount || '0'),
-        remainingAmount: parseFloat(row.original_amount) - parseFloat(row.paid_amount || '0'),
-        currency: row.currency || 'PEN',
-        exchangeRate: row.exchange_rate ? parseFloat(row.exchange_rate) : undefined,
-        amountPen: row.amount_pen ? parseFloat(row.amount_pen) : undefined,
-        loanDate: row.loan_date || undefined,
-        status: row.status,
-        dueDate: row.due_date,
-        createdAt: row.created_at || new Date().toISOString()
-      }));
+      if (!resWithPayments.error && resWithPayments.data) {
+        data = resWithPayments.data;
+      } else {
+        // 2. Fallback si la tabla aún no existe en Supabase
+        const fallbackRes = await this.executeWithRetry<any[]>(
+          () => sb.from('receivables').select('*'),
+          'getReceivablesFallback'
+        );
+        if (fallbackRes.error || !fallbackRes.data) return null;
+        data = fallbackRes.data;
+      }
+
+      if (!data || data.length === 0) return null;
+
+      return data.map((row: any) => {
+        const rawPayments: any[] = Array.isArray(row.receivable_payments) ? row.receivable_payments : [];
+        const payments: ReceivablePayment[] = rawPayments.map((p: any) => ({
+          id: p.id,
+          receivableId: p.receivable_id || row.id,
+          amountPaid: parseFloat(p.amount || '0'),
+          amount: parseFloat(p.amount || '0'),
+          paymentDate: p.payment_date,
+          notes: p.notes || undefined
+        }));
+
+        return {
+          id: row.id,
+          debtorName: row.debtor_name,
+          description: row.description || '',
+          originalAmount: parseFloat(row.original_amount),
+          paidAmount: parseFloat(row.paid_amount || '0'),
+          remainingAmount: parseFloat(row.original_amount) - parseFloat(row.paid_amount || '0'),
+          currency: row.currency || 'PEN',
+          exchangeRate: row.exchange_rate ? parseFloat(row.exchange_rate) : undefined,
+          amountPen: row.amount_pen ? parseFloat(row.amount_pen) : undefined,
+          loanDate: row.loan_date || undefined,
+          status: row.status,
+          dueDate: row.due_date,
+          createdAt: row.created_at || new Date().toISOString(),
+          updatedAt: row.updated_at || undefined,
+          payments
+        };
+      });
     } catch (e) {
       this.logSupabaseError('getReceivables (catch)', e);
       return null;
@@ -673,23 +702,120 @@ export class SupabaseDataService {
     }
   }
 
-  // PUT: Registrar abono a préstamo
-  public static async recordReceivablePayment(id: string, newPaidAmount: number, isFullyPaid: boolean): Promise<boolean> {
+  // POST/PUT: Registrar abono a préstamo y guardar en historial de pagos
+  public static async recordReceivablePayment(
+    id: string,
+    newPaidAmount: number,
+    isFullyPaid: boolean,
+    payment?: ReceivablePayment
+  ): Promise<boolean> {
     if (!supabase || !isSupabaseConfigured) return false;
     if (!isUUID(id)) return false;
 
     try {
+      // 1. Actualizar estado del préstamo
+      const { error: updateError } = await supabase
+        .from('receivables')
+        .update({
+          paid_amount: newPaidAmount,
+          status: isFullyPaid ? 'paid' : 'partial',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (updateError) {
+        this.logSupabaseError('recordReceivablePayment (update)', updateError.message);
+        return false;
+      }
+
+      // 2. Si se proporciona registro de pago, persistir en receivable_payments
+      if (payment) {
+        const paymentPayload: Record<string, any> = {
+          receivable_id: id,
+          amount: payment.amount || payment.amountPaid,
+          payment_date: payment.paymentDate || new Date().toISOString().split('T')[0],
+          notes: payment.notes || null
+        };
+
+        if (isUUID(payment.id)) {
+          paymentPayload.id = payment.id;
+        }
+
+        const { error: payError } = await supabase.from('receivable_payments').insert(paymentPayload);
+        if (payError) {
+          this.logSupabaseError('recordReceivablePayment (insert payment)', payError.message);
+        }
+      }
+
+      return true;
+    } catch (e) {
+      this.logSupabaseError('recordReceivablePayment (catch)', e);
+      return false;
+    }
+  }
+
+  // PUT/UPSERT: Actualizar fecha o notas de un abono/cobro
+  public static async updateReceivablePayment(
+    receivableId: string,
+    paymentId: string,
+    paymentDate: string,
+    notes?: string,
+    amount?: number
+  ): Promise<boolean> {
+    if (!supabase || !isSupabaseConfigured) return false;
+    if (!isUUID(receivableId)) return false;
+
+    try {
+      if (isUUID(paymentId)) {
+        const { error } = await supabase
+          .from('receivable_payments')
+          .update({
+            payment_date: paymentDate,
+            notes: notes || null,
+            ...(amount != null ? { amount } : {})
+          })
+          .eq('id', paymentId);
+        return !error;
+      } else {
+        // Es un legacy payment sin id UUID en BD: insertar como nueva fila en receivable_payments
+        const { error } = await supabase.from('receivable_payments').insert({
+          receivable_id: receivableId,
+          amount: amount || 0,
+          payment_date: paymentDate,
+          notes: notes || null
+        });
+        return !error;
+      }
+    } catch (e) {
+      this.logSupabaseError('updateReceivablePayment (catch)', e);
+      return false;
+    }
+  }
+
+  // DELETE: Eliminar un abono/cobro revertiéndolo
+  public static async deleteReceivablePayment(
+    receivableId: string,
+    paymentId: string,
+    newPaidAmount: number
+  ): Promise<boolean> {
+    if (!supabase || !isSupabaseConfigured) return false;
+    if (!isUUID(receivableId)) return false;
+
+    try {
+      if (isUUID(paymentId)) {
+        await supabase.from('receivable_payments').delete().eq('id', paymentId);
+      }
       const { error } = await supabase
         .from('receivables')
         .update({
           paid_amount: newPaidAmount,
-          status: isFullyPaid ? 'paid' : 'partial'
+          status: newPaidAmount <= 0 ? 'pending' : 'partial',
+          updated_at: new Date().toISOString()
         })
-        .eq('id', id);
-
+        .eq('id', receivableId);
       return !error;
     } catch (e) {
-      this.logSupabaseError('recordReceivablePayment (catch)', e);
+      this.logSupabaseError('deleteReceivablePayment (catch)', e);
       return false;
     }
   }

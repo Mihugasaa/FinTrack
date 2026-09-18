@@ -1798,21 +1798,21 @@ html.is-resizing *::after {
 }
 
 /* Tabla ejecutiva compacta de Últimos Movimientos en Visión General (Widget 50%) */
-.transactions-panel .table-responsive {
+.overview-grid-balanced .transactions-panel .table-responsive {
   overflow-x: hidden;
   width: 100%;
 }
 
-.transactions-panel .tx-table {
+.overview-grid-balanced .transactions-panel .tx-table {
   table-layout: fixed;
   width: 100%;
 }
 
-.transactions-panel .tx-table th {
+.overview-grid-balanced .transactions-panel .tx-table th {
   padding: 8px 10px;
 }
 
-.transactions-panel .tx-table td {
+.overview-grid-balanced .transactions-panel .tx-table td {
   padding: 8px 10px;
   vertical-align: middle;
 }

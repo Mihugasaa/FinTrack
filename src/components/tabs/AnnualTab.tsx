@@ -36,12 +36,11 @@ export const AnnualTab: React.FC = () => {
   const {
     monthlyHistoricalFlow,
     annualCategoryBreakdown,
-    cardDebtSummary,
     currentYear,
     formatSoles
   } = useFinance();
   const [filterMode, setFilterMode] = useState<'all' | 'closed'>('all');
-  const [visualTab, setVisualTab] = useState<'flow' | 'categories'>('flow');
+  const [visualTab, setVisualTab] = useState<'comparison' | 'flow' | 'categories'>('comparison');
 
   // Meses reales derivados del flujo consolidado del usuario.
   const activeMonthsData = useMemo<MonthDetailRecord[]>(() => {
@@ -119,13 +118,31 @@ export const AnnualTab: React.FC = () => {
   const gaugeOffset = GAUGE_CIRCUMFERENCE * (1 - gaugePct / 100);
   const gaugeColor = heroSavingsRate >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)';
 
-  // Deuda de tarjetas gestionada a la fecha, derivada del resumen real por tarjeta.
-  const cardStats = useMemo(() => {
-    const obligations = cardDebtSummary.reduce((acc, c) => acc + (c.consumedToDate || 0) + (c.initialDebt || 0), 0);
-    const paid = cardDebtSummary.reduce((acc, c) => acc + (c.paidToDate || 0), 0);
-    const liquidatedPct = obligations > 0 ? Math.min(100, (paid / obligations) * 100) : 0;
-    return { paid, liquidatedPct };
-  }, [cardDebtSummary]);
+  // Consistencia de ahorro anual: meses con superávit sobre el total de periodos auditados
+  const surplusMonthsCount = useMemo(() => {
+    return displayedMonths.filter(m => m.surplus >= 0).length;
+  }, [displayedMonths]);
+
+  const consistencyPct = useMemo(() => {
+    return displayedMonths.length > 0
+      ? Math.round((surplusMonthsCount / displayedMonths.length) * 100)
+      : 0;
+  }, [surplusMonthsCount, displayedMonths.length]);
+
+  // Escala dinámica del comparativo de barras derivada de los meses visualizados
+  const flowScaleMax = useMemo(() => {
+    return Math.max(
+      1,
+      ...displayedMonths.map(m => Math.max(m.income, m.cashOut))
+    ) * 1.05;
+  }, [displayedMonths]);
+
+  const flowGridlines = useMemo(() => {
+    return [1, 0.75, 0.5, 0.25].map(f => flowScaleMax * f);
+  }, [flowScaleMax]);
+
+  const fmtCompact = (v: number) => (v >= 1000 ? `S/ ${(v / 1000).toFixed(1)}k` : `S/ ${Math.round(v)}`);
+  const fmtMargin = (v: number) => `${v >= 0 ? '+' : '-'}${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}k` : Math.round(Math.abs(v))}`;
 
   // Donut de categorías del año (consumos devengados reales del año visible).
   const categoryList = useMemo(() => {
@@ -224,8 +241,8 @@ export const AnnualTab: React.FC = () => {
       <div className="annual-header">
         <div className="annual-title-group">
           <div className="annual-title-row">
-            <h2 className="annual-title">Consolidado y Salud Financiera {currentYear}</h2>
-            <span className="annual-chip-audit">
+            <h2 className="annual-title">Consolidado Anual {currentYear}</h2>
+            <span className="badge badge-success">
               {displayedMonths.length} {displayedMonths.length === 1 ? 'Periodo Auditado' : 'Periodos Auditados'}
             </span>
           </div>
@@ -271,8 +288,8 @@ export const AnnualTab: React.FC = () => {
           </div>
           <div>
             <div className="kpi-lbl">Superávit Neto Anual</div>
-            <div className="kpi-num tabular-nums" style={{ color: 'var(--accent-success)' }}>
-              +{formatSoles(heroSurplus)}
+            <div className="kpi-num tabular-nums" style={{ color: heroSurplus >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+              {heroSurplus >= 0 ? '+' : ''}{formatSoles(heroSurplus)}
             </div>
             <div className="kpi-sub">Excedente neto acumulado</div>
           </div>
@@ -292,11 +309,13 @@ export const AnnualTab: React.FC = () => {
           <div className="kpi-sub">{cashOutCommittedPct.toFixed(1)}% del ingreso comprometido</div>
         </div>
 
-        {/* Card 4: Deuda TC Cubierta */}
+        {/* Card 4: Consistencia de Ahorro */}
         <div className="annual-kpi-box box-border-purple">
-          <div className="kpi-lbl">Deuda TC Gestionada</div>
-          <div className="kpi-num tabular-nums">{formatSoles(cardStats.paid)}</div>
-          <div className="kpi-sub">{cardStats.liquidatedPct.toFixed(1)}% de consumos liquidados</div>
+          <div className="kpi-lbl">Consistencia de Ahorro</div>
+          <div className="kpi-num tabular-nums">
+            {surplusMonthsCount} de {displayedMonths.length} {displayedMonths.length === 1 ? 'mes' : 'meses'}
+          </div>
+          <div className="kpi-sub">{consistencyPct}% de meses con saldo a favor</div>
         </div>
       </div>
 
@@ -305,19 +324,40 @@ export const AnnualTab: React.FC = () => {
         <div className="segmented-tabs-wrap">
           <button
             type="button"
+            className={`segmented-tab-btn ${visualTab === 'comparison' ? 'active' : ''}`}
+            onClick={() => setVisualTab('comparison')}
+          >
+            <span>📊 Ingresos vs Salidas</span>
+          </button>
+          <button
+            type="button"
             className={`segmented-tab-btn ${visualTab === 'flow' ? 'active' : ''}`}
             onClick={() => setVisualTab('flow')}
           >
-            <span>📊 Ritmo de Flujo de Caja</span>
+            <span>📈 Ritmo y Colchón</span>
           </button>
           <button
             type="button"
             className={`segmented-tab-btn ${visualTab === 'categories' ? 'active' : ''}`}
             onClick={() => setVisualTab('categories')}
           >
-            <span>🍩 Distribución por Categorías</span>
+            <span>🍩 Categorías</span>
           </button>
         </div>
+
+        {visualTab === 'comparison' && (
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '14px', fontWeight: 600, flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#10b981' }} /> Ingresos
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#ef4444' }} /> Salida Real
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ fontWeight: 800, color: 'var(--text-secondary)', fontSize: '0.82rem', lineHeight: 1 }}>±</span> Margen mensual
+            </span>
+          </div>
+        )}
 
         {visualTab === 'flow' && (
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '14px', fontWeight: 600, flexWrap: 'wrap' }}>
@@ -333,6 +373,108 @@ export const AnnualTab: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Contenedor Visual: Vista Comparativa de Barras */}
+      {visualTab === 'comparison' && (
+        <div className="annual-visual-card">
+          {displayedMonths.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '28px 0' }}>
+              Aún no hay meses con actividad este año para trazar la evolución.
+            </p>
+          ) : (
+            <div className="chart-canvas-area" style={{ marginBottom: 0 }}>
+              {/* Líneas Guía Horizontales con Escala de Montos */}
+              <div className="chart-gridlines">
+                {flowGridlines.map((v, i) => (
+                  <div key={i} className="chart-gridline-row">
+                    <span className="chart-gridline-label">{fmtCompact(v)}</span>
+                  </div>
+                ))}
+                <div className="chart-gridline-row baseline">
+                  <span className="chart-gridline-label">S/ 0</span>
+                </div>
+              </div>
+
+              <div className="chart-bars-container">
+                {displayedMonths.map(m => {
+                  const maxH = flowScaleMax;
+                  const inH = Math.min(100, Math.round((m.income / maxH) * 100));
+                  const outH = Math.min(100, Math.round((m.cashOut / maxH) * 100));
+
+                  return (
+                    <div key={m.id} className="chart-bar-column">
+                      <div
+                        className="chart-bar-track"
+                        title={`${m.name}: Ingresos S/ ${m.income.toFixed(2)} | Salidas S/ ${m.cashOut.toFixed(2)} | Margen S/ ${m.surplus.toFixed(2)}`}
+                      >
+                        <div className="chart-bar-group">
+                          <div
+                            className="chart-bar-item chart-bar-income"
+                            style={{ height: `${inH}%` }}
+                            title={`Ingresos • ${m.name}: S/ ${m.income.toFixed(2)}`}
+                          />
+                          <div
+                            className="chart-bar-item chart-bar-expense"
+                            style={{ height: `${outH}%` }}
+                            title={`Salida Real de Caja • ${m.name}: S/ ${m.cashOut.toFixed(2)}`}
+                          />
+                        </div>
+                      </div>
+                      <span className="chart-bar-label" title={`Mes de ${m.name}`}>
+                        {m.name.slice(0, 3)}
+                      </span>
+                      <span
+                        className="chart-bar-margin"
+                        style={{ color: m.surplus >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}
+                        title={`Margen del mes • ${m.name}: ${m.surplus >= 0 ? '+' : ''}S/ ${m.surplus.toFixed(2)}`}
+                      >
+                        {fmtMargin(m.surplus)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Fila de 3 Hitos Integrada */}
+          <div className="annual-highlights-strip">
+            <div className="highlight-item">
+              <div className="highlight-emoji">🏆</div>
+              <div>
+                <div className="highlight-label">Récord de Ahorro</div>
+                <div className="highlight-val tabular-nums">
+                  {highlights.bestSaving
+                    ? `${highlights.bestSaving.name} • ${highlights.bestSaving.surplus >= 0 ? '+' : ''}${formatSoles(highlights.bestSaving.surplus)}`
+                    : 'Sin datos'}
+                </div>
+              </div>
+            </div>
+
+            <div className="highlight-item">
+              <div className="highlight-emoji">💳</div>
+              <div>
+                <div className="highlight-label">Mayor Salida de Caja</div>
+                <div className="highlight-val tabular-nums">
+                  {highlights.biggestOut
+                    ? `${highlights.biggestOut.name} • ${formatSoles(highlights.biggestOut.cashOut)}`
+                    : 'Sin datos'}
+                </div>
+              </div>
+            </div>
+
+            <div className="highlight-item">
+              <div className="highlight-emoji">🎯</div>
+              <div>
+                <div className="highlight-label">Colchón Acumulado {currentYear}</div>
+                <div className="highlight-val tabular-nums">
+                  {totals.surplus >= 0 ? '+' : ''}{formatSoles(totals.surplus)} en Cuenta
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Contenedor Visual: Vista Flujo de Caja */}
       {visualTab === 'flow' && (

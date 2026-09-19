@@ -133,17 +133,10 @@ export const AnalysisTab: React.FC = () => {
   const avgMonthlySavings = validMonths.length > 0
     ? validMonths.reduce((acc, curr) => acc + curr.savings, 0) / validMonths.length
     : 0;
-
-  // Escala dinámica del gráfico de barras: el pico real de ingreso/salida con
-  // un pequeño margen. Las líneas guía se etiquetan a partir de esa escala.
-  const flowScaleMax = Math.max(
-    1,
-    ...monthlyHistoricalFlow.map(m => Math.max(m.inVal, m.outVal))
-  ) * 1.05;
-  const flowGridlines = [1, 0.75, 0.5, 0.25].map(f => flowScaleMax * f);
-  const fmtCompact = (v: number) => (v >= 1000 ? `S/ ${(v / 1000).toFixed(1)}k` : `S/ ${Math.round(v)}`);
-  // Margen compacto con signo para la etiqueta bajo cada columna del comparativo.
-  const fmtMargin = (v: number) => `${v >= 0 ? '+' : '-'}${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}k` : Math.round(Math.abs(v))}`;
+  const fmtCompact = (v: number) => (Math.abs(v) >= 1000 ? `S/ ${(v / 1000).toFixed(1)}k` : `S/ ${Math.round(v)}`);
+  // Sanitiza porcentajes largos provenientes de respuestas de IA sin redondear
+  const cleanNarrativeText = (text: string) =>
+    (text || '').replace(/(\d+\.\d{2,})%/g, (_, num) => `${Number(num).toFixed(1)}%`);
 
   // 2. Punto crítico de liquidez (mes con menor saldo final proyectado en el horizonte)
   const criticalMonth = forecastData.length > 0
@@ -228,7 +221,7 @@ export const AnalysisTab: React.FC = () => {
   }, [forecastData]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* 1. Header del hub de Análisis */}
       <div className="analytics-section-title">
         <div>
@@ -329,16 +322,7 @@ export const AnalysisTab: React.FC = () => {
       {/* ===================== VISTA: MES ACTUAL (diagnóstico + auditoría) ===================== */}
       {analysisView === 'month' && (
         <>
-        <div
-          className="cfo-copilot-card clean-card"
-          style={{
-            background: 'var(--accent-brand-subtle)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '16px',
-            padding: '20px 24px',
-            position: 'relative'
-          }}
-        >
+        <div className="cfo-copilot-card clean-card panel-body">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div
@@ -357,17 +341,17 @@ export const AnalysisTab: React.FC = () => {
                 <Sparkles size={18} />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span>Copiloto CFO • Salud Financiera</span>
                   <span
                     className={`badge ${scoreBadgeClass}`}
-                    style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                    style={{ fontSize: '0.725rem' }}
                     title="Calculado con tus movimientos del mes, siempre igual."
                   >
                     Salud {financialHealth.score}/100 • {financialHealth.level}
                   </span>
                 </h3>
-                <p style={{ margin: '2px 0 0 0', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.80rem', color: 'var(--text-muted)' }}>
                   Tu puntaje del mes, calculado con tus propios movimientos.
                 </p>
               </div>
@@ -379,14 +363,6 @@ export const AnalysisTab: React.FC = () => {
               className="btn-secondary"
               onClick={fetchCfoDiagnostic}
               disabled={isLoadingCfo}
-              style={{
-                padding: '7px 14px',
-                fontSize: '0.8rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderColor: 'rgba(139, 92, 246, 0.4)'
-              }}
             >
               <Sparkles size={14} color="var(--accent-brand)" />
               <span>{isLoadingCfo ? 'Consultando...' : cfoNarrative ? 'Actualizar explicación' : 'Explicar en simple'}</span>
@@ -456,35 +432,35 @@ export const AnalysisTab: React.FC = () => {
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
                 {/* Bloque 1: Solvencia & Cobertura */}
-                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                     <span>💧</span>
                     <span>Solvencia & Liquidez</span>
                   </div>
                   <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
-                    {cfoNarrative.liquidityInsight}
+                    {cleanNarrativeText(cfoNarrative.liquidityInsight)}
                   </p>
                 </div>
 
                 {/* Bloque 2: Detección de Fugas */}
-                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-warning)' }}>
                     <span>🔍</span>
                     <span>Fugas & Concentración</span>
                   </div>
                   <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
-                    {cfoNarrative.spendingLeakInsight}
+                    {cleanNarrativeText(cfoNarrative.spendingLeakInsight)}
                   </p>
                 </div>
 
                 {/* Bloque 3: Acción Recomendada */}
-                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-brand)' }}>
                     <span>🎯</span>
                     <span>Acción Inmediata CFO</span>
                   </div>
                   <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
-                    {cfoNarrative.actionableRecommendation}
+                    {cleanNarrativeText(cfoNarrative.actionableRecommendation)}
                   </p>
                 </div>
               </div>
@@ -592,90 +568,14 @@ export const AnalysisTab: React.FC = () => {
         </>
       )}
 
-      {/* ===================== VISTA: TENDENCIA (mes a mes + consolidado anual) ===================== */}
+      {/* ===================== VISTA: TENDENCIA (Evolución y Consolidado Anual) ===================== */}
       {analysisView === 'trend' && (
-        <>
-          <div className="analytics-chart-full">
-            {/* Gráfico Dinámico de Barras */}
-            <div className="chart-card">
-              <div className="chart-card-header">
-                <span className="chart-card-title" title="Comparativa mensual de ingresos netos vs salidas de caja y margen">
-                  <TrendingUp size={16} color="var(--accent-brand)" />
-                  Evolución Mensual: Ingresos vs Salidas Reales
-                </span>
-                <span className="badge badge-brand" title={`Consolidado financiero del año ${currentYear}`}>Consolidado {currentYear}</span>
-              </div>
-
-              <div className="chart-canvas-area">
-                {/* Líneas Guía Horizontales con Escala de Montos (derivada de datos) */}
-                <div className="chart-gridlines">
-                  {flowGridlines.map((v, i) => (
-                    <div key={i} className="chart-gridline-row"><span className="chart-gridline-label">{fmtCompact(v)}</span></div>
-                  ))}
-                  <div className="chart-gridline-row baseline"><span className="chart-gridline-label">S/ 0</span></div>
-                </div>
-
-                <div className="chart-bars-container">
-                  {monthlyHistoricalFlow.map(m => {
-                    const maxH = flowScaleMax;
-                    const inH = Math.min(100, Math.round((m.inVal / maxH) * 100));
-                    const outH = Math.min(100, Math.round((m.outVal / maxH) * 100));
-
-                    return (
-                      <div key={m.key} className="chart-bar-column">
-                        <div className="chart-bar-track" title={`${m.label}: Ingresos S/ ${m.inVal.toFixed(2)} | Salidas S/ ${m.outVal.toFixed(2)} | Margen S/ ${m.savings.toFixed(2)}`}>
-                          <div className="chart-bar-group">
-                            <div
-                              className="chart-bar-item chart-bar-income"
-                              style={{ height: `${inH}%` }}
-                              title={`Ingresos • ${m.label}: S/ ${m.inVal.toFixed(2)}`}
-                            />
-                            <div
-                              className="chart-bar-item chart-bar-expense"
-                              style={{ height: `${outH}%` }}
-                              title={`Salida Real de Caja • ${m.label}: S/ ${m.outVal.toFixed(2)}`}
-                            />
-                          </div>
-                        </div>
-                        <span className="chart-bar-label" title={`Mes de ${m.label}`}>{m.label.slice(0, 3)}</span>
-                        <span
-                          className="chart-bar-margin"
-                          style={{ color: m.savings >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}
-                          title={`Margen del mes • ${m.label}: ${m.savings >= 0 ? '+' : ''}S/ ${m.savings.toFixed(2)}`}
-                        >
-                          {fmtMargin(m.savings)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="chart-legend">
-                <div className="chart-legend-item" title="Dinero efectivamente cobrado en cuenta bancaria">
-                  <span className="chart-legend-dot" style={{ background: '#10b981' }} />
-                  <span>Ingresos</span>
-                </div>
-                <div className="chart-legend-item" title="Pagos y egresos reales salidos de tu cuenta">
-                  <span className="chart-legend-dot" style={{ background: '#ef4444' }} />
-                  <span>Salida Real</span>
-                </div>
-                <div className="chart-legend-item" title="Margen neto del mes (ingresos menos salidas), anotado bajo cada columna">
-                  <span style={{ fontWeight: 800, color: 'var(--text-secondary)', fontSize: '0.82rem', lineHeight: 1 }}>±</span>
-                  <span>Margen mensual</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Consolidado del año (antes tab "Resumen Anual") */}
-          <AnnualTab />
-        </>
+        <AnnualTab />
       )}
 
       {/* ===================== VISTA: PROYECCIÓN (simulador) ===================== */}
       {analysisView === 'projection' && (
-        <div className="simulator-zen-card">
+        <div className="simulator-zen-card clean-card panel-body">
           <div className="sim-header">
             <div>
               <div className="sim-title">
@@ -683,30 +583,30 @@ export const AnalysisTab: React.FC = () => {
                 <span>Simulador de Flujo Predictivo</span>
                 <span className="badge badge-success nowrap">Tiempo Real</span>
               </div>
-              <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.80rem', color: 'var(--text-muted)' }}>
                 Cálculo predictivo de arrastre de saldos, sueldos, gastos fijos y cuotas de tarjetas.
               </p>
             </div>
 
-            {/* Selector de Horizonte Integrado */}
-            <div className="sim-pills">
+            {/* Selector de Horizonte Integrado (Estándar Zen de FinTrack) */}
+            <div className="segmented-tabs-wrap">
               <button
                 id="forecast-horizon-3"
                 type="button"
-                className={`sim-pill-btn ${forecastHorizon === 3 ? 'active' : ''}`}
+                className={`segmented-tab-btn ${forecastHorizon === 3 ? 'active' : ''}`}
                 onClick={() => setForecastHorizon(3)}
                 title="Proyectar liquidez para los próximos 3 meses"
               >
-                3 Meses
+                <span>3 Meses</span>
               </button>
               <button
                 id="forecast-horizon-6"
                 type="button"
-                className={`sim-pill-btn ${forecastHorizon === 6 ? 'active' : ''}`}
+                className={`segmented-tab-btn ${forecastHorizon === 6 ? 'active' : ''}`}
                 onClick={() => setForecastHorizon(6)}
                 title="Proyectar liquidez para los próximos 6 meses"
               >
-                6 Meses
+                <span>6 Meses</span>
               </button>
             </div>
           </div>
@@ -781,42 +681,44 @@ export const AnalysisTab: React.FC = () => {
                   </div>
 
                   <div className="forecast-stat-row">
-                    <span>Saldo Inicial:</span>
+                    <span title="Saldo disponible en cuentas de débito y efectivo al iniciar el mes">Saldo Inicial:</span>
                     <strong className="tabular-nums">{formatSoles(f.projectedInitialBalance)}</strong>
                   </div>
                   <div className="forecast-stat-row">
-                    <span>+ Ingresos:</span>
+                    <span title="Sueldos previstos y otros ingresos programados para este mes">+ Ingresos:</span>
                     <strong className="tabular-nums text-success">+{formatSoles(f.expectedIncome)}</strong>
                   </div>
                   {(f.scheduledReceivableDue ?? 0) > 0 && (
                     <div className="forecast-stat-row" style={{ color: 'var(--accent-success)' }}>
-                      <span>+ Cobranzas Programadas:</span>
+                      <span title="Cobranzas de préstamos a terceros que vencen este mes">+ Cobranzas Programadas:</span>
                       <strong className="tabular-nums">+{formatSoles(f.scheduledReceivableDue ?? 0)}</strong>
                     </div>
                   )}
-                  <div className="forecast-stat-row">
-                    <span>- Fijos Programados:</span>
-                    <strong className="tabular-nums text-danger">-{formatSoles(f.fixedExpenses)}</strong>
-                  </div>
-                  <div className="forecast-stat-row">
-                    <span title="Promedio histórico de tus gastos variables, aplicado por igual a cada mes proyectado">- Variables (prom. histórico):</span>
-                    <strong className="tabular-nums text-muted">-{formatSoles(f.projectedVariableExpenses)}</strong>
-                  </div>
+                  {f.fixedExpenses > 0 && (
+                    <div className="forecast-stat-row">
+                      <span title="Servicios y suscripciones fijas que se debitan directamente de tu cuenta bancaria o efectivo">- Fijos en Débito:</span>
+                      <strong className="tabular-nums text-danger">-{formatSoles(f.fixedExpenses)}</strong>
+                    </div>
+                  )}
                   {f.projectedCardOutflows > 0 && (
                     <div className="forecast-stat-row" style={{ color: 'var(--accent-warning)' }}>
-                      <span>- Vencimiento Tarjetas:</span>
+                      <span title="Cuotas de compras diferidas y consumos con tarjeta que vencen y debes pagar al banco este mes">- Vencimiento Tarjetas:</span>
                       <strong className="tabular-nums">-{formatSoles(f.projectedCardOutflows)}</strong>
                     </div>
                   )}
+                  <div className="forecast-stat-row">
+                    <span title="Presupuesto proyectado para gastos cotidianos del día a día (comida, transporte, ocio) según tu media histórica">- Variables (estimado mensual):</span>
+                    <strong className="tabular-nums text-muted">-{formatSoles(f.projectedVariableExpenses)}</strong>
+                  </div>
                   {(f.scheduledDebtDue ?? 0) > 0 && (
                     <div className="forecast-stat-row" style={{ color: 'var(--accent-danger)' }}>
-                      <span>- Deudas por Vencer:</span>
+                      <span title="Deudas propias con terceros que vencen y debes pagar este mes">- Deudas por Vencer:</span>
                       <strong className="tabular-nums">-{formatSoles(f.scheduledDebtDue ?? 0)}</strong>
                     </div>
                   )}
 
                   <div className="forecast-ending-balance">
-                    <span>Saldo Final</span>
+                    <span title="Liquidez neta proyectada con la que cerrarás el mes">Saldo Final</span>
                     <strong className={`tabular-nums ${health.colorClass}`}>
                       {formatSoles(f.projectedEndingBalance)}
                     </strong>

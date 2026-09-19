@@ -1259,8 +1259,22 @@ function useFinanceController() {
   const forecastData = useMemo(() => {
     const fixedList = transactions.filter(t => t.isFixedSubscription && t.date.startsWith(monthKey));
     const variableTxs = currentMonthTransactions.filter(t => !t.isFixedSubscription);
-    const variableSum = variableTxs.reduce((acc, curr) => acc + curr.amountPen, 0);
+    const variableSum = variableTxs.reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
     const creditCardIds = paymentMethods.filter(p => p.type === 'credit').map(p => p.id);
+
+    // Calcular promedio histórico real de gastos variables mensuales en base al historial
+    const variableByMonth = new Map<string, number>();
+    transactions.forEach(t => {
+      if (!t.isFixedSubscription && t.date) {
+        const ym = t.date.slice(0, 7);
+        const net = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
+        variableByMonth.set(ym, (variableByMonth.get(ym) || 0) + net);
+      }
+    });
+    const pastMonthsVars = Array.from(variableByMonth.values()).filter(v => v > 0);
+    const historicalMonthlyVariableAvg = pastMonthsVars.length > 0
+      ? Math.round(pastMonthsVars.reduce((acc, v) => acc + v, 0) / pastMonthsVars.length * 100) / 100
+      : (variableSum > 0 ? variableSum : 750);
 
     return AIIntelligenceService.generateCashflowForecast(
       currentYear,
@@ -1268,7 +1282,7 @@ function useFinanceController() {
       debitStats.projectedDebitBalanceMonthEnd,
       salaries,
       fixedList,
-      variableSum > 0 ? variableSum : 750,
+      historicalMonthlyVariableAvg,
       forecastHorizon,
       transactions,
       creditCardIds,

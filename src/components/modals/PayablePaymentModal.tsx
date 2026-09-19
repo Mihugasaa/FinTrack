@@ -51,7 +51,8 @@ export const PayablePaymentModal: React.FC = () => {
           width: '100%',
           padding: '22px 26px',
           borderTop: '3px solid var(--accent-warning)',
-          borderRadius: '16px'
+          borderRadius: '16px',
+          overflow: 'visible'
         }}
         onClick={e => e.stopPropagation()}
         role="dialog"

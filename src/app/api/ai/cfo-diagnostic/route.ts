@@ -173,7 +173,7 @@ REGLAS DE ORO:
           ? `Tu margen operativo de S/ ${liquidityMargin.toFixed(2)} respalda con solidez tus pagos del mes con una tasa de ahorro de ${savingsRatePercentage.toFixed(1)}%.`
           : `Presentas un desfase de liquidez de S/ ${Math.abs(liquidityMargin).toFixed(2)} frente a tus salidas de caja programadas.`,
         spendingLeakInsight: topCategories.length > 0
-          ? `${topCategories[0].category} concentra el ${topCategories[0].percentage}% de tus gastos consumidos, totalizando S/ ${topCategories[0].amount.toFixed(2)}.`
+          ? `${topCategories[0].category} concentra el ${Number(topCategories[0].percentage || 0).toFixed(1)}% de tus gastos consumidos, totalizando S/ ${topCategories[0].amount.toFixed(2)}.`
           : `Tus consumos se encuentran distribuidos sin una categoría dominante anormal.`,
         actionableRecommendation: isPositive
           ? `Deriva al menos S/ ${(liquidityMargin * 0.4).toFixed(2)} a tu fondo de reserva o inversión de bajo riesgo antes de que venza la quincena.`

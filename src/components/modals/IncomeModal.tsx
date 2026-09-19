@@ -36,7 +36,12 @@ export const IncomeModal: React.FC = () => {
       onClick={handleBackdropClick(onClose)}
       onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
     >
-      <div className="modal-box" ref={modalBoxRef} onClick={e => e.stopPropagation()}>
+      <div
+        className="modal-box"
+        ref={modalBoxRef}
+        style={{ overflow: 'visible' }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="modal-drag-zone" {...dragHandleProps}>
           <div className="modal-drag-handle" />
         </div>

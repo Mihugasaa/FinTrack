@@ -2748,11 +2748,11 @@ body.modal-open {
 }
 
 .annual-title {
-  font-size: 1.35rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: var(--text-primary);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 
 .annual-chip-audit {
@@ -2767,7 +2767,7 @@ body.modal-open {
 }
 
 .annual-subtitle {
-  font-size: 0.82rem;
+  font-size: 0.80rem;
   color: var(--text-muted);
   margin: 0;
 }
@@ -2935,30 +2935,51 @@ body.modal-open {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-/* En móvil el toggle Ritmo/Distribución (etiquetas largas) se salía de pantalla.
-   Se vuelve de ancho completo en dos columnas iguales. Scoped al bar del anual
-   para no afectar los otros controles segmentados. */
+/* En móvil el selector visual se vuelve de 3 columnas iguales y se optimiza el espaciado.
+   Scoped al bar del anual para no afectar los otros controles segmentados. */
 @media (max-width: 640px) {
   .annual-segmented-bar {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
   .annual-segmented-bar .segmented-tabs-wrap {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
   }
   .annual-segmented-bar .segmented-tab-btn {
     justify-content: center;
     text-align: center;
-    padding: 8px 4px;
-    font-size: 0.7rem;
-    gap: 4px;
+    padding: 7px 2px;
+    font-size: 0.67rem;
+    gap: 2px;
     min-width: 0;
-    line-height: 1.2;
-    /* Permitir que el texto largo ("Distribución por Categorías") ajuste en
-       dos líneas dentro de su celda en vez de desbordar (base tiene nowrap). */
+    line-height: 1.15;
     white-space: normal !important;
+  }
+  .annual-visual-card {
+    padding: 16px 12px;
+  }
+  .chart-canvas-area {
+    padding: 12px 8px 32px 34px;
+  }
+  .chart-bars-container {
+    gap: 6px;
+    height: 175px;
+    padding: 0 2px 28px 2px;
+  }
+  .chart-bar-track {
+    max-width: 44px;
+    padding: 0 2px;
+  }
+  .chart-bar-label {
+    font-size: 0.65rem;
+    bottom: -22px;
+  }
+  .chart-bar-margin {
+    font-size: 0.62rem;
+    bottom: -38px;
   }
 }
 
@@ -3223,7 +3244,7 @@ body.modal-open {
 
 /* Nota metodológica bajo la tabla anual (devengado vs caja + tiers de estado). */
 .annual-table-note {
-  margin: 12px 2px 0 2px;
+  margin: 12px 2px 14px 2px;
   padding-top: 12px;
   border-top: 1px solid var(--border-subtle);
   font-size: 0.74rem;
@@ -4157,7 +4178,7 @@ body.modal-open {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 0;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -4188,7 +4209,7 @@ body.modal-open {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
-  margin-bottom: 22px;
+  margin-bottom: 0;
 }
 
 @media (max-width: 768px) {
@@ -4257,7 +4278,7 @@ body.modal-open {
   flex-direction: column;
   gap: 18px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
-  margin-bottom: 22px;
+  margin-bottom: 0;
 }
 
 .sim-header {
@@ -4269,12 +4290,13 @@ body.modal-open {
 }
 
 .sim-title {
-  font-size: 1rem;
+  font-size: 1.15rem;
   font-weight: 800;
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--text-primary);
+  letter-spacing: -0.015em;
 }
 
 .sim-pills {
@@ -4568,17 +4590,17 @@ body.modal-open {
   border-color: var(--border-medium);
 }
 
-/* Semáforo de 3 Estados */
+/* Semáforo de 3 Estados (Acento vertical izquierdo estándar de FinTrack) */
 .forecast-card.status-surplus {
-  border-top: 3.5px solid var(--accent-success);
+  border-left: 4px solid var(--accent-success);
 }
 
 .forecast-card.status-tight {
-  border-top: 3.5px solid var(--accent-warning);
+  border-left: 4px solid var(--accent-warning);
 }
 
 .forecast-card.status-deficit {
-  border-top: 3.5px solid var(--accent-danger);
+  border-left: 4px solid var(--accent-danger);
 }
 
 .forecast-card-header {

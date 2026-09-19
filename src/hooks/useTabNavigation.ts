@@ -13,8 +13,8 @@ export type ActiveTab =
 
 export const VALID_TABS: ActiveTab[] = [
   'overview',
-  'incomes',
   'transactions',
+  'incomes',
   'cards',
   'receivables',
   'analysis',

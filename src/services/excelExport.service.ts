@@ -139,7 +139,7 @@ export class ExcelExportService {
     // 5. Hoja 5: Proyección a Futuro (3-6 Meses)
     if (data.forecast && data.forecast.length > 0) {
       const forecastRows = [
-        ['Mes Proyectado', 'Saldo Inicial (S/)', 'Ingresos Esperados (S/)', 'Gastos Fijos (S/)', 'Variables Estimados (S/)', 'Salidas Totales (S/)', 'Saldo Final (S/)', 'Riesgo Déficit']
+        ['Mes Proyectado', 'Saldo Inicial (S/)', 'Ingresos Esperados (S/)', 'Fijos en Débito (S/)', 'Vencimiento Tarjetas (S/)', 'Variables Estimados (S/)', 'Salidas Totales (S/)', 'Saldo Final (S/)', 'Riesgo Déficit']
       ];
 
       data.forecast.forEach(f => {
@@ -148,6 +148,7 @@ export class ExcelExportService {
           String(f.projectedInitialBalance),
           String(f.expectedIncome),
           String(f.fixedExpenses),
+          String(f.projectedCardOutflows),
           String(f.projectedVariableExpenses),
           String(f.totalProjectedOutflow),
           String(f.projectedEndingBalance),
@@ -157,7 +158,7 @@ export class ExcelExportService {
 
       const wsForecast = XLSX.utils.aoa_to_sheet(forecastRows);
       wsForecast['!cols'] = [
-        { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 16 }
+        { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 16 }
       ];
       XLSX.utils.book_append_sheet(wb, wsForecast, 'Proyección 3-6 Meses');
     }

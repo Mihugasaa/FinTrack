@@ -424,12 +424,13 @@ export class AIIntelligenceService {
 
       const projectedCardOutflows = cardPaymentsDue > 0 ? cardPaymentsDue : fallbackCardFixed;
 
-      // 2. Gastos fijos directos en Débito o Efectivo
+      // 2. Gastos fijos directos en Débito o Efectivo (suscripciones y servicios en cuenta)
       const debitFixed = fixedExpensesList
         .filter(t => !creditCardIds.includes(t.paymentMethodId))
         .reduce((acc, curr) => acc + curr.amountPen, 0);
 
-      const fixedExpenses = debitFixed + projectedCardOutflows;
+      // Fijos en débito se mantienen separados de las tarjetas para que la matemática sea mutuamente excluyente y transparente
+      const fixedExpenses = debitFixed;
       const projectedVariableExpenses = historicalMonthlyVariableAvg > 0 ? historicalMonthlyVariableAvg : 800.00;
 
       // 3. Deudas propias que vencen este mes (salida programada de caja).
@@ -450,7 +451,7 @@ export class AIIntelligenceService {
           return acc + Math.max(0, pen);
         }, 0);
 
-      const totalProjectedOutflow = fixedExpenses + projectedVariableExpenses + scheduledDebtDue;
+      const totalProjectedOutflow = fixedExpenses + projectedCardOutflows + projectedVariableExpenses + scheduledDebtDue;
 
       // Dinero disponible antes de gastos del mes = saldo anterior + ingresos + cobranzas programadas
       const totalAvailable = projectedInitial + expectedIncome + scheduledReceivableDue;

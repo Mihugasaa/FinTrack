@@ -1,19 +1,10 @@
 'use client';
 
 import React from 'react';
-import {
-  PieChart,
-  ListFilter,
-  Coins,
-  CreditCard,
-  MoreHorizontal,
-  X,
-  Users,
-  BarChart3,
-  CheckCheck
-} from 'lucide-react';
+import { MoreHorizontal, X } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
+import { BOTTOM_NAV_TABS, MORE_MENU_TABS } from '@/config/navigationTabs';
 
 export const MobileNav: React.FC = () => {
   const {
@@ -33,57 +24,33 @@ export const MobileNav: React.FC = () => {
   const anomalyCount = aiAnomalies.length;
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose: () => setIsMoreMenuOpen(false) });
 
+  const isMoreTabActive = MORE_MENU_TABS.some(t => t.id === activeTab) || isMoreMenuOpen;
+
   return (
     <>
       {/* NAVEGACIÓN MÓVIL (BARRA INFERIOR FIJA - THUMB ZONE) */}
       <nav className="mobile-bottom-nav mobile-only">
-        <button
-          className={`mobile-nav-item ${activeTab === 'overview' && !isMoreMenuOpen ? 'active' : ''}`}
-          onClick={() => {
-            onSelectTab('overview');
-            setIsMoreMenuOpen(false);
-          }}
-        >
-          <PieChart size={18} />
-          <span>Inicio</span>
-        </button>
-
-        <button
-          className={`mobile-nav-item ${activeTab === 'transactions' && !isMoreMenuOpen ? 'active' : ''}`}
-          onClick={() => {
-            onSelectTab('transactions');
-            setIsMoreMenuOpen(false);
-          }}
-        >
-          <ListFilter size={18} />
-          <span>Movimientos</span>
-        </button>
-
-        <button
-          className={`mobile-nav-item ${activeTab === 'incomes' && !isMoreMenuOpen ? 'active' : ''}`}
-          onClick={() => {
-            onSelectTab('incomes');
-            setIsMoreMenuOpen(false);
-          }}
-        >
-          <Coins size={18} />
-          <span>Ingresos</span>
-        </button>
-
-        <button
-          className={`mobile-nav-item ${activeTab === 'cards' && !isMoreMenuOpen ? 'active' : ''}`}
-          onClick={() => {
-            onSelectTab('cards');
-            setIsMoreMenuOpen(false);
-          }}
-        >
-          <CreditCard size={18} />
-          <span>Tarjetas</span>
-        </button>
+        {BOTTOM_NAV_TABS.map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id && !isMoreMenuOpen;
+          return (
+            <button
+              key={tab.id}
+              className={`mobile-nav-item ${isActive ? 'active' : ''}`}
+              onClick={() => {
+                onSelectTab(tab.id);
+                setIsMoreMenuOpen(false);
+              }}
+            >
+              <Icon size={18} />
+              <span>{tab.labelMobile}</span>
+            </button>
+          );
+        })}
 
         <button
           id="btn-mobile-more"
-          className={`mobile-nav-item ${(activeTab === 'receivables' || activeTab === 'analysis' || isMoreMenuOpen) ? 'active' : ''}`}
+          className={`mobile-nav-item ${isMoreTabActive ? 'active' : ''}`}
           onClick={() => setIsMoreMenuOpen(prev => !prev)}
         >
           <MoreHorizontal size={18} />
@@ -112,63 +79,40 @@ export const MobileNav: React.FC = () => {
             </div>
 
             <div className="more-menu-sheet">
-              <button
-                className={`more-menu-item ${activeTab === 'receivables' ? 'active' : ''}`}
-                onClick={() => {
-                  onSelectTab('receivables');
-                  setIsMoreMenuOpen(false);
-                }}
-              >
-                <div className="more-item-left">
-                  <Users size={18} className="text-brand" />
-                  <div>
-                    <div>Préstamos y Deudas</div>
-                    <div className="text-body-sm text-muted">Dinero prestado y deudas mías</div>
-                  </div>
-                </div>
-                {totalPendingLoans > 0 && (
-                  <span className="badge badge-warning">
-                    {totalPendingLoans} pendientes
-                  </span>
-                )}
-              </button>
-
-              <button
-                className={`more-menu-item ${activeTab === 'analysis' ? 'active' : ''}`}
-                onClick={() => {
-                  onSelectTab('analysis');
-                  setIsMoreMenuOpen(false);
-                }}
-              >
-                <div className="more-item-left">
-                  <BarChart3 size={18} className="text-brand" />
-                  <div>
-                    <div>Análisis</div>
-                    <div className="text-body-sm text-muted">Mes actual, tendencia y proyección de saldos</div>
-                  </div>
-                </div>
-                {anomalyCount > 0 && (
-                  <span className="badge badge-danger">
-                    {anomalyCount} {anomalyCount === 1 ? 'alerta' : 'alertas'}
-                  </span>
-                )}
-              </button>
-
-              <button
-                className={`more-menu-item ${activeTab === 'reconciliation' ? 'active' : ''}`}
-                onClick={() => {
-                  onSelectTab('reconciliation');
-                  setIsMoreMenuOpen(false);
-                }}
-              >
-                <div className="more-item-left">
-                  <CheckCheck size={18} className="text-brand" />
-                  <div>
-                    <div>Conciliación Bancaria</div>
-                    <div className="text-body-sm text-muted">Comparar estado de cuenta con app</div>
-                  </div>
-                </div>
-              </button>
+              {MORE_MENU_TABS.map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    className={`more-menu-item ${isActive ? 'active' : ''}`}
+                    onClick={() => {
+                      onSelectTab(tab.id);
+                      setIsMoreMenuOpen(false);
+                    }}
+                  >
+                    <div className="more-item-left">
+                      <Icon size={18} className="text-brand" />
+                      <div>
+                        <div>{tab.labelMobile}</div>
+                        {tab.mobileSubtitle && (
+                          <div className="text-body-sm text-muted">{tab.mobileSubtitle}</div>
+                        )}
+                      </div>
+                    </div>
+                    {tab.id === 'receivables' && totalPendingLoans > 0 && (
+                      <span className="badge badge-warning">
+                        {totalPendingLoans} pendientes
+                      </span>
+                    )}
+                    {tab.id === 'analysis' && anomalyCount > 0 && (
+                      <span className="badge badge-danger">
+                        {anomalyCount} {anomalyCount === 1 ? 'alerta' : 'alertas'}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

@@ -37,12 +37,9 @@ export const SalaryModal: React.FC = () => {
           <div className="modal-drag-handle" />
         </div>
         <div className="modal-title-row">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Building2 size={18} color="var(--accent-brand)" />
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Configurar Sueldo / Nómina</h3>
-          </div>
-          <button className="btn-action-icon" onClick={onClose}>
-            <X size={18} />
+          <span className="text-h2 font-bold">Configurar Sueldo / Nómina</span>
+          <button id="btn-close-salary-modal" className="month-nav-btn modal-close-btn" onClick={onClose}>
+            <X size={16} />
           </button>
         </div>
 

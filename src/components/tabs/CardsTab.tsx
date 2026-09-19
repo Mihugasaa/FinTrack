@@ -56,10 +56,10 @@ export const CardsTab: React.FC = () => {
       {/* Cabecera Principal de Pestaña */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+          <h2 className="panel-header-title">
             Mis Cuentas de Débito y Tarjetas de Crédito
           </h2>
-          <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+          <p className="panel-header-subtitle">
             Gestiona tus fondos líquidos y líneas de crédito con balance simétrico
           </p>
         </div>
@@ -72,8 +72,7 @@ export const CardsTab: React.FC = () => {
       </div>
 
       {/* 1. Hero Débito (Liquidez en Cuenta y Fondos Disponibles) */}
-      <div className="debit-hero-card">
-        <div className="card-color-stripe" style={{ background: 'var(--accent-success)' }} />
+      <div className="debit-hero-card" style={{ borderLeft: '4px solid var(--accent-success)' }}>
         <div className="debit-hero-main">
           <div className="debit-icon-box">
             <Landmark size={22} />
@@ -131,7 +130,7 @@ export const CardsTab: React.FC = () => {
 
       {/* 2. Grid Simétrico 2x2 de Tarjetas de Crédito (Cero tarjetas huérfanas) */}
       <div style={{ margin: '24px 0 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-        <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <CreditCard size={17} style={{ color: 'var(--accent-brand)' }} />
           <span>Mis Líneas de Crédito Activas ({cardDebtSummary.length})</span>
         </h3>
@@ -150,8 +149,7 @@ export const CardsTab: React.FC = () => {
           const usedPercent = card.hasPositiveBalance ? 0 : Math.min(100, (card.totalAccumulatedDebt / limit) * 100);
 
           return (
-            <div key={card.paymentMethodId} className="credit-card-zen">
-              <div className="card-color-stripe" style={{ background: card.cardColor }} />
+            <div key={card.paymentMethodId} className="credit-card-zen" style={{ borderLeft: `4px solid ${card.cardColor}` }}>
               <div>
                 <div className="card-zen-top">
                   <div>

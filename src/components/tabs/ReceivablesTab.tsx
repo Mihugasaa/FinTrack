@@ -159,6 +159,18 @@ export const ReceivablesTab: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+      {/* Cabecera Principal de Pestaña */}
+      <div className="panel-header" style={{ marginBottom: '2px' }}>
+        <div>
+          <h2 className="panel-header-title">
+            Mis Préstamos y Deudas
+          </h2>
+          <p className="panel-header-subtitle">
+            Seguimiento de dinero prestado a terceros y compromisos por pagar
+          </p>
+        </div>
+      </div>
+
       {/* 1. KPIs de Préstamos y Deudas (2 Columnas Simétricas al 100%) */}
       <div className="loans-kpi-grid">
         <div className="loans-kpi-card" style={{ borderLeft: '4px solid var(--accent-success)' }} title="Total de dinero que has prestado a terceros y aún está pendiente de devolución">
@@ -468,7 +480,7 @@ export const ReceivablesTab: React.FC = () => {
                         {!group.isFullyPaid && (
                           <>
                             <button
-                              className="btn-primary"
+                              className="btn-secondary"
                               style={{ padding: '6px 12px', fontSize: '0.78rem' }}
                               onClick={() => handleOpenGroupCollectModal(group)}
                               title="Registrar abono que se distribuirá en cascada (FIFO) sobre los préstamos"
@@ -827,7 +839,7 @@ export const ReceivablesTab: React.FC = () => {
                         {!group.isFullyPaid && (
                           <>
                             <button
-                              className="btn-primary"
+                              className="btn-secondary"
                               style={{ padding: '6px 12px', fontSize: '0.78rem' }}
                               onClick={() => handleOpenGroupPayModal(group)}
                               title="Abonar a las deudas de este acreedor en orden de antigüedad"

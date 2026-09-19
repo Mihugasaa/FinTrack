@@ -77,7 +77,7 @@ export const IncomesTab: React.FC = () => {
 
       {/* 3 KPIs Superiores Nivelados */}
       <div className="stats-grid-3">
-        <div className="metric-stat-card">
+        <div className="metric-stat-card" style={{ borderLeft: '4px solid var(--accent-success)' }}>
           <span className="text-caption text-muted">
             Total Ingresos Previstos
           </span>
@@ -89,7 +89,7 @@ export const IncomesTab: React.FC = () => {
           </span>
         </div>
 
-        <div className="metric-stat-card">
+        <div className="metric-stat-card" style={{ borderLeft: '4px solid var(--border-medium)' }}>
           <span className="text-caption text-muted">
             Acreditado en Cuenta Hoy
           </span>
@@ -103,7 +103,7 @@ export const IncomesTab: React.FC = () => {
           </span>
         </div>
 
-        <div className="metric-stat-card">
+        <div className="metric-stat-card" style={{ borderLeft: '4px solid var(--accent-warning)' }}>
           <span className="text-caption text-muted">
             Por Acreditar a Fin de Mes
           </span>

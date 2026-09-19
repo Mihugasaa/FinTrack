@@ -4876,6 +4876,10 @@ body.modal-open {
   align-items: center;
   justify-content: center;
   gap: 12px;
+  max-width: 860px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
   margin-bottom: 22px;
   box-shadow: var(--shadow-card);
 }

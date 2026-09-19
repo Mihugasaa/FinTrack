@@ -64,7 +64,8 @@ export const TransactionsTab: React.FC = () => {
     currentDateStr,
     handleParseNaturalExpense,
     isParsingNaturalExpense,
-    handleOpenEditCollectPayment
+    handleOpenEditCollectPayment,
+    setActiveTab
   } = useFinance();
 
   const currentMonthReceivablePaymentsCount = React.useMemo(() => {
@@ -402,8 +403,15 @@ export const TransactionsTab: React.FC = () => {
                               </span>
                             )}
                           </td>
-                          <td className="text-center text-muted" style={{ fontSize: '0.75rem' }}>
-                            Efectivo
+                          <td className="text-center">
+                            <button
+                              type="button"
+                              className="btn-action-icon"
+                              title="Ver en Ingresos"
+                              onClick={() => setActiveTab('incomes')}
+                            >
+                              <ExternalLink size={14} />
+                            </button>
                           </td>
                         </tr>
                       </React.Fragment>

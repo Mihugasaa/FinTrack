@@ -337,6 +337,7 @@ export interface DebitBalanceResult {
   paidToCreditorsToday?: number;
   paidToCreditorsMonth?: number;
   borrowedCreditedToDebitToday?: number;
+  borrowedCreditedToDebitMonth?: number;
 }
 
 /**
@@ -380,6 +381,9 @@ export function calculateCurrentDebitBalance(
   let otherIncomesReceivedToday = 0;
   let otherIncomesTotalMonth = 0;
   otherIncomes.forEach(oi => {
+    // Si es un ingreso legado generado por préstamo recibido (inc-loan-...), lo excluimos
+    // para no duplicar con borrowedCreditedToDebitToday/borrowedCreditedToDebitMonth
+    if (oi.id && oi.id.startsWith('inc-loan-')) return;
     otherIncomesTotalMonth += oi.amount;
     if (oi.receivedDate <= currentDateStr) {
       otherIncomesReceivedToday += oi.amount;
@@ -424,7 +428,10 @@ export function calculateCurrentDebitBalance(
   });
 
   // 4. Gastos con Débito o Efectivo (los reembolsos descuentan gasto)
-  const debitTxs = monthTransactions.filter(t => debitMethodIds.includes(t.paymentMethodId));
+  const debitTxs = monthTransactions.filter(t =>
+    debitMethodIds.includes(t.paymentMethodId) ||
+    (debitMethodIds.length > 0 && (t.paymentMethodId === 'pm-1' || t.paymentMethodId === 'pm-deb-1'))
+  );
   let debitExpensesPaidToday = 0;
   let debitExpensesPendingFuture = 0;
 
@@ -479,7 +486,8 @@ export function calculateCurrentDebitBalance(
     cardPaymentsPaidMonth: cardPaymentsThisMonthTotal,
     paidToCreditorsToday,
     paidToCreditorsMonth,
-    borrowedCreditedToDebitToday
+    borrowedCreditedToDebitToday,
+    borrowedCreditedToDebitMonth
   };
 }
 
@@ -685,8 +693,10 @@ export function calculateMonthlyDiagnostic(
 ): LiquidityDiagnostic {
   const targetYearMonth = `${budget.year}-${budget.month.toString().padStart(2, '0')}`;
 
-  // 1. Total Ingresos = Sueldo + Otros Ingresos
-  const otherIncomesTotal = budget.otherIncomes.reduce((acc, curr) => acc + curr.amount, 0);
+  // 1. Total Ingresos = Sueldo + Otros Ingresos (excluyendo préstamos de deuda legados)
+  const otherIncomesTotal = budget.otherIncomes
+    .filter(curr => !curr.id || !curr.id.startsWith('inc-loan-'))
+    .reduce((acc, curr) => acc + curr.amount, 0);
   const totalIncome = budget.baseSalary + otherIncomesTotal;
 
   // 2. Gastos consumidos en este mes calendario (descontando reembolsos y devoluciones)

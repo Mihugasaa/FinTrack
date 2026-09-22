@@ -280,7 +280,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
       exchangeRate: payableCurrency === 'USD' ? tc : undefined,
       amountPen: totalInPen,
       issueDate: payableIssueDate,
-      createdAt: payableIssueDate,
+      createdAt: new Date().toISOString(),
       dueDate: payableDueDate || undefined,
       isCreditedToDebit: payableIsCreditedToDebit,
       status: 'PENDING',
@@ -290,18 +290,10 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
     setPayables(prev => [newPayable, ...prev]);
     SupabaseDataService.createPayable(newPayable);
 
-    // Si el usuario indicó abonar a cuenta débito:
-    if (payableIsCreditedToDebit) {
-      const loanIncomeId = `inc-loan-${Date.now()}`;
-      const loanIncomeDesc = `Préstamo recibido: ${payableCreditorName.trim()} ${payableCurrency === 'USD' ? `• $ ${num.toFixed(2)} USD` : ''}`;
-      const newIncome: OtherIncome = {
-        id: loanIncomeId,
-        description: loanIncomeDesc,
-        amount: totalInPen,
-        receivedDate: payableIssueDate
-      };
-      onCreditToDebit(newIncome, payableIssueDate);
-    }
+    // Si el usuario indicó abonar a cuenta débito, el abono se gestiona directamente
+    // a través de isCreditedToDebit en el flujo de caja y en la lista unificada de movimientos,
+    // evitando duplicaciones de saldo y registros huérfanos en other_incomes.
+
 
     setIsPayableModalOpen(false);
     setPayableCreditorName('');
@@ -371,6 +363,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
       const newRem = Math.max(0, itemTotal - newPaid);
       const isDone = newRem <= 0;
 
+      const nowIso = new Date().toISOString();
       const pRecord: PayablePayment = {
         id: `ppay-${Date.now()}-${item.id}`,
         payableId: item.id,
@@ -378,7 +371,8 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
         amount: pay,
         paymentDate: dateStr,
         paymentMethodId: 'pm-1',
-        notes: payNotes || 'Abono en cascada a acreedor'
+        notes: payNotes || 'Abono en cascada a acreedor',
+        createdAt: nowIso
       };
 
       updates.set(item.id, { newPaid, newRem, isDone, paymentRecord: pRecord });
@@ -430,6 +424,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
     }
 
     if (payingPayable) {
+      const nowIso = new Date().toISOString();
       const payRecord: PayablePayment = {
         id: `ppay-${Date.now()}`,
         payableId: payingPayable.id,
@@ -437,7 +432,8 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
         amount: num,
         paymentDate: payablePaymentDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`,
         paymentMethodId: 'pm-1',
-        notes: payablePaymentNotes || undefined
+        notes: payablePaymentNotes || undefined,
+        createdAt: nowIso
       };
 
       const payTotal = payingPayable.totalAmount ?? payingPayable.originalAmount ?? 0;

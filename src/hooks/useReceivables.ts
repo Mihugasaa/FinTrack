@@ -6,13 +6,15 @@ import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { generateUUID } from '@/lib/utils';
 import { getEffectiveDayOfMonth } from '@/lib/calculations';
-import { Receivable, ReceivablePayment, CurrencyCode, DebtConfirmData, Transaction } from '@/types';
+import { Receivable, ReceivablePayment, CurrencyCode, DebtConfirmData, Transaction, PaymentMethod, Category } from '@/types';
 
 interface UseReceivablesDeps {
   currentYear: number;
   currentMonth: number;
   setDebtConfirmData?: (data: DebtConfirmData | null) => void;
   onDisburseLoan?: (tx: Transaction) => void;
+  paymentMethods?: PaymentMethod[];
+  categories?: Category[];
 }
 
 /**
@@ -23,7 +25,7 @@ interface UseReceivablesDeps {
  * setReceivables; el borrado se expone como deleteReceivable para el confirmador
  * de eliminación compartido.
  */
-export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, onDisburseLoan }: UseReceivablesDeps) {
+export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, onDisburseLoan, paymentMethods, categories }: UseReceivablesDeps) {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
   // Id del préstamo en edición (null = alta nueva). Alterna el modal entre crear/editar.
@@ -64,11 +66,23 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     const d = new Date();
     return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
   });
+  const defaultDebitMethodId = useMemo(() => {
+    const deb = (paymentMethods || []).find(p => p.type === 'debit');
+    const cash = (paymentMethods || []).find(p => p.type === 'cash');
+    return deb?.id || cash?.id || paymentMethods?.[0]?.id || 'pm-1';
+  }, [paymentMethods]);
+
   const [loanIsDebitedFromAccount, setLoanIsDebitedFromAccount] = useState(true);
-  const [loanPaymentMethodId, setLoanPaymentMethodId] = useState('pm-1');
+  const [loanPaymentMethodId, setLoanPaymentMethodId] = useState('');
   const [isFetchingLoanTc, setIsFetchingLoanTc] = useState(false);
   const [loanTcInfo, setLoanTcInfo] = useState<ExchangeRateResult | null>(null);
   const [hasUserManuallyEditedLoanTc, setHasUserManuallyEditedLoanTc] = useState(false);
+
+  useEffect(() => {
+    if (defaultDebitMethodId && (!loanPaymentMethodId || loanPaymentMethodId === 'pm-1')) {
+      setLoanPaymentMethodId(defaultDebitMethodId);
+    }
+  }, [defaultDebitMethodId, loanPaymentMethodId]);
 
   const debtorGroups = useMemo(() => {
     const map = new Map<string, {
@@ -237,6 +251,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       const newRem = Math.max(0, item.originalAmount - newPaid);
       const isDone = newRem <= 0;
 
+      const nowIso = new Date().toISOString();
       const pRecord: ReceivablePayment = {
         id: `rpay-${Date.now()}-${item.id}`,
         receivableId: item.id,
@@ -244,7 +259,8 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
         amount: pay,
         paymentDate: dateStr,
         paymentMethodId: 'pm-1',
-        notes: collectNotes || 'Abono en cascada a préstamo'
+        notes: collectNotes || 'Abono en cascada a préstamo',
+        createdAt: nowIso
       };
 
       updates.set(item.id, { newPaid, isDone, paymentRecord: pRecord });
@@ -283,6 +299,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     const newRemaining = Math.max(0, targetRec.originalAmount - newPaid);
     const isDone = newRemaining === 0;
 
+    const nowIso = new Date().toISOString();
     const pRecord: ReceivablePayment = {
       id: `rpay-${Date.now()}-${id}`,
       receivableId: id,
@@ -290,7 +307,8 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       amount: amountToCollect,
       paymentDate: dateStr,
       paymentMethodId: 'pm-1',
-      notes: collectNotes || undefined
+      notes: collectNotes || undefined,
+      createdAt: nowIso
     };
 
     setReceivables(prev =>
@@ -379,7 +397,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     const d = new Date();
     setLoanDate(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`);
     setLoanIsDebitedFromAccount(true);
-    setLoanPaymentMethodId('pm-1');
+    setLoanPaymentMethodId(defaultDebitMethodId);
     setIsReceivableModalOpen(true);
   };
 
@@ -448,6 +466,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       return;
     }
 
+    const nowIso = new Date().toISOString();
     const newRec: Receivable = {
       id: generateUUID(),
       debtorName: debtorName.trim(),
@@ -462,7 +481,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       status: 'pending',
       isDebitedFromAccount: loanIsDebitedFromAccount,
       fundingPaymentMethodId: loanPaymentMethodId,
-      createdAt: loanDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`
+      createdAt: nowIso
     };
 
     setReceivables(prev => [newRec, ...prev]);
@@ -471,18 +490,31 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
 
     // Si el dinero prestado salió de la cuenta del usuario, se genera el movimiento de salida
     if (loanIsDebitedFromAccount && onDisburseLoan) {
+      // Resolver categoría válida (priorizando 'Regalos y Terceros' u 'Otros')
+      const matchedCat = (categories || []).find(c => {
+        const n = c.name.toLowerCase();
+        return n.includes('terceros') || n.includes('regalos') || n.includes('otros');
+      }) || (categories && categories.length > 0 ? categories[0] : undefined);
+      const finalCategoryId = matchedCat?.id || '345e217d-4c25-486f-aafd-7ee7c3e09590';
+
+      // Resolver método de pago válido de débito
+      const effectivePaymentMethodId = (loanPaymentMethodId && loanPaymentMethodId !== 'pm-1')
+        ? loanPaymentMethodId
+        : defaultDebitMethodId;
+
       const disburseTx: Transaction = {
         id: generateUUID(),
         date: loanDate,
         description: `Préstamo a ${debtorName.trim()}${loanDesc.trim() ? ` - ${loanDesc.trim()}` : ''}`,
-        categoryId: 'cat-11', // Regalos y Terceros
-        paymentMethodId: loanPaymentMethodId || 'pm-1',
+        categoryId: finalCategoryId,
+        paymentMethodId: effectivePaymentMethodId,
         currency: loanCurrency,
         originalAmount: orig,
         exchangeRate: loanCurrency === 'USD' ? tc : 1,
         amountPen: amountPen,
         paymentDueDate: loanDate,
-        notes: `Desembolso de préstamo registrado en FinTrack (#${newRec.id})`
+        notes: `Desembolso de préstamo registrado en FinTrack (#${newRec.id}) [created:${nowIso}]`,
+        createdAt: nowIso
       };
       onDisburseLoan(disburseTx);
     }
@@ -496,7 +528,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     setLoanTcInfo(null);
     setHasUserManuallyEditedLoanTc(false);
     setLoanIsDebitedFromAccount(true);
-    setLoanPaymentMethodId('pm-1');
+    setLoanPaymentMethodId(defaultDebitMethodId);
   };
 
   // Elimina una cuenta por cobrar (usado por el confirmador de borrado compartido)

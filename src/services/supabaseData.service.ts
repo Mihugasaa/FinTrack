@@ -187,7 +187,8 @@ export class SupabaseDataService {
           paymentDueDate: row.payment_due_date,
           isFixedSubscription: !!row.is_fixed_subscription,
           isRefund: isRefund,
-          notes: row.notes
+          notes: row.notes,
+          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined
         };
       });
     } catch (e) {
@@ -240,7 +241,8 @@ export class SupabaseDataService {
           paymentDueDate: row.payment_due_date,
           isFixedSubscription: !!row.is_fixed_subscription,
           isRefund: isRefund,
-          notes: row.notes
+          notes: row.notes,
+          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined
         };
       });
     } catch (e) {
@@ -615,7 +617,8 @@ export class SupabaseDataService {
           amountPaid: parseFloat(p.amount || '0'),
           amount: parseFloat(p.amount || '0'),
           paymentDate: p.payment_date,
-          notes: p.notes || undefined
+          notes: p.notes || undefined,
+          createdAt: p.created_at || (p.notes ? (p.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined
         }));
 
         return {
@@ -734,7 +737,8 @@ export class SupabaseDataService {
           receivable_id: id,
           amount: payment.amount || payment.amountPaid,
           payment_date: payment.paymentDate || new Date().toISOString().split('T')[0],
-          notes: payment.notes || null
+          notes: payment.notes || null,
+          created_at: payment.createdAt || new Date().toISOString()
         };
 
         if (isUUID(payment.id)) {
@@ -875,7 +879,8 @@ export class SupabaseDataService {
           amountPaid: parseFloat(p.amount),
           amount: parseFloat(p.amount),
           paymentDate: p.payment_date,
-          notes: p.notes
+          notes: p.notes,
+          createdAt: p.created_at || (p.notes ? (p.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined
         })) : []
       }));
     } catch (e) {
@@ -980,7 +985,8 @@ export class SupabaseDataService {
         payable_id: payableId,
         amount: payment.amount || payment.amountPaid,
         payment_date: payment.paymentDate || new Date().toISOString().split('T')[0],
-        notes: payment.notes || null
+        notes: payment.notes || null,
+        created_at: payment.createdAt || new Date().toISOString()
       };
 
       if (isUUID(payment.id)) {

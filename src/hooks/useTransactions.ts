@@ -151,12 +151,12 @@ export function useTransactions({
     // timestamp de creación embebido en notes (`[created:ISO]`). Así un gasto recién
     // agregado aparece arriba de su día. Las filas legacy sin timestamp caen al
     // desempate estable por descripción/id, sin alterar su orden relativo.
-    const createdAt = (t: Transaction) => (t.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '';
+    const getTxCreatedAt = (t: Transaction) => t.createdAt || (t.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '';
     return transactions
       .filter(t => t.date.startsWith(monthKey))
       .sort((a, b) =>
         b.date.localeCompare(a.date) ||
-        createdAt(b).localeCompare(createdAt(a)) ||
+        getTxCreatedAt(b).localeCompare(getTxCreatedAt(a)) ||
         (a.description || '').localeCompare(b.description || '') ||
         (a.id || '').localeCompare(b.id || '')
       );
@@ -496,7 +496,8 @@ export function useTransactions({
       }
 
       // Timestamp de creación embebido para ordenar por recencia dentro del mismo día.
-      const createdTag = `[created:${new Date().toISOString()}]`;
+      const nowIso = new Date().toISOString();
+      const createdTag = `[created:${nowIso}]`;
       const finalNotes = `${isRefundMode ? '[isRefund:true] ' : ''}${createdTag}`;
       const newTx: Transaction = {
         id: generateUUID(),
@@ -511,7 +512,8 @@ export function useTransactions({
         paymentDueDate: dueDate,
         isFixedSubscription: isRecurring,
         isRefund: isRefundMode,
-        notes: finalNotes
+        notes: finalNotes,
+        createdAt: nowIso
       };
 
       const newTxs: Transaction[] = [newTx];

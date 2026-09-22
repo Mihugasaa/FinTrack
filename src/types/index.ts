@@ -43,6 +43,7 @@ export interface Transaction {
   originalTotalAmount?: number;
   hasInterest?: boolean;
   notes?: string;
+  createdAt?: string;
 }
 
 export interface ReceivablePayment {
@@ -53,6 +54,7 @@ export interface ReceivablePayment {
   paymentDate: string;
   paymentMethodId?: string;
   notes?: string;
+  createdAt?: string;
 }
 
 export interface Receivable {
@@ -142,6 +144,7 @@ export interface PayablePayment {
   paymentDate: string;
   paymentMethodId?: string;
   notes?: string;
+  createdAt?: string;
 }
 
 export interface Payable {

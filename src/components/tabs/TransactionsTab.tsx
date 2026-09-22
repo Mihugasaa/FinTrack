@@ -381,7 +381,7 @@ export const TransactionsTab: React.FC = () => {
                               <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>🟢 Ingreso</span>
                             </div>
                             <div className="tx-concept-sub">
-                              {inc.type === 'salary' ? 'Sueldo / Nómina fija' : 'Ingreso Extraordinario'}
+                              {inc.type === 'salary' ? 'Sueldo / Nómina fija' : (inc.type === 'borrowed' ? 'Préstamo recibido (Abono en cuenta)' : 'Ingreso Extraordinario')}
                             </div>
                           </td>
                           <td>
@@ -404,14 +404,25 @@ export const TransactionsTab: React.FC = () => {
                             )}
                           </td>
                           <td className="text-center">
-                            <button
-                              type="button"
-                              className="btn-action-icon"
-                              title="Ver en Ingresos"
-                              onClick={() => setActiveTab('incomes')}
-                            >
-                              <ExternalLink size={14} />
-                            </button>
+                            {inc.type === 'borrowed' ? (
+                              <button
+                                type="button"
+                                className="btn-action-icon"
+                                title="Ver en Mis Deudas"
+                                onClick={() => setActiveTab('receivables', 'payables')}
+                              >
+                                <ExternalLink size={14} />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn-action-icon"
+                                title="Ver en Ingresos"
+                                onClick={() => setActiveTab('incomes')}
+                              >
+                                <ExternalLink size={14} />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       </React.Fragment>
@@ -792,7 +803,7 @@ export const TransactionsTab: React.FC = () => {
                             <div className="mobile-tx-meta">
                               <span>{formatDisplayDate(inc.date)}</span>
                               <span>•</span>
-                              <span>{inc.type === 'salary' ? 'Sueldo / Nómina' : 'Ingreso extra'}</span>
+                              <span>{inc.type === 'salary' ? 'Sueldo / Nómina' : (inc.type === 'borrowed' ? 'Préstamo recibido' : 'Ingreso extra')}</span>
                               <span>•</span>
                               <span style={{ color: 'var(--accent-success)', fontWeight: 500 }}>Débito</span>
                             </div>

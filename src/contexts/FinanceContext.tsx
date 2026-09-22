@@ -427,7 +427,9 @@ function useFinanceController() {
     onDisburseLoan: (tx: Transaction) => {
       setTransactions(prev => [tx, ...prev]);
       SupabaseDataService.createTransaction(tx);
-    }
+    },
+    paymentMethods,
+    categories
   });
 
   // Mis deudas: dinero que me prestaron, agrupado por acreedor, con pagos
@@ -1436,9 +1438,9 @@ function useFinanceController() {
   type UnifiedMovement =
     | { kind: 'transaction'; data: Transaction; sortDate: string }
     | { kind: 'card_payment'; data: CardPayment; index: number; sortDate: string }
-    | { kind: 'income'; data: { id: string; description: string; amount: number; date: string; type: 'salary' | 'extra' }; sortDate: string }
-    | { kind: 'payable_payment'; data: { id: string; payableId: string; creditorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string }; sortDate: string }
-    | { kind: 'receivable_payment'; data: { id: string; receivableId: string; debtorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string }; sortDate: string }
+    | { kind: 'income'; data: { id: string; description: string; amount: number; date: string; type: 'salary' | 'extra' | 'borrowed'; createdAt?: string }; sortDate: string }
+    | { kind: 'payable_payment'; data: { id: string; payableId: string; creditorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string; createdAt?: string }; sortDate: string }
+    | { kind: 'receivable_payment'; data: { id: string; receivableId: string; debtorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string; createdAt?: string }; sortDate: string }
     | { kind: 'scheduled_payable'; data: { id: string; payableId: string; creditorName: string; description: string; amountPen: number; currency?: 'PEN' | 'USD'; remaining: number; dueDate: string }; sortDate: string };
 
   const combinedMovements = useMemo<UnifiedMovement[]>(() => {
@@ -1488,6 +1490,7 @@ function useFinanceController() {
       });
 
       currentOtherIncomes.forEach(oi => {
+        if (oi.id && oi.id.startsWith('inc-loan-')) return;
         const searchMatches = !searchQuery || `ingreso extra ${oi.description}`.toLowerCase().includes(searchQuery.toLowerCase());
         if (searchMatches && selectedCategory === 'ALL' && selectedPaymentMethod === 'ALL') {
           items.push({
@@ -1501,6 +1504,32 @@ function useFinanceController() {
             },
             sortDate: oi.receivedDate
           });
+        }
+      });
+    }
+
+    // 3.b Préstamos recibidos acreditados a cuenta débito (Ingreso de dinero en cuenta)
+    if (txTypeFilter === 'ALL' || txTypeFilter === 'INCOMES' || txTypeFilter === 'PAYABLES') {
+      payables.forEach(p => {
+        if (p.isCreditedToDebit && (p.issueDate || '').startsWith(monthKey)) {
+          const searchMatches = !searchQuery || `prestamo recibido deuda ${p.creditorName} ${p.description}`.toLowerCase().includes(searchQuery.toLowerCase());
+          if (searchMatches && selectedCategory === 'ALL' && selectedPaymentMethod === 'ALL') {
+            const isUsd = p.currency === 'USD';
+            const exRate = p.exchangeRate || 1;
+            const orig = (isUsd && p.originalAmount) ? p.originalAmount : (p.originalAmount ?? p.totalAmount ?? 0);
+            const penAmount = isUsd ? (p.amountPen || orig * exRate) : orig;
+            items.push({
+              kind: 'income',
+              data: {
+                id: `borrowed-${p.id}`,
+                description: `Préstamo recibido: ${p.creditorName}${p.description ? ` - ${p.description}` : ''}`,
+                amount: penAmount,
+                date: p.issueDate,
+                type: 'borrowed'
+              },
+              sortDate: p.issueDate
+            });
+          }
         }
       });
     }
@@ -1525,7 +1554,8 @@ function useFinanceController() {
                   currency: p.currency,
                   exchangeRate: p.exchangeRate,
                   paymentDate: pay.paymentDate,
-                  notes: pay.notes
+                  notes: pay.notes,
+                  createdAt: pay.createdAt
                 },
                 sortDate: pay.paymentDate
               });
@@ -1594,7 +1624,8 @@ function useFinanceController() {
                   currency: r.currency,
                   exchangeRate: r.exchangeRate,
                   paymentDate: pay.paymentDate,
-                  notes: pay.notes
+                  notes: pay.notes,
+                  createdAt: pay.createdAt
                 },
                 sortDate: pay.paymentDate
               });
@@ -1616,11 +1647,28 @@ function useFinanceController() {
         case 'scheduled_payable': return `${m.data.creditorName} ${m.data.id}`;
       }
     };
+    const getMovementCreatedAt = (m: UnifiedMovement): string => {
+      switch (m.kind) {
+        case 'transaction':
+          return m.data.createdAt || (m.data.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '';
+        case 'receivable_payment':
+          return m.data.createdAt || (m.data.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '';
+        case 'payable_payment':
+          return m.data.createdAt || (m.data.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '';
+        case 'card_payment':
+          return (m.data.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '';
+        case 'income':
+          return m.data.createdAt || '';
+        case 'scheduled_payable':
+          return '';
+      }
+    };
+
     return items.sort((a, b) => {
       const dateDiff = new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime();
       if (dateDiff !== 0) return dateDiff;
-      const caA = a.kind === 'transaction' ? ((a.data.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '') : '';
-      const caB = b.kind === 'transaction' ? ((b.data.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || '') : '';
+      const caA = getMovementCreatedAt(a);
+      const caB = getMovementCreatedAt(b);
       const createdDiff = caB.localeCompare(caA);
       if (createdDiff !== 0) return createdDiff;
       return tieKey(a).localeCompare(tieKey(b));
@@ -1633,18 +1681,23 @@ function useFinanceController() {
       (acc, p) => acc + (p.payments || []).filter(pay => pay.paymentDate.startsWith(monthKey)).length,
       0
     );
+    const borrowedCreditsThisMonth = payables.filter(
+      p => p.isCreditedToDebit && (p.issueDate || '').startsWith(monthKey)
+    ).length;
     const receivablePaymentsThisMonth = receivables.reduce((acc, r) => {
       const effPayments = (r.payments && r.payments.length > 0)
         ? r.payments
         : (r.paidAmount > 0 ? [{ paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr) }] : []);
       return acc + effPayments.filter(pay => pay.paymentDate.startsWith(monthKey)).length;
     }, 0);
+    const validOtherIncomesCount = currentOtherIncomes.filter(oi => !oi.id?.startsWith('inc-loan-')).length;
 
     return (
       currentMonthTransactions.length +
       currentMonthCardPayments.length +
       salaries.length +
-      currentOtherIncomes.length +
+      validOtherIncomesCount +
+      borrowedCreditsThisMonth +
       payablePaymentsThisMonth +
       receivablePaymentsThisMonth
     );

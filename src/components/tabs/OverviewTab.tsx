@@ -79,8 +79,8 @@ export const OverviewTab: React.FC = () => {
   // Flujo del mes visible (para las tarjetas Entradas/Salidas, según el mes sea en
   // curso, pasado o futuro). Los "previstos" incluyen sueldo + ingresos extra del mes.
   const monthIncome = totalSalaryAmount + debitStats.otherIncomesTotalMonth;
-  const expectedInflow = monthIncome + debitStats.collectedFromDebtors;
-  const realizedInflow = debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday + debitStats.collectedFromDebtors;
+  const expectedInflow = monthIncome + debitStats.collectedFromDebtors + (debitStats.borrowedCreditedToDebitMonth || 0);
+  const realizedInflow = debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday + debitStats.collectedFromDebtors + (debitStats.borrowedCreditedToDebitToday || 0);
   const debtPaidToday = debitStats.paidToCreditorsToday || 0;
   const debtPaidMonth = debitStats.paidToCreditorsMonth || 0;
   const realizedOutflow = debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidMonth + debtPaidToday;

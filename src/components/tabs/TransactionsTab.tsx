@@ -334,7 +334,7 @@ export const TransactionsTab: React.FC = () => {
               type="button"
               className="btn-primary"
               style={{ padding: '3px 10px', fontSize: '0.75rem' }}
-              onClick={handleOpenCreateCardPayment}
+              onClick={() => handleOpenCreateCardPayment()}
             >
               + Registrar Abono
             </button>
@@ -622,15 +622,27 @@ export const TransactionsTab: React.FC = () => {
                             </div>
                             <div className="tx-concept-sub">
                               {isRefundSource ? 'Abono externo de comercio / banco' : 'Amortización ciclo facturado'}
+                              {pay.currency === 'USD' && (
+                                <span> • T.C. {(pay.exchangeRate || 1).toFixed(4)}</span>
+                              )}
                             </div>
                           </td>
                           <td>
                             <span className="badge badge-neutral" style={{ color: pm?.color }}>
-                              {isRefundSource ? 'Comercio / Banco' : 'Cuenta Débito / Bancos'}
+                              {pay.sourceType === 'USD_SAVINGS_ACCOUNT' ? 'Ahorros USD' : (isRefundSource ? 'Comercio / Banco' : 'Cuenta Débito / Bancos')}
                             </span>
                           </td>
                           <td className="tx-amount-cell" style={{ color: isRefundSource ? 'var(--accent-success)' : 'var(--accent-brand)' }}>
-                            {isRefundSource ? `+${formatSoles(pay.amountPaid)}` : `-${formatSoles(pay.amountPaid)}`}
+                            <div>
+                              {isRefundSource
+                                ? `+${formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}`
+                                : `-${formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}`}
+                            </div>
+                            {pay.currency === 'USD' && (
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                ${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD
+                              </div>
+                            )}
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             {isFuture ? (
@@ -1050,19 +1062,34 @@ export const TransactionsTab: React.FC = () => {
                                 <span className="badge badge-immediate" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⚡ Inmediato</span>
                               )}
                               <span>•</span>
-                              <span style={{ color: 'var(--accent-brand)', fontWeight: 500 }}>{isRefund ? 'Comercio/Banco' : 'Débito'}</span>
+                              <span style={{ color: 'var(--accent-brand)', fontWeight: 500 }}>
+                                {pay.sourceType === 'USD_SAVINGS_ACCOUNT' ? 'Ahorros USD' : (isRefund ? 'Comercio/Banco' : 'Débito')}
+                              </span>
+                              {pay.currency === 'USD' && (
+                                <>
+                                  <span>•</span>
+                                  <span style={{ color: 'var(--accent-info)', fontWeight: 600 }}>T.C. {(pay.exchangeRate || 1).toFixed(4)}</span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
                         <div className="mobile-tx-right">
                           <div className="mobile-tx-tags">
                             <span className={`badge ${isRefund ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
-                              {isRefund ? 'Reembolso' : 'Amortización'}
+                              {isRefund ? 'Reembolso' : (pay.currency === 'USD' ? '$ USD' : 'Amortización')}
                             </span>
                           </div>
                           <span className="mobile-tx-amount tabular-nums" style={{ color: isRefund ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-                            {isRefund ? `+${formatSoles(pay.amountPaid)}` : `-${formatSoles(pay.amountPaid)}`}
+                            {isRefund
+                              ? `+${formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}`
+                              : `-${formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}`}
                           </span>
+                          {pay.currency === 'USD' && (
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>
+                              ${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD
+                            </span>
+                          )}
                           <div className="mobile-tx-actions">
                             <button className="btn-action-icon" onClick={() => handleOpenEditCardPayment(pay, item.index)} title="Modificar pago">
                               <Pencil size={13} />

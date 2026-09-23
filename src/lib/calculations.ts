@@ -519,7 +519,16 @@ export function computeMonthlyDebitChain(params: {
   overrides: Record<string, number>;
   transactions: Transaction[];
   extraIncomes: Record<string, OtherIncome[]>;
-  cardPayments: { paymentMethodId: string; amountPaid: number; paymentDate: string; sourceType?: string }[];
+  cardPayments: {
+    paymentMethodId: string;
+    amountPaid: number;
+    paymentDate: string;
+    sourceType?: string;
+    currency?: string;
+    originalAmount?: number;
+    exchangeRate?: number;
+    amountPen?: number;
+  }[];
   receivables: Receivable[];
   payables: Payable[];
   paymentMethods: PaymentMethod[];
@@ -564,22 +573,57 @@ export function computeMonthlyDebitChain(params: {
     if (isMonthKey(k)) pushTo(txByMonth, k, t);
   });
 
+  // Salidas reales en cuenta bancaria (soles) y amortizaciones por divisa
   const cardByMonth = new Map<string, number>();
+  const cardPaidPenByMonth = new Map<string, number>();
+  const cardPaidUsdByMonth = new Map<string, number>();
+
   cardPayments.forEach(p => {
-    if (p.sourceType === 'MERCHANT_REFUND' || p.sourceType === 'BANK_CREDIT') return;
+    const isRefund = p.sourceType === 'MERCHANT_REFUND' || p.sourceType === 'BANK_CREDIT';
+    const isUsdSavings = p.sourceType === 'USD_SAVINGS_ACCOUNT';
+    const isUsd = p.currency === 'USD';
+    const nominalAmt = p.originalAmount !== undefined ? p.originalAmount : p.amountPaid;
+    const penDeduction = p.amountPen !== undefined 
+      ? p.amountPen 
+      : (isUsd && p.exchangeRate ? Math.round(nominalAmt * p.exchangeRate * 100) / 100 : p.amountPaid);
+
     const k = (p.paymentDate || '').slice(0, 7);
-    if (isMonthKey(k)) cardByMonth.set(k, (cardByMonth.get(k) || 0) + p.amountPaid);
+    if (!isMonthKey(k)) return;
+
+    // Solo descuenta de saldo débito si no es reembolso ni ahorros directos en USD
+    if (!isRefund && !isUsdSavings) {
+      cardByMonth.set(k, (cardByMonth.get(k) || 0) + penDeduction);
+    }
+
+    // Cobertura de cuotas bancarias por divisa
+    if (isUsd) {
+      cardPaidUsdByMonth.set(k, (cardPaidUsdByMonth.get(k) || 0) + nominalAmt);
+    } else {
+      cardPaidPenByMonth.set(k, (cardPaidPenByMonth.get(k) || 0) + penDeduction);
+    }
   });
 
   // Cuotas/estados de cuenta de tarjeta por VENCIMIENTO bancario, por mes (neto de
-  // reembolsos): lo que hay que pagar cada mes para no generar intereses.
-  const cardBillDueByMonth = new Map<string, number>();
+  // reembolsos) separado por PEN y USD para evitar discrepancias por T.C.
+  const cardBillDuePenByMonth = new Map<string, number>();
+  const cardBillDueUsdByMonth = new Map<string, number>();
+  const cardBillRateByMonth = new Map<string, number>();
+
   transactions.forEach(t => {
     if (!creditCardIds.includes(t.paymentMethodId)) return;
     const k = (t.paymentDueDate || '').slice(0, 7);
     if (!isMonthKey(k)) return;
-    const net = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
-    cardBillDueByMonth.set(k, (cardBillDueByMonth.get(k) || 0) + net);
+
+    if (t.currency === 'USD') {
+      const netUsd = t.isRefund ? -Math.abs(t.originalAmount) : t.originalAmount;
+      cardBillDueUsdByMonth.set(k, (cardBillDueUsdByMonth.get(k) || 0) + netUsd);
+      if (t.exchangeRate && t.exchangeRate > 0) {
+        cardBillRateByMonth.set(k, t.exchangeRate);
+      }
+    } else {
+      const netPen = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
+      cardBillDuePenByMonth.set(k, (cardBillDuePenByMonth.get(k) || 0) + netPen);
+    }
   });
 
   // Deudas propias con vencimiento programado, por mes (saldo pendiente en PEN).
@@ -652,9 +696,13 @@ export function computeMonthlyDebitChain(params: {
     // en curso o futuros (en meses cerrados el saldo real ya refleja lo pagado). Se
     // restan del CIERRE para que lo proyectado que ve el usuario sea EXACTAMENTE lo que
     // se arrastra al mes siguiente (arrastre consistente entre meses).
+    const pendingPenCard = Math.max(0, (cardBillDuePenByMonth.get(key) || 0) - (cardPaidPenByMonth.get(key) || 0));
+    const pendingUsdCard = Math.max(0, (cardBillDueUsdByMonth.get(key) || 0) - (cardPaidUsdByMonth.get(key) || 0));
+    const usdRate = cardBillRateByMonth.get(key) || FALLBACK_USD_PEN_RATE;
+    const pendingCardTotal = round2(pendingPenCard + (pendingUsdCard * usdRate));
+
     const commitments = key >= realTodayKey
-      ? (scheduledDueByMonth.get(key) || 0) +
-        Math.max(0, (cardBillDueByMonth.get(key) || 0) - (cardByMonth.get(key) || 0))
+      ? (scheduledDueByMonth.get(key) || 0) + pendingCardTotal
       : 0;
 
     const closing = round2(res.projectedDebitBalanceMonthEnd - commitments);
@@ -768,20 +816,45 @@ export function calculateMonthlyDiagnostic(
       .filter(t => !creditCardIds.includes(t.paymentMethodId))
       .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
 
-    // Abonos pagados a tarjeta en el mes (excluyendo reembolsos de banco o comercio)
+    // Abonos pagados a tarjeta en el mes (excluyendo reembolsos de banco o comercio o cuenta propia en USD)
     const cardPaymentsTotal = cardPayments
-      .filter(p => p.paymentDate.startsWith(targetYearMonth) && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT')
-      .reduce((acc, curr) => acc + curr.amountPaid, 0);
+      .filter(p => p.paymentDate.startsWith(targetYearMonth) && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT' && p.sourceType !== 'USD_SAVINGS_ACCOUNT')
+      .reduce((acc, curr) => {
+        const nominalAmt = curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid;
+        const penAmt = curr.amountPen !== undefined 
+          ? curr.amountPen 
+          : (curr.currency === 'USD' && curr.exchangeRate ? Math.round(nominalAmt * curr.exchangeRate * 100) / 100 : curr.amountPaid);
+        return acc + penAmt;
+      }, 0);
 
-    // Vencimientos de tarjeta este mes (netos de reembolsos)
-    const cardBillsDue = allTransactions
-      .filter(t => creditCardIds.includes(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYearMonth))
+    // Vencimientos de tarjeta este mes por moneda
+    const cardBillsDuePen = allTransactions
+      .filter(t => creditCardIds.includes(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYearMonth) && t.currency !== 'USD')
       .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
 
-    // En mes cerrado manda lo efectivamente abonado. En mes en curso/futuro manda el mayor entre lo abonado y lo que vence
+    const cardBillsDueUsd = allTransactions
+      .filter(t => creditCardIds.includes(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYearMonth) && t.currency === 'USD')
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.originalAmount) : curr.originalAmount), 0);
+
+    // Abonos del mes por moneda (para verificar cobertura de vencimientos bancarios)
+    const cardPaidPenThisMonth = cardPayments
+      .filter(p => p.paymentDate.startsWith(targetYearMonth) && p.currency !== 'USD')
+      .reduce((acc, curr) => acc + (curr.amountPen !== undefined ? curr.amountPen : curr.amountPaid), 0);
+
+    const cardPaidUsdThisMonth = cardPayments
+      .filter(p => p.paymentDate.startsWith(targetYearMonth) && p.currency === 'USD')
+      .reduce((acc, curr) => acc + (curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid), 0);
+
+    const pendingCardPenDue = Math.max(0, cardBillsDuePen - cardPaidPenThisMonth);
+    const pendingCardUsdDue = Math.max(0, cardBillsDueUsd - cardPaidUsdThisMonth);
+    const usdTx = allTransactions.find(t => creditCardIds.includes(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYearMonth) && t.currency === 'USD' && t.exchangeRate && t.exchangeRate > 0);
+    const usdPendingRate = usdTx?.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const pendingCardTotalDue = pendingCardPenDue + (pendingCardUsdDue * usdPendingRate);
+
+    // En mes cerrado manda lo efectivamente abonado. En mes en curso/futuro es lo abonado más lo pendiente que falta pagar
     cardOutflowThisMonth = isPastMonth
       ? cardPaymentsTotal
-      : Math.max(cardPaymentsTotal, Math.max(0, cardBillsDue));
+      : (cardPaymentsTotal + pendingCardTotalDue);
   } else {
     // Fallback si no se pasan paymentMethods: usa cálculo por vencimiento de allTransactions
     cardOutflowThisMonth = allTransactions
@@ -949,7 +1022,16 @@ export function calculateCardsDebtSummary(
   cards: PaymentMethod[],
   currentMonthTransactions: Transaction[],
   allTransactions: Transaction[],
-  cardPayments: { paymentMethodId: string; amountPaid: number; paymentDate: string }[],
+  cardPayments: {
+    paymentMethodId: string;
+    amountPaid: number;
+    paymentDate: string;
+    sourceType?: string;
+    currency?: string;
+    originalAmount?: number;
+    exchangeRate?: number;
+    amountPen?: number;
+  }[],
   currentYear: number,
   currentMonth: number
 ): CardDebtSummary[] {
@@ -961,7 +1043,6 @@ export function calculateCardsDebtSummary(
     const targetYM = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
 
     // Match by direct id, or by same-name alias against the real methods list
-    // (handles a legacy id that points to a card now stored under a new id).
     const matchesCard = (methodId?: string) => {
       if (!methodId) return false;
       if (methodId === card.id) return true;
@@ -969,43 +1050,71 @@ export function calculateCardsDebtSummary(
       return !!aliased && aliased.name.toLowerCase() === card.name.toLowerCase();
     };
 
-    // Consumo total registrado en el mes calendario (incluye programados y descuenta reembolsos)
-    const consumedThisMonth = currentMonthTransactions
-      .filter(t => matchesCard(t.paymentMethodId))
+    // 1. DESGLOSE DE CONSUMOS POR MONEDA (Soles y Dólares)
+    const consumedPenThisMonth = currentMonthTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && t.currency !== 'USD')
       .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
 
-    // Consumo acumulado devengado en la tarjeta a la fecha de hoy across ALL history:
-    // Incluye todos los consumos realizados con esta tarjeta hasta la fecha de hoy (t.date <= todayStr),
-    // descontando reembolsos de comercio y devoluciones.
-    const consumedToDate = allTransactions
-      .filter(t => matchesCard(t.paymentMethodId) && t.date <= todayStr)
+    const consumedPenToDate = allTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && t.date <= todayStr && t.currency !== 'USD')
       .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
 
-    // Pagado total en el mes calendario seleccionado
-    const paidThisMonth = cardPayments
-      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate.startsWith(targetYM))
-      .reduce((acc, curr) => acc + curr.amountPaid, 0);
+    const consumedThisMonthUsd = currentMonthTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && t.currency === 'USD')
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.originalAmount) : curr.originalAmount), 0);
 
-    // Pagos y abonos acumulados efectivamente realizados a la tarjeta a la fecha de hoy across ALL history:
-    const paidToDate = cardPayments
-      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate <= todayStr)
-      .reduce((acc, curr) => acc + curr.amountPaid, 0);
+    const consumedToDateUsd = allTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && t.date <= todayStr && t.currency === 'USD')
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.originalAmount) : curr.originalAmount), 0);
 
+    // 2. DESGLOSE DE ABONOS POR MONEDA (Soles y Dólares)
+    const paidPenThisMonth = cardPayments
+      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate.startsWith(targetYM) && p.currency !== 'USD')
+      .reduce((acc, curr) => acc + (curr.amountPen !== undefined ? curr.amountPen : curr.amountPaid), 0);
+
+    const paidPenToDate = cardPayments
+      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate <= todayStr && p.currency !== 'USD')
+      .reduce((acc, curr) => acc + (curr.amountPen !== undefined ? curr.amountPen : curr.amountPaid), 0);
+
+    const paidThisMonthUsd = cardPayments
+      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate.startsWith(targetYM) && p.currency === 'USD')
+      .reduce((acc, curr) => acc + (curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid), 0);
+
+    const paidToDateUsd = cardPayments
+      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate <= todayStr && p.currency === 'USD')
+      .reduce((acc, curr) => acc + (curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid), 0);
+
+    // 3. ESTADO DE DEUDA EN DÓLARES
+    const totalAccumulatedDebtUsd = Math.max(0, consumedToDateUsd - paidToDateUsd);
+    const hasUsdDebt = totalAccumulatedDebtUsd > 0.009 || consumedThisMonthUsd > 0.009;
+
+    // Tasa referencial para valorizar cualquier saldo USD residual en soles:
+    const latestUsdTx = allTransactions.find(t => matchesCard(t.paymentMethodId) && t.currency === 'USD' && t.exchangeRate && t.exchangeRate > 0);
+    const cardUsdRate = latestUsdTx?.exchangeRate || FALLBACK_USD_PEN_RATE;
+
+    // 4. BALANCES TOTALES Y CONSOLIDADOS
     const initialDebt = card.initialDebt || 0;
+    const netBalancePen = initialDebt + consumedPenToDate - paidPenToDate;
+    // Si la deuda en USD ya se pagó completamente en USD, su aporte a la deuda pendiente en PEN es CERO
+    const usdPendingInPen = totalAccumulatedDebtUsd > 0.009 ? totalAccumulatedDebtUsd * cardUsdRate : 0;
+    const netBalance = netBalancePen + usdPendingInPen;
 
-    // Balance neto real a la fecha de hoy:
-    // Deuda previa arrastrada + compras devengadas hasta hoy - abonos/reembolsos realizados hasta hoy
-    const netBalance = initialDebt + consumedToDate - paidToDate;
-    const hasPositiveBalance = netBalance < -0.009;
+    const hasPositiveBalance = netBalance < -0.009 && totalAccumulatedDebtUsd <= 0.009;
     const creditBalanceAmount = hasPositiveBalance ? Math.abs(netBalance) : 0;
     const totalAccumulatedDebt = Math.max(0, netBalance);
 
-    // Días hasta corte y pago evitando desbordamiento de mes en JS
+    // Métricas totales agregadas en PEN (para compatibilidad con vistas generales):
+    const consumedThisMonth = consumedPenThisMonth + (consumedThisMonthUsd * cardUsdRate);
+    const consumedToDate = consumedPenToDate + (consumedToDateUsd * cardUsdRate);
+    const paidThisMonth = paidPenThisMonth + (paidThisMonthUsd * cardUsdRate);
+    const paidToDate = paidPenToDate + (paidToDateUsd * cardUsdRate);
+
+    // Días hasta corte y pago
     const daysInCurMonth = getDaysInMonth(currentYear, currentMonth);
     const effCloseDay = Math.min(card.billingCloseDay || 1, daysInCurMonth);
 
     let nextCloseYear = currentYear;
-    let nextCloseMonth = currentMonth; // 1-12
+    let nextCloseMonth = currentMonth;
     if (now.getDate() > effCloseDay) {
       nextCloseMonth += 1;
       if (nextCloseMonth > 12) {
@@ -1040,30 +1149,38 @@ export function calculateCardsDebtSummary(
     // ==========================================
     // CRONOGRAMA MENSUAL DE VENCIMIENTOS (targetYM)
     // ==========================================
-    // 1. Compras cuyo vencimiento bancario cae en el mes seleccionado
-    const dueInSelectedMonth = allTransactions
-      .filter(t => matchesCard(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYM))
+    const duePenInSelectedMonth = allTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYM) && t.currency !== 'USD')
       .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
 
-    // 2. Abonos registrados a la tarjeta en el mes seleccionado
-    const paidInSelectedMonth = paidThisMonth;
+    const dueInSelectedMonthUsd = allTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYM) && t.currency === 'USD')
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.originalAmount) : curr.originalAmount), 0);
 
-    // 3. Saldo neto exigible en este mes
-    let netDueInSelectedMonth = Math.max(0, dueInSelectedMonth - paidInSelectedMonth);
+    const netDuePenInSelectedMonth = Math.max(0, duePenInSelectedMonth - paidPenThisMonth);
+    const netDueInSelectedMonthUsd = Math.max(0, dueInSelectedMonthUsd - paidThisMonthUsd);
+
+    const dueInSelectedMonth = duePenInSelectedMonth + (dueInSelectedMonthUsd * cardUsdRate);
+    const paidInSelectedMonth = paidPenThisMonth + (paidThisMonthUsd * cardUsdRate);
+    let netDueInSelectedMonth = netDuePenInSelectedMonth + (netDueInSelectedMonthUsd * cardUsdRate);
     if (hasPositiveBalance) {
       netDueInSelectedMonth = 0;
     }
 
-    const isPaidThisMonth = dueInSelectedMonth > 0 && paidInSelectedMonth >= dueInSelectedMonth;
+    // El mes se considera pagado si tanto el componente en soles como en dólares están cubiertos
+    const isPenCovered = duePenInSelectedMonth <= 0.009 || paidPenThisMonth >= (duePenInSelectedMonth - 0.01);
+    const isUsdCovered = dueInSelectedMonthUsd <= 0.009 || paidThisMonthUsd >= (dueInSelectedMonthUsd - 0.01);
+    const hasAnyDue = duePenInSelectedMonth > 0.009 || dueInSelectedMonthUsd > 0.009;
+    const isPaidThisMonth = hasAnyDue && isPenCovered && isUsdCovered;
 
-    // 4. Saldo vencido arrastrado de meses previos sin pagar
+    // Saldo vencido arrastrado de meses previos sin pagar
     const dueBeforeSelectedMonth = allTransactions
       .filter(t => matchesCard(t.paymentMethodId) && (t.paymentDueDate || '') < `${targetYM}-01`)
       .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
 
     const paidBeforeSelectedMonth = cardPayments
       .filter(p => matchesCard(p.paymentMethodId) && (p.paymentDate || '') < `${targetYM}-01`)
-      .reduce((acc, curr) => acc + curr.amountPaid, 0);
+      .reduce((acc, curr) => acc + (curr.amountPen !== undefined ? curr.amountPen : curr.amountPaid), 0);
 
     const overdueFromPastMonths = Math.max(0, dueBeforeSelectedMonth - paidBeforeSelectedMonth);
 
@@ -1089,7 +1206,16 @@ export function calculateCardsDebtSummary(
       paidInSelectedMonth,
       netDueInSelectedMonth,
       isPaidThisMonth,
-      overdueFromPastMonths
+      overdueFromPastMonths,
+      // Desglose bimoneda para UI y validación financiera
+      hasUsdDebt,
+      consumedThisMonthUsd,
+      consumedToDateUsd,
+      dueInSelectedMonthUsd,
+      paidThisMonthUsd,
+      paidToDateUsd,
+      totalAccumulatedDebtUsd,
+      netDueInSelectedMonthUsd
     };
   });
 }

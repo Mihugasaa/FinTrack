@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SupabaseDataService } from '@/services/supabaseData.service';
+import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
+import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { initialPaymentMethods } from '@/lib/defaults';
-import { CardPayment, PaymentMethod } from '@/types';
+import { CardPayment, PaymentMethod, CurrencyCode } from '@/types';
 
 interface UseCardPaymentsDeps {
   paymentMethods: PaymentMethod[];
@@ -14,16 +16,21 @@ interface UseCardPaymentsDeps {
 /**
  * Abonos a tarjetas: el historial de pagos, el formulario/modal para registrar
  * o editar un abono (con su origen: cuenta débito, reembolso de comercio o abono
- * de banco) y el listado del mes activo. La carga inicial desde Supabase sigue
- * en el efecto de sincronización mensual de la página, que reusa setCardPayments.
+ * de banco, y moneda PEN/USD con tipo de cambio editable).
  */
 export function useCardPayments({ paymentMethods, currentYear, currentMonth }: UseCardPaymentsDeps) {
   const [cardPayments, setCardPayments] = useState<CardPayment[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentSourceType, setPaymentSourceType] = useState<'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT'>('DEBIT_ACCOUNT');
+  const [paymentSourceType, setPaymentSourceType] = useState<'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' | 'USD_SAVINGS_ACCOUNT'>('DEBIT_ACCOUNT');
 
   const [paymentCardId, setPaymentCardId] = useState(initialPaymentMethods[1].id);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentCurrency, setPaymentCurrency] = useState<CurrencyCode>('PEN');
+  const [paymentExchangeRate, setPaymentExchangeRate] = useState(FALLBACK_USD_PEN_RATE_STR);
+  const [paymentTcInfo, setPaymentTcInfo] = useState<ExchangeRateResult | null>(null);
+  const [hasUserManuallyEditedPaymentTc, setHasUserManuallyEditedPaymentTc] = useState(false);
+  const [isFetchingPaymentTc, setIsFetchingPaymentTc] = useState(false);
+
   const [paymentDate, setPaymentDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
@@ -39,14 +46,45 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
   }, [cardPayments, currentYear, currentMonth]);
 
-  const handleOpenCreateCardPayment = () => {
+  // Consulta de Tipo de Cambio SUNAT para abonos en USD
+  const fetchPaymentSunatRate = async (dateForTc?: string, forceOverwrite = false) => {
+    const targetDate = dateForTc || paymentDate;
+    setIsFetchingPaymentTc(true);
+    try {
+      const info = await ExchangeRateService.getRateForDate(targetDate);
+      setPaymentTcInfo(info);
+      if (forceOverwrite || !hasUserManuallyEditedPaymentTc || !paymentExchangeRate || paymentExchangeRate === FALLBACK_USD_PEN_RATE_STR || paymentExchangeRate === '1') {
+        setPaymentExchangeRate(info.rate.toFixed(4));
+        if (forceOverwrite) setHasUserManuallyEditedPaymentTc(false);
+      }
+    } catch (err) {
+      console.warn('Error al obtener tipo de cambio SUNAT para abono a tarjeta:', err);
+    } finally {
+      setIsFetchingPaymentTc(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isPaymentModalOpen && paymentCurrency === 'USD') {
+      fetchPaymentSunatRate(paymentDate, !hasUserManuallyEditedPaymentTc);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPaymentModalOpen, paymentCurrency, paymentDate]);
+
+  const handleOpenCreateCardPayment = (preselectedCardId?: string | React.MouseEvent) => {
     setEditingCardPaymentId(null);
     setEditingCardPaymentIndex(null);
     const creditCards = paymentMethods.filter(p => p.type === 'credit');
-    if (creditCards.length > 0) {
+    if (typeof preselectedCardId === 'string' && preselectedCardId) {
+      setPaymentCardId(preselectedCardId);
+    } else if (creditCards.length > 0) {
       setPaymentCardId(creditCards[0].id);
     }
     setPaymentAmount('');
+    setPaymentCurrency('PEN');
+    setPaymentExchangeRate(FALLBACK_USD_PEN_RATE_STR);
+    setPaymentTcInfo(null);
+    setHasUserManuallyEditedPaymentTc(false);
     setPaymentSourceType('DEBIT_ACCOUNT');
     const now = new Date();
     const day = (currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1))
@@ -60,7 +98,11 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setEditingCardPaymentId(pay.id || `cp-${idx}`);
     setEditingCardPaymentIndex(idx);
     setPaymentCardId(pay.paymentMethodId);
-    setPaymentAmount(pay.amountPaid.toString());
+    const isUsd = pay.currency === 'USD';
+    setPaymentCurrency(isUsd ? 'USD' : 'PEN');
+    setPaymentAmount((isUsd && pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toString());
+    setPaymentExchangeRate(pay.exchangeRate ? pay.exchangeRate.toString() : FALLBACK_USD_PEN_RATE_STR);
+    setHasUserManuallyEditedPaymentTc(true);
     setPaymentDate(pay.paymentDate);
     setPaymentSourceType(pay.sourceType || 'DEBIT_ACCOUNT');
     setIsPaymentModalOpen(true);
@@ -74,6 +116,9 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     if (isNaN(num) || num <= 0) return;
 
     const targetDate = paymentDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-20`;
+    const isUsd = paymentCurrency === 'USD';
+    const rate = isUsd ? (parseFloat(paymentExchangeRate) || FALLBACK_USD_PEN_RATE) : 1;
+    const amountPen = isUsd ? Math.round(num * rate * 100) / 100 : num;
 
     if (editingCardPaymentIndex !== null || editingCardPaymentId !== null) {
       // Modificar pago existente
@@ -84,7 +129,11 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
           return {
             ...p,
             paymentMethodId: paymentCardId,
-            amountPaid: num,
+            amountPaid: amountPen,
+            currency: paymentCurrency,
+            originalAmount: num,
+            exchangeRate: rate,
+            amountPen,
             paymentDate: targetDate,
             sourceType: paymentSourceType
           };
@@ -101,7 +150,11 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     const newPay: CardPayment = {
       id: `cp-${Date.now()}`,
       paymentMethodId: paymentCardId,
-      amountPaid: num,
+      amountPaid: amountPen,
+      currency: paymentCurrency,
+      originalAmount: num,
+      exchangeRate: rate,
+      amountPen,
       paymentDate: targetDate,
       sourceType: paymentSourceType
     };
@@ -145,6 +198,15 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setPaymentCardId,
     paymentAmount,
     setPaymentAmount,
+    paymentCurrency,
+    setPaymentCurrency,
+    paymentExchangeRate,
+    setPaymentExchangeRate,
+    paymentTcInfo,
+    hasUserManuallyEditedPaymentTc,
+    setHasUserManuallyEditedPaymentTc,
+    isFetchingPaymentTc,
+    fetchPaymentSunatRate,
     paymentDate,
     setPaymentDate,
     editingCardPaymentId,

@@ -174,21 +174,41 @@ export const CardsTab: React.FC = () => {
                   )}
                 </div>
 
-                <div className="card-zen-debt-row">
+                <div className="card-zen-debt-row" style={{ alignItems: 'flex-start', minHeight: '44px', marginBottom: '8px' }}>
                   <span className="card-zen-debt-label">
                     {card.hasPositiveBalance ? 'Saldo a Favor' : 'Deuda a la Fecha'}
                   </span>
-                  <div
-                    className="card-zen-debt-val tabular-nums"
-                    style={{
-                      color: card.hasPositiveBalance
-                        ? 'var(--accent-success)'
-                        : card.totalAccumulatedDebt > 0
-                        ? 'var(--accent-warning)'
-                        : 'var(--accent-success)'
-                    }}
-                  >
-                    {card.hasPositiveBalance ? `+${formatSoles(card.creditBalanceAmount || 0)}` : formatSoles(card.totalAccumulatedDebt)}
+                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <div
+                      className="card-zen-debt-val tabular-nums"
+                      style={{
+                        color: card.hasPositiveBalance
+                          ? 'var(--accent-success)'
+                          : card.totalAccumulatedDebt > 0
+                          ? 'var(--accent-warning)'
+                          : 'var(--accent-success)',
+                        lineHeight: 1.1
+                      }}
+                    >
+                      {card.hasPositiveBalance ? `+${formatSoles(card.creditBalanceAmount || 0)}` : formatSoles(card.totalAccumulatedDebt)}
+                    </div>
+                    {card.hasUsdDebt && (card.totalAccumulatedDebtUsd || 0) > 0.009 ? (
+                      <div
+                        className="tabular-nums"
+                        style={{
+                          fontSize: '0.73rem',
+                          color: 'var(--accent-info)',
+                          fontWeight: 600,
+                          marginTop: '3px'
+                        }}
+                      >
+                        incluye ${(card.totalAccumulatedDebtUsd || 0).toFixed(2)} USD
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.73rem', visibility: 'hidden', userSelect: 'none', marginTop: '3px' }}>
+                        &nbsp;
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -264,7 +284,7 @@ export const CardsTab: React.FC = () => {
               type="button"
               className="btn-primary"
               style={{ padding: '6px 14px', fontSize: '0.8rem' }}
-              onClick={handleOpenCreateCardPayment}
+              onClick={() => handleOpenCreateCardPayment()}
             >
               <Plus size={14} />
               <span>Registrar Pago de Tarjeta</span>
@@ -323,12 +343,25 @@ export const CardsTab: React.FC = () => {
                           <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
                             Pago a {cardPm?.name || 'Tarjeta de Crédito'}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap' }}>
                             <span>Fecha: {formatDisplayDate(pay.paymentDate)}</span>
                             <span>•</span>
                             <span style={{ color: 'var(--accent-brand)', fontWeight: 500 }}>
-                              Origen: Cuenta Bancaria (Débito)
+                              Origen: {
+                                pay.sourceType === 'MERCHANT_REFUND' ? 'Reembolso de Comercio' :
+                                pay.sourceType === 'BANK_CREDIT' ? 'Abono / Cashback de Banco' :
+                                pay.sourceType === 'USD_SAVINGS_ACCOUNT' ? 'Ahorros Propios en Dólares' :
+                                'Cuenta Bancaria (Débito)'
+                              }
                             </span>
+                            {pay.currency === 'USD' && (
+                              <>
+                                <span>•</span>
+                                <span style={{ color: 'var(--accent-info)', fontWeight: 600 }}>
+                                  T.C. {(pay.exchangeRate || 1).toFixed(4)}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -336,14 +369,27 @@ export const CardsTab: React.FC = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div style={{ textAlign: 'right', marginRight: '4px' }}>
                           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>
-                            Monto Pagado
+                            {pay.currency === 'USD' ? 'Monto en USD' : 'Monto Pagado'}
                           </span>
                           <span className="tabular-nums" style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--accent-danger)', whiteSpace: 'nowrap' }}>
-                            -{formatSoles(pay.amountPaid)}
+                            {pay.currency === 'USD'
+                              ? `-$${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD`
+                              : `-${formatSoles(pay.amountPaid)}`}
                           </span>
+                          {pay.currency === 'USD' && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>
+                              ≈ {formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}
+                            </span>
+                          )}
                         </div>
-                        <span className="badge badge-collected" style={{ fontSize: '0.72rem' }}>
-                          ✓ Descontado de Débito
+                        <span
+                          className={`badge ${pay.sourceType === 'USD_SAVINGS_ACCOUNT' || pay.sourceType === 'MERCHANT_REFUND' || pay.sourceType === 'BANK_CREDIT' ? 'badge-warning' : 'badge-collected'}`}
+                          style={{ fontSize: '0.72rem' }}
+                        >
+                          {pay.sourceType === 'USD_SAVINGS_ACCOUNT' ? '💵 Fondos USD' :
+                           pay.sourceType === 'MERCHANT_REFUND' ? 'Devolución' :
+                           pay.sourceType === 'BANK_CREDIT' ? 'Abono Banco' :
+                           '✓ Descontado de Débito'}
                         </span>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button
@@ -453,21 +499,39 @@ export const CardsTab: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Coaching de historial crediticio con fechas concretas */}
-                      <div style={{ background: 'var(--bg-subtle)', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {/* Parámetros de ciclo de facturación y línea */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
+                        gap: '10px',
+                        background: 'var(--bg-subtle)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        fontSize: '0.78rem'
+                      }}>
                         <div>
-                          🗓️ Tu corte es el día {plan.billingCloseDay} y el pago vence el día {plan.paymentDueDay}.
+                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>Cierre de facturación:</span>
+                          <strong style={{ color: 'var(--text-primary)' }}>
+                            Día {plan.billingCloseDay}
+                            {plan.nextCloseDate ? ` (${formatDisplayDate(plan.nextCloseDate)})` : ''}
+                          </strong>
                         </div>
-                        <div>💳 Si pagas el total facturado antes del vencimiento, no generas intereses.</div>
                         <div>
-                          📉 Como el banco reporta la deuda que tengas el día del corte, pagar antes del{' '}
-                          <strong>{plan.scorePayByDate ? formatDisplayDate(plan.scorePayByDate) : (plan.nextCloseDate ? formatDisplayDate(plan.nextCloseDate) : `día ${plan.billingCloseDay}`)}</strong> la deja más baja y ayuda a tu historial crediticio.
+                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>Fecha límite de pago:</span>
+                          <strong style={{ color: 'var(--text-primary)' }}>
+                            Día {plan.paymentDueDay}
+                            {plan.nextDueDate ? ` (${formatDisplayDate(plan.nextDueDate)})` : ''}
+                          </strong>
                         </div>
-                        {overUtil && (
-                          <div style={{ color: 'var(--accent-warning)', fontWeight: 600 }}>
-                            ⚠️ Estás usando {r.util.toFixed(0)}% de tu línea. Trata de dejarlo bajo 30% para el día del corte.
-                          </div>
-                        )}
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>Uso de línea:</span>
+                          <strong style={{ color: overUtil ? 'var(--accent-warning)' : 'var(--text-primary)' }}>
+                            {r.util.toFixed(0)}%
+                            <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>
+                              {overUtil ? '(Objetivo: < 30%)' : 'Óptimo'}
+                            </span>
+                          </strong>
+                        </div>
                       </div>
 
                       {/* Acción */}
@@ -476,7 +540,7 @@ export const CardsTab: React.FC = () => {
                           type="button"
                           className="btn-primary"
                           style={{ alignSelf: 'flex-start', padding: '6px 14px', fontSize: '0.8rem' }}
-                          onClick={handleOpenCreateCardPayment}
+                          onClick={() => handleOpenCreateCardPayment(r.plan.cardId)}
                         >
                           <Plus size={13} />
                           <span>Registrar Pago</span>

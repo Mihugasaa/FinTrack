@@ -125,14 +125,27 @@ export interface CardDebtSummary {
   netDueInSelectedMonth: number;
   isPaidThisMonth: boolean;
   overdueFromPastMonths?: number;
+  // Campos bimoneda (consumos y deudas en USD)
+  hasUsdDebt?: boolean;
+  consumedThisMonthUsd?: number;
+  consumedToDateUsd?: number;
+  dueInSelectedMonthUsd?: number;
+  paidThisMonthUsd?: number;
+  paidToDateUsd?: number;
+  totalAccumulatedDebtUsd?: number;
+  netDueInSelectedMonthUsd?: number;
 }
 
 export interface CardPayment {
   id?: string;
   paymentMethodId: string;
-  amountPaid: number;
+  amountPaid: number; // Monto efectivamente debitado en soles (o monto nominal si es PEN)
   paymentDate: string;
-  sourceType?: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT';
+  sourceType?: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' | 'USD_SAVINGS_ACCOUNT';
+  currency?: CurrencyCode;
+  originalAmount?: number;
+  exchangeRate?: number;
+  amountPen?: number;
   notes?: string;
 }
 

@@ -6,7 +6,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { Transaction, PaymentMethod, Receivable, ReceivablePayment, Category, OtherIncome, Payable, PayablePayment } from '@/types';
+import { Transaction, PaymentMethod, Receivable, ReceivablePayment, Category, OtherIncome, Payable, PayablePayment, CardPayment } from '@/types';
 
 const isUUID = (str?: string | null): boolean =>
   typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
@@ -1334,7 +1334,7 @@ export class SupabaseDataService {
   // ============================================================================
 
   // GET: Obtener abonos a tarjetas del mes
-  public static async getCardPayments(monthKey: string): Promise<{ id?: string; paymentMethodId: string; amountPaid: number; paymentDate: string; sourceType?: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' }[] | null> {
+  public static async getCardPayments(monthKey: string): Promise<CardPayment[] | null> {
     const sb = supabase;
     if (!sb || !isSupabaseConfigured) return null;
 
@@ -1357,17 +1357,28 @@ export class SupabaseDataService {
 
       if (error || !data) return null;
 
-      return data.map((row: any) => {
-        let st: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' = 'DEBIT_ACCOUNT';
-        if ((row as any).source_type) {
-          st = (row as any).source_type;
+      return data.map((row: any): CardPayment => {
+        let st: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' | 'USD_SAVINGS_ACCOUNT' = 'DEBIT_ACCOUNT';
+        if (row.source_type) {
+          st = row.source_type;
         }
+        const currency = (row.currency as 'PEN' | 'USD') || 'PEN';
+        const amountPaid = parseFloat(row.amount_paid) || 0;
+        const originalAmount = row.original_amount !== null && row.original_amount !== undefined ? parseFloat(row.original_amount) : amountPaid;
+        const exchangeRate = row.exchange_rate !== null && row.exchange_rate !== undefined ? parseFloat(row.exchange_rate) : 1.0;
+        const amountPen = row.amount_pen !== null && row.amount_pen !== undefined ? parseFloat(row.amount_pen) : amountPaid;
+
         return {
           id: row.id,
           paymentMethodId: row.payment_method_id,
-          amountPaid: parseFloat(row.amount_paid),
+          amountPaid,
           paymentDate: row.payment_date,
-          sourceType: st
+          sourceType: st,
+          currency,
+          originalAmount,
+          exchangeRate,
+          amountPen,
+          notes: row.notes || undefined
         };
       });
     } catch (e) {
@@ -1379,7 +1390,7 @@ export class SupabaseDataService {
   // GET: Historial COMPLETO de abonos a tarjetas (sin filtro de mes).
   // Con esto el resumen de deuda "a la fecha" y las vistas consolidadas cubren
   // todos los pagos reales, no solo los del mes visitado.
-  public static async getAllCardPayments(): Promise<{ id?: string; paymentMethodId: string; amountPaid: number; paymentDate: string; sourceType?: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' }[] | null> {
+  public static async getAllCardPayments(): Promise<CardPayment[] | null> {
     const sb = supabase;
     if (!sb || !isSupabaseConfigured) return null;
 
@@ -1393,17 +1404,28 @@ export class SupabaseDataService {
 
       if (error || !data) return null;
 
-      return data.map((row: any) => {
-        let st: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' = 'DEBIT_ACCOUNT';
-        if ((row as any).source_type) {
-          st = (row as any).source_type;
+      return data.map((row: any): CardPayment => {
+        let st: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' | 'USD_SAVINGS_ACCOUNT' = 'DEBIT_ACCOUNT';
+        if (row.source_type) {
+          st = row.source_type;
         }
+        const currency = (row.currency as 'PEN' | 'USD') || 'PEN';
+        const amountPaid = parseFloat(row.amount_paid) || 0;
+        const originalAmount = row.original_amount !== null && row.original_amount !== undefined ? parseFloat(row.original_amount) : amountPaid;
+        const exchangeRate = row.exchange_rate !== null && row.exchange_rate !== undefined ? parseFloat(row.exchange_rate) : 1.0;
+        const amountPen = row.amount_pen !== null && row.amount_pen !== undefined ? parseFloat(row.amount_pen) : amountPaid;
+
         return {
           id: row.id,
           paymentMethodId: row.payment_method_id,
-          amountPaid: parseFloat(row.amount_paid),
+          amountPaid,
           paymentDate: row.payment_date,
-          sourceType: st
+          sourceType: st,
+          currency,
+          originalAmount,
+          exchangeRate,
+          amountPen,
+          notes: row.notes || undefined
         };
       });
     } catch (e) {
@@ -1413,7 +1435,7 @@ export class SupabaseDataService {
   }
 
   // POST: Registrar abono a tarjeta
-  public static async createCardPayment(pay: { id?: string; paymentMethodId: string; amountPaid: number; paymentDate: string; sourceType?: 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' }): Promise<boolean> {
+  public static async createCardPayment(pay: CardPayment): Promise<boolean> {
     if (!supabase || !isSupabaseConfigured) return false;
 
     try {
@@ -1423,13 +1445,25 @@ export class SupabaseDataService {
       const monthlyPeriodId = await this.getOrCreateMonthlyPeriod(userId, pay.paymentDate);
       if (!monthlyPeriodId) return false;
 
+      const currency = pay.currency || 'PEN';
+      const originalAmount = pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid;
+      const exchangeRate = currency === 'USD' ? (pay.exchangeRate || 1.0) : 1.0;
+      const amountPen = pay.amountPen !== undefined 
+        ? pay.amountPen 
+        : (currency === 'USD' ? Math.round(originalAmount * exchangeRate * 100) / 100 : originalAmount);
+
       const payload: Record<string, any> = {
         user_id: userId,
         monthly_period_id: monthlyPeriodId,
         payment_method_id: isUUID(pay.paymentMethodId) ? pay.paymentMethodId : null,
-        amount_paid: pay.amountPaid,
+        amount_paid: amountPen,
         payment_date: pay.paymentDate,
-        source_type: pay.sourceType || 'DEBIT_ACCOUNT'
+        source_type: pay.sourceType || 'DEBIT_ACCOUNT',
+        currency,
+        original_amount: originalAmount,
+        exchange_rate: exchangeRate,
+        amount_pen: amountPen,
+        notes: pay.notes || null
       };
 
       if (pay.id && isUUID(pay.id)) {
@@ -1437,6 +1471,16 @@ export class SupabaseDataService {
       }
 
       let { error } = await supabase.from('card_payments').insert(payload);
+
+      // Fallback si las nuevas columnas de moneda aún no se ejecutaron en PostgreSQL
+      if (error && (error.message?.includes('currency') || error.message?.includes('original_amount') || error.message?.includes('exchange_rate') || error.message?.includes('amount_pen'))) {
+        delete payload.currency;
+        delete payload.original_amount;
+        delete payload.exchange_rate;
+        delete payload.amount_pen;
+        const retryCols = await supabase.from('card_payments').insert(payload);
+        error = retryCols.error;
+      }
 
       // Fallback si la migración de source_type aún no se ejecutó en PostgreSQL
       if (error && error.message?.includes('source_type')) {

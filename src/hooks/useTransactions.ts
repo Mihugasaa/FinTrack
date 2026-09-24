@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SupabaseDataService } from '@/services/supabaseData.service';
 import { AIIntelligenceService } from '@/services/aiIntelligence.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
@@ -93,139 +93,53 @@ export function useTransactions({
 
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
 
-  // Registro de suscripciones canceladas/eliminadas en la sesión actual para no auto-provisionarlas
-  const deletedSubscriptionKeysRef = useRef<Set<string>>(new Set());
-
   // Carga y sincronización nube-local de las transacciones del mes activo
-  // (deduplicación atómica, preservación de medio de pago, reembolsos y auto-continuidad de suscripciones)
+  // (deduplicación atómica, preservación de medio de pago y reembolsos)
   useEffect(() => {
     if (!currentUser) return;
-    SupabaseDataService.getTransactions(monthKey).then(async cloudTxs => {
-      let activeMonthTxs = cloudTxs || [];
+    SupabaseDataService.getTransactions(monthKey).then(cloudTxs => {
+      if (cloudTxs && cloudTxs.length > 0) {
+        setTransactions(prev => {
+          const enrichedCloud = cloudTxs.map(ct => {
+            const localMatch = prev.find(lt => lt.id === ct.id || (
+              lt.date === ct.date &&
+              (lt.description || '').trim().toLowerCase() === (ct.description || '').trim().toLowerCase() &&
+              Math.abs((lt.amountPen || 0) - (ct.amountPen || 0)) < 0.01
+            ));
 
-      // Auto-provisioning inteligente de suscripciones recurrentes activas:
-      // Si un gasto fijo recurrente estuvo activo en meses anteriores pero no tiene fila en este mes navegado,
-      // se proyecta automáticamente asegurando su día ancla (ej. iCloud vuelve a 30 en marzo aunque en feb fue 28).
-      try {
-        const recurringTxs = await SupabaseDataService.getRecurringSubscriptions();
-        if (recurringTxs && recurringTxs.length > 0) {
-          const [targetYear, targetMonth] = monthKey.split('-').map(Number);
-
-          // Agrupar suscripciones por clave única (descripción normalizada + categoría)
-          const groups = new Map<string, Transaction[]>();
-          for (const tx of recurringTxs) {
-            const key = `${(tx.description || '').trim().toLowerCase()}_${tx.categoryId || ''}`;
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key)!.push(tx);
-          }
-
-          const toProvision: Transaction[] = [];
-
-          groups.forEach((occurrences, key) => {
-            // Verificar si fue cancelada/eliminada en esta sesión para este mes
-            if (deletedSubscriptionKeysRef.current.has(`${key}_${monthKey}`) || deletedSubscriptionKeysRef.current.has(key)) {
-              return;
+            let pmId = ct.paymentMethodId;
+            if (!pmId && localMatch?.paymentMethodId) {
+              pmId = localMatch.paymentMethodId;
+            }
+            if (!pmId && ct.notes) {
+              const m = ct.notes.match(/\[pmId:([^\]]+)\]/);
+              if (m && m[1]) pmId = m[1];
             }
 
-            // ¿Ya existe en el mes visible?
-            const existsInCurrentMonth = activeMonthTxs.some(t =>
-              t.date.startsWith(monthKey) &&
-              (t.description || '').trim().toLowerCase() === (occurrences[0].description || '').trim().toLowerCase()
-            );
-            if (existsInCurrentMonth) return;
-
-            // Ordenar por fecha desc
-            const sortedOccurrences = [...occurrences].sort((a, b) => b.date.localeCompare(a.date));
-            const latestPrior = sortedOccurrences.find(t => t.date < `${monthKey}-01`);
-
-            // Si tiene una ocurrencia previa activa (especialmente reciente)
-            if (latestPrior) {
-              const [priorY, priorM] = latestPrior.date.split('-').map(Number);
-              const monthsDiff = (targetYear - priorY) * 12 + (targetMonth - priorM);
-
-              // Solo auto-provisionar si la última ocurrencia es reciente (dentro de los últimos 2 meses)
-              // para no resucitar suscripciones antiguas canceladas en el pasado distante
-              if (monthsDiff >= 1 && monthsDiff <= 2) {
-                // Resolver el día ancla (priorizando notas, historial o campo anchorDay)
-                const anchorDay = resolveTransactionAnchorDay(
-                  latestPrior.date,
-                  latestPrior.notes,
-                  recurringTxs,
-                  latestPrior.description,
-                  latestPrior.categoryId
-                );
-
-                const nextDateStr = computeRecurringDate(targetYear, targetMonth, anchorDay);
-                const method = paymentMethods.find(p => p.id === (latestPrior.paymentMethodId || selectedMethodId));
-                const nextDueDate = calculatePaymentDueDate(nextDateStr, method);
-
-                const nowIso = new Date().toISOString();
-                const newRecTx: Transaction = {
-                  ...latestPrior,
-                  id: generateUUID(),
-                  date: nextDateStr,
-                  paymentDueDate: nextDueDate,
-                  isFixedSubscription: true,
-                  anchorDay,
-                  notes: `${latestPrior.notes ? latestPrior.notes.replace(/\[anchorDay:\d+\]/g, '').replace(/\[created:[^\]]+\]/g, '').trim() : ''} [anchorDay:${anchorDay}] [created:${nowIso}]`.trim(),
-                  createdAt: nowIso
-                };
-
-                toProvision.push(newRecTx);
-                // Persistir en Supabase
-                SupabaseDataService.createTransaction(newRecTx);
+            // Preservación blindada de Reembolsos / Abonos a favor (nube, notas y local)
+            let isRefund = ct.isRefund;
+            if (!isRefund) {
+              if (localMatch?.isRefund) {
+                isRefund = true;
+              } else if (ct.notes && (ct.notes.includes('[isRefund:true]') || ct.notes.includes('[refund]'))) {
+                isRefund = true;
               }
             }
+
+            return { ...ct, paymentMethodId: pmId, isRefund: !!isRefund };
           });
 
-          if (toProvision.length > 0) {
-            activeMonthTxs = [...activeMonthTxs, ...toProvision];
-          }
-        }
-      } catch (err) {
-        console.warn('Error en auto-provisioning de suscripciones:', err);
-      }
-
-      setTransactions(prev => {
-        const enrichedCloud = activeMonthTxs.map(ct => {
-          const localMatch = prev.find(lt => lt.id === ct.id || (
-            lt.date === ct.date &&
-            (lt.description || '').trim().toLowerCase() === (ct.description || '').trim().toLowerCase() &&
-            Math.abs((lt.amountPen || 0) - (ct.amountPen || 0)) < 0.01
-          ));
-
-          let pmId = ct.paymentMethodId;
-          if (!pmId && localMatch?.paymentMethodId) {
-            pmId = localMatch.paymentMethodId;
-          }
-          if (!pmId && ct.notes) {
-            const m = ct.notes.match(/\[pmId:([^\]]+)\]/);
-            if (m && m[1]) pmId = m[1];
-          }
-
-          // Preservación blindada de Reembolsos / Abonos a favor (nube, notas y local)
-          let isRefund = ct.isRefund;
-          if (!isRefund) {
-            if (localMatch?.isRefund) {
-              isRefund = true;
-            } else if (ct.notes && (ct.notes.includes('[isRefund:true]') || ct.notes.includes('[refund]'))) {
-              isRefund = true;
-            }
-          }
-
-          return { ...ct, paymentMethodId: pmId, isRefund: !!isRefund };
+          const cloudSigs = new Set(
+            enrichedCloud.map(t => `${t.date}_${(t.description || '').trim().toLowerCase()}_${(t.amountPen || 0).toFixed(2)}_${t.paymentMethodId}`)
+          );
+          const cloudIds = new Set(enrichedCloud.map(t => t.id));
+          const localOnly = prev.filter(t => !cloudIds.has(t.id) && !cloudSigs.has(`${t.date}_${(t.description || '').trim().toLowerCase()}_${(t.amountPen || 0).toFixed(2)}_${t.paymentMethodId}`));
+          return deduplicateTransactions([...enrichedCloud, ...localOnly]);
         });
-
-        const cloudSigs = new Set(
-          enrichedCloud.map(t => `${t.date}_${(t.description || '').trim().toLowerCase()}_${(t.amountPen || 0).toFixed(2)}_${t.paymentMethodId}`)
-        );
-        const cloudIds = new Set(enrichedCloud.map(t => t.id));
-        const localOnly = prev.filter(t => !cloudIds.has(t.id) && !cloudSigs.has(`${t.date}_${(t.description || '').trim().toLowerCase()}_${(t.amountPen || 0).toFixed(2)}_${t.paymentMethodId}`));
-        return deduplicateTransactions([...enrichedCloud, ...localOnly]);
-      });
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthKey, currentUser, reloadNonce, paymentMethods]);
+  }, [monthKey, currentUser, reloadNonce]);
 
   // Asegurar que el medio de pago seleccionado corresponda a una tarjeta activa del usuario actual
   useEffect(() => {
@@ -710,11 +624,6 @@ export function useTransactions({
   // Elimina una transacción (local + nube). Lo usan el confirmador de borrado
   // compartido de la página y el borrado directo de movimientos sin ficha.
   const deleteTransactionById = (id: string) => {
-    const tx = transactions.find(t => t.id === id);
-    if (tx && tx.isFixedSubscription) {
-      const key = `${(tx.description || '').trim().toLowerCase()}_${tx.categoryId || ''}_${monthKey}`;
-      deletedSubscriptionKeysRef.current.add(key);
-    }
     setTransactions(prev => prev.filter(t => t.id !== id));
     SupabaseDataService.deleteTransaction(id);
   };
@@ -728,8 +637,6 @@ export function useTransactions({
     }
 
     const normDesc = baseTx.description.trim().toLowerCase();
-    const key = `${normDesc}_${baseTx.categoryId || ''}`;
-    deletedSubscriptionKeysRef.current.add(key);
 
     // Encontrar todas las transacciones vinculadas a esta suscripción desde esta fecha en adelante
     const matches = transactions.filter(t =>

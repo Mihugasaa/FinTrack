@@ -44,6 +44,7 @@ export interface Transaction {
   hasInterest?: boolean;
   notes?: string;
   createdAt?: string;
+  anchorDay?: number;
 }
 
 export interface ReceivablePayment {

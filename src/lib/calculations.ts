@@ -102,6 +102,78 @@ export function getEffectiveDayOfMonth(year: number, month: number, targetDay: n
 }
 
 /**
+ * Extrae o infiere el día ancla original de un gasto recurrente.
+ * 1. Prioridad: notas con [anchorDay:XX].
+ * 2. Si no existe en notas, busca en el historial completo de transacciones de la misma suscripción
+ *    (misma descripción y categoría) el día de cobro en meses de 30 o 31 días.
+ * 3. Si no hay historial o el día actual no es fin de mes de febrero, usa el día de dateStr.
+ */
+export function resolveTransactionAnchorDay(
+  dateStr: string,
+  notes?: string,
+  history?: Transaction[],
+  description?: string,
+  categoryId?: string
+): number {
+  if (notes) {
+    const match = notes.match(/\[anchorDay:(\d+)\]/);
+    if (match && match[1]) {
+      const parsed = parseInt(match[1], 10);
+      if (parsed >= 1 && parsed <= 31) return parsed;
+    }
+  }
+
+  // Si tenemos historial, buscar si en otros meses tenía un día de cobro de fin de mes (ej. 30 o 31)
+  if (history && description) {
+    const normDesc = description.trim().toLowerCase();
+    const matches = history.filter(t =>
+      t.isFixedSubscription &&
+      t.description.trim().toLowerCase() === normDesc &&
+      (!categoryId || t.categoryId === categoryId)
+    );
+    for (const m of matches) {
+      if (m.anchorDay && m.anchorDay >= 1 && m.anchorDay <= 31) {
+        return m.anchorDay;
+      }
+      if (m.notes) {
+        const match = m.notes.match(/\[anchorDay:(\d+)\]/);
+        if (match && match[1]) {
+          const parsed = parseInt(match[1], 10);
+          if (parsed >= 1 && parsed <= 31) return parsed;
+        }
+      }
+      if (m.date) {
+        const p = m.date.split('-');
+        if (p.length === 3) {
+          const d = parseInt(p[2], 10);
+          if (d >= 29) return d;
+        }
+      }
+    }
+  }
+
+  if (dateStr) {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const parsed = parseInt(parts[2], 10);
+      if (parsed >= 1 && parsed <= 31) return parsed;
+    }
+  }
+  return 30;
+}
+
+/**
+ * Calcula la fecha ISO (YYYY-MM-DD) para un gasto recurrente en un año y mes objetivo,
+ * respetando el día ancla (ej. si el ancla es 30, en febrero retorna día 28, pero en marzo vuelve al 30).
+ */
+export function computeRecurringDate(year: number, month: number, anchorDay: number): string {
+  const safeDay = getEffectiveDayOfMonth(year, month, anchorDay);
+  const mStr = month.toString().padStart(2, '0');
+  const dStr = safeDay.toString().padStart(2, '0');
+  return `${year}-${mStr}-${dStr}`;
+}
+
+/**
  * Devuelve la fecha ISO exacta del último día del mes: YYYY-MM-DD
  */
 export function getEndOfMonthDate(year: number, month: number): string {

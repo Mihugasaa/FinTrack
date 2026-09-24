@@ -174,6 +174,16 @@ export class SupabaseDataService {
         const isRefund = !!(row as any).is_refund ||
           (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
 
+        let anchorDay: number | undefined;
+        if (typeof row.notes === 'string') {
+          const am = row.notes.match(/\[anchorDay:(\d+)\]/);
+          if (am && am[1]) anchorDay = parseInt(am[1], 10);
+        }
+        if (!anchorDay && row.date && !!row.is_fixed_subscription) {
+          const parts = row.date.split('-');
+          if (parts.length === 3) anchorDay = parseInt(parts[2], 10);
+        }
+
         return {
           id: row.id,
           date: row.date,
@@ -188,7 +198,8 @@ export class SupabaseDataService {
           isFixedSubscription: !!row.is_fixed_subscription,
           isRefund: isRefund,
           notes: row.notes,
-          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined
+          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
+          anchorDay
         };
       });
     } catch (e) {
@@ -228,6 +239,16 @@ export class SupabaseDataService {
         const isRefund = !!(row as any).is_refund ||
           (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
 
+        let anchorDay: number | undefined;
+        if (typeof row.notes === 'string') {
+          const am = row.notes.match(/\[anchorDay:(\d+)\]/);
+          if (am && am[1]) anchorDay = parseInt(am[1], 10);
+        }
+        if (!anchorDay && row.date && !!row.is_fixed_subscription) {
+          const parts = row.date.split('-');
+          if (parts.length === 3) anchorDay = parseInt(parts[2], 10);
+        }
+
         return {
           id: row.id,
           date: row.date,
@@ -242,11 +263,76 @@ export class SupabaseDataService {
           isFixedSubscription: !!row.is_fixed_subscription,
           isRefund: isRefund,
           notes: row.notes,
-          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined
+          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
+          anchorDay
         };
       });
     } catch (e) {
       this.logSupabaseError('getAllTransactions (catch)', e);
+      return null;
+    }
+  }
+
+  // GET: Obtener todas las suscripciones o gastos fijos recurrentes
+  public static async getRecurringSubscriptions(): Promise<Transaction[] | null> {
+    const sb = supabase;
+    if (!sb || !isSupabaseConfigured) return null;
+
+    try {
+      const { data, error } = await this.executeWithRetry<any[]>(
+        () => sb
+          .from('transactions')
+          .select('*')
+          .eq('is_fixed_subscription', true)
+          .order('date', { ascending: false }),
+        'getRecurringSubscriptions'
+      );
+
+      if (error || !data) {
+        if (error) this.logSupabaseError('getRecurringSubscriptions', error.message);
+        return null;
+      }
+
+      return data.map((row: any) => {
+        let pmId = row.payment_method_id || '';
+        if (!pmId && row.notes) {
+          const m = row.notes.match(/\[pmId:([^\]]+)\]/);
+          if (m && m[1]) pmId = m[1];
+        }
+
+        const isRefund = !!(row as any).is_refund ||
+          (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
+
+        let anchorDay: number | undefined;
+        if (typeof row.notes === 'string') {
+          const am = row.notes.match(/\[anchorDay:(\d+)\]/);
+          if (am && am[1]) anchorDay = parseInt(am[1], 10);
+        }
+        if (!anchorDay && row.date && !!row.is_fixed_subscription) {
+          const parts = row.date.split('-');
+          if (parts.length === 3) anchorDay = parseInt(parts[2], 10);
+        }
+
+        return {
+          id: row.id,
+          date: row.date,
+          description: row.description,
+          categoryId: row.category_id || '',
+          paymentMethodId: pmId,
+          currency: row.currency || 'PEN',
+          originalAmount: parseFloat(row.original_amount),
+          exchangeRate: parseFloat(row.exchange_rate || '1.0'),
+          amountPen: parseFloat(row.amount_pen),
+          paymentDueDate: row.payment_due_date,
+          isFixedSubscription: true,
+          isRefund: isRefund,
+          notes: row.notes,
+          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
+          anchorDay
+        };
+      });
+    } catch (e) {
+      this.logSupabaseError('getRecurringSubscriptions (catch)', e);
       return null;
     }
   }
@@ -271,6 +357,9 @@ export class SupabaseDataService {
       }
       if (tx.isRefund && !finalNotes.includes('[isRefund:true]')) {
         finalNotes = finalNotes ? `${finalNotes} [isRefund:true]` : `[isRefund:true]`;
+      }
+      if (tx.isFixedSubscription && tx.anchorDay && !finalNotes.includes('[anchorDay:')) {
+        finalNotes = finalNotes ? `${finalNotes} [anchorDay:${tx.anchorDay}]` : `[anchorDay:${tx.anchorDay}]`;
       }
 
       const payload: Record<string, any> = {
@@ -341,6 +430,9 @@ export class SupabaseDataService {
         }
       } else {
         finalNotes = finalNotes.replace(/\[isRefund:true\]/g, '').replace(/\[refund\]/g, '').trim();
+      }
+      if (tx.isFixedSubscription && tx.anchorDay && !finalNotes.includes('[anchorDay:')) {
+        finalNotes = finalNotes ? `${finalNotes} [anchorDay:${tx.anchorDay}]` : `[anchorDay:${tx.anchorDay}]`;
       }
 
       const payload: Record<string, any> = {

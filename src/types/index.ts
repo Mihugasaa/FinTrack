@@ -253,6 +253,8 @@ export interface AIAnomaly {
   amount?: number;
   date?: string;
   suggestedAction?: string;
+  merchantName?: string;
+  relatedTransactionIds?: string[];
 }
 
 export interface CashflowForecastMonth {

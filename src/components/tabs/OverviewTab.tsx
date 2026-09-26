@@ -12,7 +12,8 @@ import {
   X,
   ExternalLink,
   CreditCard,
-  TrendingUp
+  TrendingUp,
+  Sparkles
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
@@ -47,6 +48,8 @@ export const OverviewTab: React.FC = () => {
     debtorGroups,
     aiAnomalies,
     handleDismissAnomaly,
+    isOverviewAuditDismissed,
+    handleToggleHideOverviewAudit,
     paymentMethods,
     categories,
     cardPaymentPlan,
@@ -93,55 +96,7 @@ export const OverviewTab: React.FC = () => {
 
   return (
     <div>
-      {/* TIRA DE ALERTAS PROACTIVAS: auditoría IA resumida y descartable. El
-          detalle completo vive en el tab Análisis (Mes actual). Solo aparece si
-          hay anomalías activas. */}
-      {aiAnomalies.length > 0 && (
-        <section className="overview-alert-strip clean-card">
-          <div className="alert-strip-head">
-            <span className="alert-strip-title">
-              <AlertTriangle size={16} color="var(--accent-warning)" />
-              Auditoría: {aiAnomalies.length} {aiAnomalies.length === 1 ? 'alerta por revisar' : 'alertas por revisar'}
-            </span>
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-              onClick={() => setActiveTab('analysis')}
-            >
-              Ver detalle
-            </button>
-          </div>
-          <div className="alert-strip-list">
-            {aiAnomalies.slice(0, 3).map(anom => (
-              <div key={anom.id} className="alert-strip-item">
-                <span className="alert-strip-dot" data-sev={anom.severity} />
-                <span className="alert-strip-text" title={anom.description}>{anom.title}</span>
-                <button
-                  type="button"
-                  className="btn-dismiss-alert"
-                  onClick={() => handleDismissAnomaly(anom.id)}
-                  title="Descartar esta alerta"
-                  aria-label="Descartar alerta"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
-            {aiAnomalies.length > 3 && (
-              <button
-                type="button"
-                className="alert-strip-more"
-                onClick={() => setActiveTab('analysis')}
-              >
-                +{aiAnomalies.length - 3} más en Análisis
-              </button>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* 3. HERO MASTER: MI DINERO EN DÉBITO (ARMONÍA ZEN Y FOCO EN LIQUIDEZ) */}
+      {/* 1. HERO MASTER: MI DINERO EN DÉBITO (ARMONÍA ZEN Y FOCO EN LIQUIDEZ) */}
       <section className="zen-hero clean-card">
         <div className="zen-hero-left">
           <div className="zen-tag-row">
@@ -273,6 +228,36 @@ export const OverviewTab: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* Sugerencia inteligente de auditoría (discreta, no invasiva) */}
+      {!isOverviewAuditDismissed && aiAnomalies.length > 0 && (
+        <div className="overview-smart-suggestion-pill">
+          <div className="suggestion-pill-content">
+            <Sparkles size={15} className="suggestion-pill-icon" />
+            <span>
+              Tienes <strong>{aiAnomalies.length} {aiAnomalies.length === 1 ? 'sugerencia de revisión' : 'sugerencias de revisión'}</strong> en tus gastos de este mes.
+            </span>
+          </div>
+          <div className="suggestion-pill-actions">
+            <button
+              type="button"
+              className="btn-suggestion-action"
+              onClick={() => setActiveTab('analysis')}
+            >
+              Revisar en Análisis
+            </button>
+            <button
+              type="button"
+              className="btn-suggestion-dismiss"
+              onClick={() => handleToggleHideOverviewAudit(true)}
+              title="Ocultar sugerencia de la pantalla principal"
+              aria-label="Ocultar sugerencia"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* PRÓXIMOS VENCIMIENTOS DE TARJETAS (forward-looking: próximo pago real de cada
           tarjeta, sin importar el mes visible) */}

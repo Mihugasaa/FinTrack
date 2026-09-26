@@ -145,14 +145,62 @@ function useFinanceController() {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('ALL');
   const [txTypeFilter, setTxTypeFilter] = useState<'ALL' | 'FIXED' | 'VARIABLE' | 'CARD_PAYMENTS' | 'INCOMES' | 'PAYABLES'>('ALL');
-  const [dismissedAnomalyIds, setDismissedAnomalyIds] = useState<string[]>([]);
+  const [dismissedAnomalyIds, setDismissedAnomalyIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fintrack_dismissed_anomalies');
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+
+  const [isOverviewAuditDismissed, setIsOverviewAuditDismissed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('fintrack_hide_overview_audit') === 'true';
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
 
   const handleDismissAnomaly = (id: string) => {
-    setDismissedAnomalyIds(prev => [...prev, id]);
+    setDismissedAnomalyIds(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      if (typeof window !== 'undefined') {
+        try { localStorage.setItem('fintrack_dismissed_anomalies', JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+  };
+
+  const handleDismissAllAnomalies = (idsToDismiss: string[]) => {
+    setDismissedAnomalyIds(prev => {
+      const next = Array.from(new Set([...prev, ...idsToDismiss]));
+      if (typeof window !== 'undefined') {
+        try { localStorage.setItem('fintrack_dismissed_anomalies', JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
   };
 
   const handleResetDismissedAnomalies = () => {
     setDismissedAnomalyIds([]);
+    if (typeof window !== 'undefined') {
+      try { localStorage.removeItem('fintrack_dismissed_anomalies'); } catch {}
+    }
+  };
+
+  const handleToggleHideOverviewAudit = (hide: boolean) => {
+    setIsOverviewAuditDismissed(hide);
+    if (typeof window !== 'undefined') {
+      try { localStorage.setItem('fintrack_hide_overview_audit', String(hide)); } catch {}
+    }
   };
 
   // 6. Estados de Modales y Subpestañas
@@ -1984,7 +2032,10 @@ function useFinanceController() {
     dismissedAnomalyIds,
     setDismissedAnomalyIds,
     handleDismissAnomaly,
+    handleDismissAllAnomalies,
     handleResetDismissedAnomalies,
+    isOverviewAuditDismissed,
+    handleToggleHideOverviewAudit,
 
     // Modales varios
     isCardModalOpen,

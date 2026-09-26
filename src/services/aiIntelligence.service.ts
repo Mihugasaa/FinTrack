@@ -226,43 +226,69 @@ export class AIIntelligenceService {
     const anomalies: AIAnomaly[] = [];
     if (!transactions || transactions.length === 0) return anomalies;
 
-    // 1. Detección de Posibles Cobros Duplicados (Mismo monto, mismo comercio en <= 48 horas)
-    const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // 1. Detección Inteligente de Posibles Cobros Duplicados (Agrupación por cluster en <= 48 horas)
+    // Se agrupan todos los cargos del mismo monto y comercio para evitar generar múltiples
+    // alertas redundantes por pares (ej. si hay 3 cargos, genera 1 sola alerta consolidada).
+    const sorted = [...transactions]
+      .filter(t => !t.isRefund && t.amountPen > 0)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    for (let i = 0; i < sorted.length - 1; i++) {
+    const processedDupIds = new Set<string>();
+
+    for (let i = 0; i < sorted.length; i++) {
       const current = sorted[i];
+      if (processedDupIds.has(current.id)) continue;
+
+      const cluster: Transaction[] = [current];
+      const normCurrent = current.description.toLowerCase().trim();
+
       for (let j = i + 1; j < sorted.length; j++) {
         const next = sorted[j];
-        const timeDiffHours = Math.abs(new Date(next.date).getTime() - new Date(current.date).getTime()) / (1000 * 60 * 60);
+        if (processedDupIds.has(next.id)) continue;
 
-        if (timeDiffHours > 48) break; // Fuera del rango de alerta
+        const timeDiffHours = Math.abs(new Date(next.date).getTime() - new Date(current.date).getTime()) / (1000 * 60 * 60);
+        if (timeDiffHours > 48) break; // Fuera del rango de ventana temporal
 
         const sameAmount = Math.abs(current.amountPen - next.amountPen) < 0.01;
-        const normCurrent = current.description.toLowerCase().trim();
         const normNext = next.description.toLowerCase().trim();
         const similarDesc = normCurrent === normNext || normCurrent.includes(normNext) || normNext.includes(normCurrent);
 
-        if (sameAmount && similarDesc && current.id !== next.id) {
-          anomalies.push({
-            id: `anom-dup-${current.id}-${next.id}`,
-            type: 'duplicate_charge',
-            severity: 'high',
-            title: 'Posible Cobro Duplicado Detectado',
-            description: `Se detectaron 2 cargos de S/ ${current.amountPen.toFixed(2)} en "${current.description}" con menos de 48h de diferencia (${current.date} y ${next.date}).`,
-            transactionId: next.id,
-            amount: next.amountPen,
-            date: next.date,
-            suggestedAction: 'Verifica tu estado de cuenta bancario para descartar un doble cobro del POS.'
-          });
+        if (sameAmount && similarDesc) {
+          cluster.push(next);
         }
+      }
+
+      if (cluster.length >= 2) {
+        cluster.forEach(c => processedDupIds.add(c.id));
+        const sortedIds = cluster.map(c => c.id).sort();
+        const clusterDates = Array.from(new Set(cluster.map(c => c.date)));
+        const datesStr = clusterDates.length === 1 ? clusterDates[0] : clusterDates.join(' y ');
+
+        anomalies.push({
+          id: `anom-dup-${sortedIds.join('-')}`,
+          type: 'duplicate_charge',
+          severity: 'high',
+          title: 'Posible Cobro Duplicado Detectado',
+          description: cluster.length === 2
+            ? `Se detectaron 2 cargos de S/ ${current.amountPen.toFixed(2)} en "${current.description}" con menos de 48h de diferencia (${datesStr}).`
+            : `Se detectaron ${cluster.length} cargos idénticos de S/ ${current.amountPen.toFixed(2)} en "${current.description}" en un lapso de 48h (${datesStr}).`,
+          transactionId: cluster[cluster.length - 1].id,
+          amount: current.amountPen,
+          date: cluster[cluster.length - 1].date,
+          merchantName: current.description,
+          relatedTransactionIds: sortedIds,
+          suggestedAction: 'Verifica tu estado de cuenta bancario para descartar un doble cobro del POS.'
+        });
       }
     }
 
-    // 2. Detección de Picos Inusuales de Gasto (> 2.5x el promedio de la categoría)
+    // 2. Detección de Picos Inusuales de Gasto (> 2.8x el promedio de la categoría)
     const categoryTotals: Record<string, number[]> = {};
     transactions.forEach(t => {
-      if (!categoryTotals[t.categoryId]) categoryTotals[t.categoryId] = [];
-      categoryTotals[t.categoryId].push(t.amountPen);
+      if (!t.isRefund && t.amountPen > 0) {
+        if (!categoryTotals[t.categoryId]) categoryTotals[t.categoryId] = [];
+        categoryTotals[t.categoryId].push(t.amountPen);
+      }
     });
 
     Object.entries(categoryTotals).forEach(([catId, amounts]) => {
@@ -270,22 +296,21 @@ export class AIIntelligenceService {
         const avg = amounts.reduce((acc, curr) => acc + curr, 0) / amounts.length;
         const catName = categories.find(c => c.id === catId)?.name || 'Categoría';
 
-        amounts.forEach(amt => {
-          if (amt > avg * 2.8 && amt > 150) {
-            const highTx = transactions.find(t => t.categoryId === catId && t.amountPen === amt);
-            if (highTx) {
-              anomalies.push({
-                id: `anom-spike-${highTx.id}`,
-                type: 'unusual_spike',
-                severity: 'medium',
-                title: `Gasto Inusualmente Alto en ${catName}`,
-                description: `El consumo de S/ ${amt.toFixed(2)} en "${highTx.description}" supera por ${(amt / avg).toFixed(1)}x la media de ${catName} (S/ ${avg.toFixed(2)}).`,
-                transactionId: highTx.id,
-                amount: amt,
-                date: highTx.date,
-                suggestedAction: 'Considera si es un gasto extraordinario único o si requiere presupuesto adicional.'
-              });
-            }
+        const categoryTxs = transactions.filter(t => t.categoryId === catId && !t.isRefund);
+        categoryTxs.forEach(tx => {
+          if (tx.amountPen > avg * 2.8 && tx.amountPen > 150) {
+            anomalies.push({
+              id: `anom-spike-${tx.id}`,
+              type: 'unusual_spike',
+              severity: 'medium',
+              title: `Gasto Inusualmente Alto en ${catName}`,
+              description: `El consumo de S/ ${tx.amountPen.toFixed(2)} en "${tx.description}" supera por ${(tx.amountPen / avg).toFixed(1)}x la media de ${catName} (S/ ${avg.toFixed(2)}).`,
+              transactionId: tx.id,
+              amount: tx.amountPen,
+              date: tx.date,
+              merchantName: tx.description,
+              suggestedAction: 'Considera si es un gasto extraordinario único o si requiere presupuesto adicional.'
+            });
           }
         });
       }

@@ -73,7 +73,7 @@ export const NavigationTabs: React.FC = () => {
             {tab.id === 'analysis' && anomalyCount > 0 && (
               <span
                 className="tab-alert-badge"
-                title={`${anomalyCount} ${anomalyCount === 1 ? 'alerta de auditoría' : 'alertas de auditoría'}`}
+                title={`${anomalyCount} ${anomalyCount === 1 ? 'sugerencia de revisión' : 'sugerencias de revisión'}`}
               >
                 {anomalyCount}
               </span>

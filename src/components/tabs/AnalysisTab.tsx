@@ -11,7 +11,9 @@ import {
   AlertTriangle,
   Activity,
   CheckCircle2,
-  X
+  X,
+  Check,
+  Search
 } from 'lucide-react';
 
 interface CFONarrative {
@@ -35,8 +37,11 @@ export const AnalysisTab: React.FC = () => {
     forecastData,
     dismissedAnomalyIds,
     handleResetDismissedAnomalies,
+    handleDismissAllAnomalies,
     aiAnomalies,
     handleDismissAnomaly,
+    setActiveTab,
+    setSearchQuery,
     formatSoles,
     diagnostic: liquidityDiagnostic,
     financialHealth,
@@ -487,7 +492,18 @@ export const AnalysisTab: React.FC = () => {
                 Auditoría Inteligente & Detección de Patrones
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {aiAnomalies.length > 1 && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ fontSize: '0.72rem', padding: '3px 8px', height: 'auto' }}
+                  onClick={() => handleDismissAllAnomalies(aiAnomalies.map(a => a.id))}
+                  title="Marcar todas las alertas activas como revisadas"
+                >
+                  Marcar todas como revisadas
+                </button>
+              )}
               {dismissedAnomalyIds.length > 0 && (
                 <button
                   type="button"
@@ -558,6 +574,44 @@ export const AnalysisTab: React.FC = () => {
                           💡 Sugerencia: {anom.suggestedAction}
                         </p>
                       )}
+
+                      {/* Acciones claras de resolución */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{
+                            fontSize: '0.74rem',
+                            padding: '4px 10px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            background: 'rgba(16, 185, 129, 0.08)',
+                            color: 'var(--accent-success)',
+                            border: '1px solid rgba(16, 185, 129, 0.25)'
+                          }}
+                          onClick={() => handleDismissAnomaly(anom.id)}
+                          title="Confirmar que este gasto es correcto y descartar la alerta permanentemente"
+                        >
+                          <Check size={12} />
+                          <span>Es un gasto correcto</span>
+                        </button>
+                        {anom.merchantName && (
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ fontSize: '0.74rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                            onClick={() => {
+                              setSearchQuery(anom.merchantName || '');
+                              setActiveTab('transactions');
+                            }}
+                            title={`Buscar "${anom.merchantName}" en tus movimientos`}
+                          >
+                            <Search size={12} />
+                            <span>Ver en Movimientos</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

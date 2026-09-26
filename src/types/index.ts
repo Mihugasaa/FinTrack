@@ -45,6 +45,7 @@ export interface Transaction {
   notes?: string;
   createdAt?: string;
   anchorDay?: number;
+  isAuditConfirmed?: boolean;
 }
 
 export interface ReceivablePayment {

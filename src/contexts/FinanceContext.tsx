@@ -79,6 +79,14 @@ function useFinanceController() {
         return;
       }
       setCurrentUser(user);
+      if (user.preferences) {
+        if (typeof user.preferences.hideOverviewAudit === 'boolean') {
+          setIsOverviewAuditDismissed(user.preferences.hideOverviewAudit);
+        }
+        if (Array.isArray(user.preferences.dismissedAnomalyIds)) {
+          setDismissedAnomalyIds(user.preferences.dismissedAnomalyIds);
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, [router]);
@@ -146,6 +154,10 @@ function useFinanceController() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('ALL');
   const [txTypeFilter, setTxTypeFilter] = useState<'ALL' | 'FIXED' | 'VARIABLE' | 'CARD_PAYMENTS' | 'INCOMES' | 'PAYABLES'>('ALL');
   const [dismissedAnomalyIds, setDismissedAnomalyIds] = useState<string[]>(() => {
+    const cachedUser = AuthService.getCurrentUser();
+    if (cachedUser?.preferences?.dismissedAnomalyIds && Array.isArray(cachedUser.preferences.dismissedAnomalyIds)) {
+      return cachedUser.preferences.dismissedAnomalyIds;
+    }
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem('fintrack_dismissed_anomalies');
@@ -158,6 +170,10 @@ function useFinanceController() {
   });
 
   const [isOverviewAuditDismissed, setIsOverviewAuditDismissed] = useState<boolean>(() => {
+    const cachedUser = AuthService.getCurrentUser();
+    if (typeof cachedUser?.preferences?.hideOverviewAudit === 'boolean') {
+      return cachedUser.preferences.hideOverviewAudit;
+    }
     if (typeof window !== 'undefined') {
       try {
         return localStorage.getItem('fintrack_hide_overview_audit') === 'true';
@@ -167,41 +183,6 @@ function useFinanceController() {
     }
     return false;
   });
-
-  const handleDismissAnomaly = (id: string) => {
-    setDismissedAnomalyIds(prev => {
-      if (prev.includes(id)) return prev;
-      const next = [...prev, id];
-      if (typeof window !== 'undefined') {
-        try { localStorage.setItem('fintrack_dismissed_anomalies', JSON.stringify(next)); } catch {}
-      }
-      return next;
-    });
-  };
-
-  const handleDismissAllAnomalies = (idsToDismiss: string[]) => {
-    setDismissedAnomalyIds(prev => {
-      const next = Array.from(new Set([...prev, ...idsToDismiss]));
-      if (typeof window !== 'undefined') {
-        try { localStorage.setItem('fintrack_dismissed_anomalies', JSON.stringify(next)); } catch {}
-      }
-      return next;
-    });
-  };
-
-  const handleResetDismissedAnomalies = () => {
-    setDismissedAnomalyIds([]);
-    if (typeof window !== 'undefined') {
-      try { localStorage.removeItem('fintrack_dismissed_anomalies'); } catch {}
-    }
-  };
-
-  const handleToggleHideOverviewAudit = (hide: boolean) => {
-    setIsOverviewAuditDismissed(hide);
-    if (typeof window !== 'undefined') {
-      try { localStorage.setItem('fintrack_hide_overview_audit', String(hide)); } catch {}
-    }
-  };
 
   // 6. Estados de Modales y Subpestañas
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
@@ -1361,10 +1342,121 @@ function useFinanceController() {
   // Detección Inteligente de Anomalías y Cobros Duplicados (IA & NLP).
   // Cargos duplicados y picos se evalúan sobre el mes visible; las suscripciones
   // recurrentes necesitan ver varios meses, así que pasamos el historial completo.
+  const rawAiAnomalies = useMemo(() => {
+    return AIIntelligenceService.detectAnomalies(currentMonthTransactions, categories, transactions);
+  }, [currentMonthTransactions, categories, transactions]);
+
   const aiAnomalies = useMemo(() => {
-    const detected = AIIntelligenceService.detectAnomalies(currentMonthTransactions, categories, transactions);
-    return detected.filter(a => !dismissedAnomalyIds.includes(a.id));
-  }, [currentMonthTransactions, categories, transactions, dismissedAnomalyIds]);
+    return rawAiAnomalies.filter(a => !dismissedAnomalyIds.includes(a.id));
+  }, [rawAiAnomalies, dismissedAnomalyIds]);
+
+  // 1. Confirmar/Descartar anomalía y persistir solución de raíz en BD PostgreSQL (is_audit_confirmed + notas)
+  const handleDismissAnomaly = (id: string) => {
+    const anomaly = rawAiAnomalies.find(a => a.id === id) || aiAnomalies.find(a => a.id === id);
+    const targetTxIds = anomaly?.relatedTransactionIds && anomaly.relatedTransactionIds.length > 0
+      ? anomaly.relatedTransactionIds
+      : (anomaly?.transactionId ? [anomaly.transactionId] : []);
+
+    // Si la anomalía está vinculada a transacciones reales, confirmarlas a nivel raíz en base de datos
+    if (targetTxIds.length > 0) {
+      const txsToUpdate: Transaction[] = [];
+      setTransactions(prev => prev.map(tx => {
+        if (targetTxIds.includes(tx.id)) {
+          const updated: Transaction = { ...tx, isAuditConfirmed: true };
+          txsToUpdate.push(updated);
+          return updated;
+        }
+        return tx;
+      }));
+
+      // Guardar de inmediato en PostgreSQL (Supabase) para cada transacción afectada
+      for (const tx of txsToUpdate) {
+        SupabaseDataService.updateTransaction(tx);
+      }
+    }
+
+    // Persistir además el ID de la alerta en preferencias de usuario (PostgreSQL: profiles.preferences)
+    setDismissedAnomalyIds(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      AuthService.updateUserPreferences({ dismissedAnomalyIds: next });
+      if (typeof window !== 'undefined') {
+        try { localStorage.setItem('fintrack_dismissed_anomalies', JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+  };
+
+  // 2. Marcar todas las alertas activas como revisadas (solución raíz masiva en BD)
+  const handleDismissAllAnomalies = (idsToDismiss: string[]) => {
+    const allTargetTxIds = new Set<string>();
+
+    idsToDismiss.forEach(id => {
+      const anomaly = rawAiAnomalies.find(a => a.id === id) || aiAnomalies.find(a => a.id === id);
+      if (anomaly?.relatedTransactionIds && anomaly.relatedTransactionIds.length > 0) {
+        anomaly.relatedTransactionIds.forEach(tid => allTargetTxIds.add(tid));
+      } else if (anomaly?.transactionId) {
+        allTargetTxIds.add(anomaly.transactionId);
+      }
+    });
+
+    if (allTargetTxIds.size > 0) {
+      const txsToUpdate: Transaction[] = [];
+      setTransactions(prev => prev.map(tx => {
+        if (allTargetTxIds.has(tx.id)) {
+          const updated: Transaction = { ...tx, isAuditConfirmed: true };
+          txsToUpdate.push(updated);
+          return updated;
+        }
+        return tx;
+      }));
+
+      for (const tx of txsToUpdate) {
+        SupabaseDataService.updateTransaction(tx);
+      }
+    }
+
+    setDismissedAnomalyIds(prev => {
+      const next = Array.from(new Set([...prev, ...idsToDismiss]));
+      AuthService.updateUserPreferences({ dismissedAnomalyIds: next });
+      if (typeof window !== 'undefined') {
+        try { localStorage.setItem('fintrack_dismissed_anomalies', JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+  };
+
+  // 3. Restaurar alertas descartadas: revierte isAuditConfirmed en BD y limpia preferencias
+  const handleResetDismissedAnomalies = () => {
+    const txsToRevert: Transaction[] = [];
+    setTransactions(prev => prev.map(tx => {
+      if (tx.isAuditConfirmed) {
+        const reverted: Transaction = { ...tx, isAuditConfirmed: false };
+        txsToRevert.push(reverted);
+        return reverted;
+      }
+      return tx;
+    }));
+
+    for (const tx of txsToRevert) {
+      SupabaseDataService.updateTransaction(tx);
+    }
+
+    setDismissedAnomalyIds([]);
+    AuthService.updateUserPreferences({ dismissedAnomalyIds: [] });
+    if (typeof window !== 'undefined') {
+      try { localStorage.removeItem('fintrack_dismissed_anomalies'); } catch {}
+    }
+  };
+
+  // 4. Ocultar o mostrar la píldora informativa en Overview: sincronizada a profiles.preferences
+  const handleToggleHideOverviewAudit = (hide: boolean) => {
+    setIsOverviewAuditDismissed(hide);
+    AuthService.updateUserPreferences({ hideOverviewAudit: hide });
+    if (typeof window !== 'undefined') {
+      try { localStorage.setItem('fintrack_hide_overview_audit', String(hide)); } catch {}
+    }
+  };
 
   // Evolución Histórica Multimes (para gráfico de barras y analítica dinámica).
   // Se deriva por completo de datos reales: la salida de caja de cada mes es la

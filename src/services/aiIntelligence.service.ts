@@ -230,7 +230,7 @@ export class AIIntelligenceService {
     // Se agrupan todos los cargos del mismo monto y comercio para evitar generar múltiples
     // alertas redundantes por pares (ej. si hay 3 cargos, genera 1 sola alerta consolidada).
     const sorted = [...transactions]
-      .filter(t => !t.isRefund && t.amountPen > 0)
+      .filter(t => !t.isRefund && !t.isAuditConfirmed && t.amountPen > 0)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const processedDupIds = new Set<string>();
@@ -296,7 +296,7 @@ export class AIIntelligenceService {
         const avg = amounts.reduce((acc, curr) => acc + curr, 0) / amounts.length;
         const catName = categories.find(c => c.id === catId)?.name || 'Categoría';
 
-        const categoryTxs = transactions.filter(t => t.categoryId === catId && !t.isRefund);
+        const categoryTxs = transactions.filter(t => t.categoryId === catId && !t.isRefund && !t.isAuditConfirmed);
         categoryTxs.forEach(tx => {
           if (tx.amountPen > avg * 2.8 && tx.amountPen > 150) {
             anomalies.push({
@@ -309,6 +309,7 @@ export class AIIntelligenceService {
               amount: tx.amountPen,
               date: tx.date,
               merchantName: tx.description,
+              relatedTransactionIds: [tx.id],
               suggestedAction: 'Considera si es un gasto extraordinario único o si requiere presupuesto adicional.'
             });
           }
@@ -323,7 +324,7 @@ export class AIIntelligenceService {
     // Se evalúa sobre el historial completo (varios meses), no solo el mes visible.
     const recurringCandidates: Record<string, Transaction[]> = {};
     historyTransactions.forEach(t => {
-      if (!t.isFixedSubscription && !t.isRefund) {
+      if (!t.isFixedSubscription && !t.isRefund && !t.isAuditConfirmed) {
         const descKey = t.description.toLowerCase().trim();
         if (!descKey) return;
         if (!recurringCandidates[descKey]) recurringCandidates[descKey] = [];
@@ -374,6 +375,8 @@ export class AIIntelligenceService {
         transactionId: sample.id,
         amount: sample.amountPen,
         date: sample.date,
+        merchantName: sample.description,
+        relatedTransactionIds: sorted.map(s => s.id),
         suggestedAction: 'Edita este gasto y activa "Gasto fijo recurrente" para proyectarlo en los siguientes meses.'
       });
     });

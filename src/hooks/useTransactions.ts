@@ -126,7 +126,17 @@ export function useTransactions({
               }
             }
 
-            return { ...ct, paymentMethodId: pmId, isRefund: !!isRefund };
+            // Preservación blindada de gastos auditados / confirmados (nube, notas y local)
+            let isAuditConfirmed = ct.isAuditConfirmed;
+            if (!isAuditConfirmed) {
+              if (localMatch?.isAuditConfirmed) {
+                isAuditConfirmed = true;
+              } else if (ct.notes && (ct.notes.includes('[auditConfirmed:true]') || ct.notes.includes('[audit_confirmed:true]'))) {
+                isAuditConfirmed = true;
+              }
+            }
+
+            return { ...ct, paymentMethodId: pmId, isRefund: !!isRefund, isAuditConfirmed: !!isAuditConfirmed };
           });
 
           const cloudSigs = new Set(
@@ -501,6 +511,7 @@ export function useTransactions({
           isFixedSubscription: isRecurring,
           anchorDay: resolvedAnchor,
           isRefund: isRefundMode,
+          isAuditConfirmed: currentTx?.isAuditConfirmed,
           notes: finalNotes || undefined
         };
         setTransactions(prev =>

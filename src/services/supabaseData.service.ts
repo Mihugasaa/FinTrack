@@ -174,6 +174,9 @@ export class SupabaseDataService {
         const isRefund = !!(row as any).is_refund ||
           (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
 
+        const isAuditConfirmed = !!(row as any).is_audit_confirmed ||
+          (typeof row.notes === 'string' && (row.notes.includes('[auditConfirmed:true]') || row.notes.includes('[audit_confirmed:true]')));
+
         let anchorDay: number | undefined;
         if (typeof row.notes === 'string') {
           const am = row.notes.match(/\[anchorDay:(\d+)\]/);
@@ -197,6 +200,7 @@ export class SupabaseDataService {
           paymentDueDate: row.payment_due_date,
           isFixedSubscription: !!row.is_fixed_subscription,
           isRefund: isRefund,
+          isAuditConfirmed: isAuditConfirmed,
           notes: row.notes,
           createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
           anchorDay
@@ -239,6 +243,9 @@ export class SupabaseDataService {
         const isRefund = !!(row as any).is_refund ||
           (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
 
+        const isAuditConfirmed = !!(row as any).is_audit_confirmed ||
+          (typeof row.notes === 'string' && (row.notes.includes('[auditConfirmed:true]') || row.notes.includes('[audit_confirmed:true]')));
+
         let anchorDay: number | undefined;
         if (typeof row.notes === 'string') {
           const am = row.notes.match(/\[anchorDay:(\d+)\]/);
@@ -262,6 +269,7 @@ export class SupabaseDataService {
           paymentDueDate: row.payment_due_date,
           isFixedSubscription: !!row.is_fixed_subscription,
           isRefund: isRefund,
+          isAuditConfirmed: isAuditConfirmed,
           notes: row.notes,
           createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
           anchorDay
@@ -303,6 +311,9 @@ export class SupabaseDataService {
         const isRefund = !!(row as any).is_refund ||
           (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
 
+        const isAuditConfirmed = !!(row as any).is_audit_confirmed ||
+          (typeof row.notes === 'string' && (row.notes.includes('[auditConfirmed:true]') || row.notes.includes('[audit_confirmed:true]')));
+
         let anchorDay: number | undefined;
         if (typeof row.notes === 'string') {
           const am = row.notes.match(/\[anchorDay:(\d+)\]/);
@@ -326,6 +337,7 @@ export class SupabaseDataService {
           paymentDueDate: row.payment_due_date,
           isFixedSubscription: true,
           isRefund: isRefund,
+          isAuditConfirmed: isAuditConfirmed,
           notes: row.notes,
           createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
           anchorDay
@@ -358,6 +370,9 @@ export class SupabaseDataService {
       if (tx.isRefund && !finalNotes.includes('[isRefund:true]')) {
         finalNotes = finalNotes ? `${finalNotes} [isRefund:true]` : `[isRefund:true]`;
       }
+      if (tx.isAuditConfirmed && !finalNotes.includes('[auditConfirmed:true]')) {
+        finalNotes = finalNotes ? `${finalNotes} [auditConfirmed:true]` : `[auditConfirmed:true]`;
+      }
       if (tx.isFixedSubscription && tx.anchorDay && !finalNotes.includes('[anchorDay:')) {
         finalNotes = finalNotes ? `${finalNotes} [anchorDay:${tx.anchorDay}]` : `[anchorDay:${tx.anchorDay}]`;
       }
@@ -374,6 +389,7 @@ export class SupabaseDataService {
         payment_due_date: tx.paymentDueDate,
         is_fixed_subscription: !!tx.isFixedSubscription,
         is_refund: !!tx.isRefund,
+        is_audit_confirmed: !!tx.isAuditConfirmed,
         notes: finalNotes || null
       };
 
@@ -388,6 +404,13 @@ export class SupabaseDataService {
       }
 
       let { error } = await supabase.from('transactions').insert(payload);
+
+      // Fallback si la columna is_audit_confirmed aún no se ejecutó en PostgreSQL
+      if (error && error.message?.includes('is_audit_confirmed')) {
+        delete payload.is_audit_confirmed;
+        const retryAudit = await supabase.from('transactions').insert(payload);
+        error = retryAudit.error;
+      }
 
       // Fallback si la migración de is_refund aún no se ejecutó en PostgreSQL
       if (error && error.message?.includes('is_refund')) {
@@ -431,6 +454,15 @@ export class SupabaseDataService {
       } else {
         finalNotes = finalNotes.replace(/\[isRefund:true\]/g, '').replace(/\[refund\]/g, '').trim();
       }
+
+      if (tx.isAuditConfirmed) {
+        if (!finalNotes.includes('[auditConfirmed:true]')) {
+          finalNotes = finalNotes ? `${finalNotes} [auditConfirmed:true]` : `[auditConfirmed:true]`;
+        }
+      } else {
+        finalNotes = finalNotes.replace(/\[auditConfirmed:true\]/g, '').replace(/\[audit_confirmed:true\]/g, '').trim();
+      }
+
       if (tx.isFixedSubscription && tx.anchorDay && !finalNotes.includes('[anchorDay:')) {
         finalNotes = finalNotes ? `${finalNotes} [anchorDay:${tx.anchorDay}]` : `[anchorDay:${tx.anchorDay}]`;
       }
@@ -445,6 +477,7 @@ export class SupabaseDataService {
         payment_due_date: tx.paymentDueDate,
         is_fixed_subscription: !!tx.isFixedSubscription,
         is_refund: !!tx.isRefund,
+        is_audit_confirmed: !!tx.isAuditConfirmed,
         notes: finalNotes || null
       };
 
@@ -459,6 +492,16 @@ export class SupabaseDataService {
         .from('transactions')
         .update(payload)
         .eq('id', tx.id);
+
+      // Fallback si la columna is_audit_confirmed aún no se ejecutó en PostgreSQL
+      if (error && error.message?.includes('is_audit_confirmed')) {
+        delete payload.is_audit_confirmed;
+        const retryAudit = await supabase
+          .from('transactions')
+          .update(payload)
+          .eq('id', tx.id);
+        error = retryAudit.error;
+      }
 
       // Fallback si la migración de is_refund aún no se ejecutó en PostgreSQL
       if (error && error.message?.includes('is_refund')) {

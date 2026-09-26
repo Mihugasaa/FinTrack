@@ -6,11 +6,18 @@
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
+export interface UserPreferences {
+  hideOverviewAudit?: boolean;
+  dismissedAnomalyIds?: string[];
+  [key: string]: any;
+}
+
 export interface UserProfile {
   id: string;
   username: string;
   fullName: string;
   role?: string;
+  preferences?: UserPreferences;
   createdAt: string;
 }
 
@@ -36,6 +43,41 @@ export class AuthService {
   }
 
   /**
+   * Actualiza las preferencias del usuario tanto en sesión local como directamente
+   * en la base de datos (PostgreSQL: profiles.preferences) para sincronización entre dispositivos.
+   */
+  public static async updateUserPreferences(newPrefs: Partial<UserPreferences>): Promise<boolean> {
+    const user = this.getCurrentUser();
+    if (!user || !user.id) return false;
+
+    const merged: UserPreferences = {
+      ...(user.preferences || {}),
+      ...newPrefs
+    };
+
+    user.preferences = merged;
+    this.persistSession(user);
+
+    if (!supabase || !isSupabaseConfigured) return true;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ preferences: merged })
+        .eq('id', user.id);
+
+      if (error) {
+        console.warn('No se pudo guardar preferencias en profiles (posible falta de columna):', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Error al sincronizar preferencias de usuario con Supabase:', err);
+      return false;
+    }
+  }
+
+  /**
    * Usuario derivado de la SESIÓN real de Supabase (fuente de verdad), no del
    * localStorage. Necesario porque en una PWA instalada (contenedor aislado en iOS)
    * la cookie de sesión puede existir sin que el perfil esté en localStorage, lo que
@@ -51,10 +93,11 @@ export class AuthService {
       if (!sUser) return null;
 
       const cached = this.getCurrentUser();
-      if (cached && cached.id === sUser.id) return cached;
+      if (cached && cached.id === sUser.id && cached.preferences) return cached;
 
       let username = sUser.email ? sUser.email.split('@')[0] : 'usuario';
       let fullName = username.charAt(0).toUpperCase() + username.slice(1);
+      let preferences: UserPreferences = {};
       try {
         const { data: profData } = await supabase
           .from('profiles')
@@ -64,6 +107,9 @@ export class AuthService {
         if (profData) {
           username = profData.username || username;
           fullName = profData.full_name || fullName;
+          if (profData.preferences && typeof profData.preferences === 'object') {
+            preferences = profData.preferences;
+          }
         }
       } catch {
         // sin perfil en BD: usar los valores derivados del email
@@ -74,6 +120,7 @@ export class AuthService {
         username,
         fullName,
         role: 'Propietario',
+        preferences,
         createdAt: sUser.created_at || new Date().toISOString()
       };
       this.persistSession(profile);
@@ -127,6 +174,7 @@ export class AuthService {
         username: profData?.username || cleanUsername,
         fullName: profData?.full_name || cleanUsername.charAt(0).toUpperCase() + cleanUsername.slice(1),
         role: 'Propietario',
+        preferences: profData?.preferences && typeof profData.preferences === 'object' ? profData.preferences : {},
         createdAt: data.user.created_at || new Date().toISOString()
       };
 

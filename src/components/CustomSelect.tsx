@@ -20,6 +20,7 @@ interface CustomSelectProps {
   id?: string;
   className?: string;
   disabled?: boolean;
+  align?: 'left' | 'right' | 'auto';
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -29,11 +30,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   placeholder = 'Seleccionar...',
   id,
   className = '',
-  disabled = false
+  disabled = false,
+  align = 'auto'
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
-  const [alignRight, setAlignRight] = useState(false);
+  const [alignRight, setAlignRight] = useState(align === 'right');
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -49,11 +51,21 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         const spaceAbove = rect.top;
         setOpenUp(spaceBelow < DROPDOWN_HEIGHT && spaceAbove > spaceBelow);
 
-        // Si el menú, anclado a la izquierda del trigger, se saldría por la
-        // derecha (tipico en movil cuando el filtro esta pegado al borde),
-        // lo anclamos a la derecha para que crezca hacia adentro.
-        const dropdownWidth = Math.min(380, window.innerWidth * 0.92);
-        setAlignRight(rect.left + dropdownWidth > window.innerWidth - 8);
+        if (align === 'right') {
+          setAlignRight(true);
+        } else if (align === 'left') {
+          setAlignRight(false);
+        } else {
+          // 'auto': Si el menú, anclado a la izquierda del trigger, se saldría por la
+          // derecha de la ventana o del contenedor modal/tarjeta donde se encuentra,
+          // lo anclamos a la derecha para que crezca hacia adentro.
+          const boundaryEl = containerRef.current?.closest('.modal-box, [role="dialog"], .modal-content, .card');
+          const boundaryRight = boundaryEl
+            ? boundaryEl.getBoundingClientRect().right - 14
+            : window.innerWidth - 8;
+          const dropdownWidth = 260; // Ancho estimado con opciones largas
+          setAlignRight(rect.left + dropdownWidth > boundaryRight);
+        }
       }
     }
     setIsOpen(prev => !prev);
@@ -84,19 +96,31 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     };
   }, [isOpen]);
 
-  // Ya con el menu montado, medimos su ancho real y decidimos el anclaje: si
-  // abierto a la izquierda se saldria por la derecha, lo anclamos a la derecha.
-  // Corrige la estimacion inicial de handleToggleOpen con la medida exacta.
+  // Ya con el menú montado, medimos su ancho real exacto y validamos el anclaje:
+  // Si abierto a la izquierda se saldría del contenedor modal o de la ventana,
+  // se ancla a la derecha para mantenerse 100% dentro de los márgenes.
   useLayoutEffect(() => {
     if (!isOpen) return;
+    if (align === 'right') {
+      setAlignRight(true);
+      return;
+    }
+    if (align === 'left') {
+      setAlignRight(false);
+      return;
+    }
     const container = containerRef.current;
     const dropdown = dropdownRef.current;
     if (!container || !dropdown) return;
     const cRect = container.getBoundingClientRect();
     const width = dropdown.offsetWidth;
-    const overflowsRight = cRect.left + width > window.innerWidth - 8;
+    const boundaryEl = container.closest('.modal-box, [role="dialog"], .modal-content, .card');
+    const boundaryRight = boundaryEl
+      ? boundaryEl.getBoundingClientRect().right - 14
+      : window.innerWidth - 8;
+    const overflowsRight = cRect.left + width > boundaryRight;
     setAlignRight(prev => (prev !== overflowsRight ? overflowsRight : prev));
-  }, [isOpen, options.length]);
+  }, [isOpen, options.length, align]);
 
   const handleSelect = (val: string) => {
     onChange(val);

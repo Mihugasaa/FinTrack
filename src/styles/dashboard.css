@@ -5634,11 +5634,25 @@ body.modal-open {
   bottom: calc(100% + 6px);
 }
 
-/* Cuando el trigger esta pegado al borde derecho (tipico en movil), el menu se
-   ancla a la derecha del trigger y crece hacia adentro para no salirse de pantalla. */
+/* Cuando el trigger esta pegado al borde derecho (en movil o columna derecha de modal), el menu se
+   ancla a la derecha del trigger y crece hacia adentro para no salirse de pantalla ni del modal. */
 .custom-select-dropdown.align-right {
   left: auto;
   right: 0;
+}
+
+/* En modales, asegura que el popover respete los margenes interiores */
+.modal-box .custom-select-dropdown {
+  max-width: min(350px, calc(100vw - 32px));
+}
+
+@media (max-width: 440px) {
+  .modal-box .custom-select-dropdown {
+    width: 100%;
+    max-width: 100%;
+    left: 0 !important;
+    right: 0 !important;
+  }
 }
 
 @keyframes customSelectFadeIn {

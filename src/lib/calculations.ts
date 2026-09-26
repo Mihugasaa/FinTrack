@@ -326,14 +326,23 @@ export function calculatePaymentDueDate(
   const corte = method.billingCloseDay;
   const pago = method.paymentDueDay || corte;
 
-  // 1. Determinar fecha de cierre de facturación efectiva (ajustada al día hábil anterior si cae no hábil)
+  // 1. Determinar fecha de cierre de facturación nominal y efectiva
   const closeInfo = getEffectiveBillingCloseDate(year, month, corte);
 
   let cierreYear = year;
   let cierreMonth = month;
 
-  // Si la compra ocurrió estrictamente después de la fecha efectiva de corte, entra en el ciclo del mes siguiente
-  if (dateStr > closeInfo.effectiveDate) {
+  const txDay = parseInt(dateStr.split('-')[2], 10);
+  const maxDays = getDaysInMonth(year, month);
+  const effectiveCorteDay = Math.min(corte, maxDays);
+
+  // Si la compra ocurrió estrictamente después de la fecha efectiva de corte:
+  // - Si fue en el día nominal de corte o después (txDay >= effectiveCorteDay), entra al ciclo siguiente
+  //   (ej. compra hoy sábado 26 cuando el corte bancario fue el viernes 25, ganando un mes).
+  // - Si fue antes del día nominal de corte (txDay < effectiveCorteDay, ej. cobro del día 25 cuando
+  //   el corte nominal es 26 y se adelantó por feriado de Navidad al 24), se mantiene
+  //   en el ciclo del mes actual.
+  if (dateStr > closeInfo.effectiveDate && txDay >= effectiveCorteDay) {
     cierreMonth += 1;
     if (cierreMonth > 12) {
       cierreMonth = 1;
@@ -385,12 +394,15 @@ export function calculatePaymentDueDateDetail(
     };
   }
 
-  const [yStr, mStr] = dateStr.split('-');
+  const [yStr, mStr, dStr] = dateStr.split('-');
   const year = parseInt(yStr, 10);
   const month = parseInt(mStr, 10);
+  const txDay = parseInt(dStr, 10);
+  const maxDays = getDaysInMonth(year, month);
+  const effectiveCorteDay = Math.min(method.billingCloseDay, maxDays);
 
   const closeInfo = getEffectiveBillingCloseDate(year, month, method.billingCloseDay);
-  const belongsToNextCycle = dateStr > closeInfo.effectiveDate;
+  const belongsToNextCycle = dateStr > closeInfo.effectiveDate && txDay >= effectiveCorteDay;
 
   const nominalDueDate = calculatePaymentDueDate(dateStr, method, false);
   const adjustment = adjustToNextBusinessDay(nominalDueDate);

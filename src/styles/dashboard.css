@@ -2236,7 +2236,7 @@ body.modal-open {
   width: 100%;
   max-width: 530px;
   max-height: min(90vh, calc(100dvh - 32px));
-  padding: 22px 26px 26px 26px;
+  padding: 20px 22px 20px 22px;
   box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
   animation: fadeIn 0.2s ease;
   position: relative;
@@ -2293,7 +2293,7 @@ body.modal-open {
 }
 
 .modal-box .modal-actions {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 @media (max-width: 600px) {
@@ -2485,9 +2485,9 @@ body.modal-open {
   background: var(--bg-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  padding: 12px 14px;
-  margin-top: 10px;
-  margin-bottom: 12px;
+  padding: 10px 14px;
+  margin-top: 0;
+  margin-bottom: 10px;
   transition: all 0.2s ease;
 }
 
@@ -2530,7 +2530,7 @@ body.modal-open {
 .modal-box .segment-tabs-nav {
   display: flex;
   width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .modal-box .segment-tabs-nav .segment-tab-btn {
@@ -2646,7 +2646,7 @@ body.modal-open {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 20px;
+  margin-top: 14px;
 }
 
 @media (max-width: 480px) {

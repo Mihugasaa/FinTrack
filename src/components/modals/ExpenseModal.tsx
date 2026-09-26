@@ -90,7 +90,7 @@ export const ExpenseModal: React.FC = () => {
         </div>
 
         {!editingTransactionId && (
-          <div className="segment-tabs-nav" style={{ marginBottom: '16px' }}>
+          <div className="segment-tabs-nav">
             <button
               type="button"
               className={`segment-tab-btn ${!isRefundMode ? 'active' : ''}`}
@@ -114,13 +114,13 @@ export const ExpenseModal: React.FC = () => {
         )}
 
         {isRefundMode && (
-          <div style={{ padding: '10px 12px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)', marginBottom: '14px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+          <div style={{ padding: '8px 12px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)', marginBottom: '12px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
             🟢 Reduce la deuda en tarjetas de crédito o suma saldo a favor en cuentas de débito.
           </div>
         )}
 
         {!editingTransactionId && !isRefundMode && (
-          <div style={{ marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {/* Autocompletado por lenguaje natural dentro del modal */}
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               <input
@@ -300,8 +300,8 @@ export const ExpenseModal: React.FC = () => {
               border: '1px solid var(--border-subtle)',
               borderRadius: '10px',
               padding: '12px 14px',
-              marginTop: '10px',
-              marginBottom: '10px'
+              marginTop: '0',
+              marginBottom: '12px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
                 <label className="form-label" style={{ margin: 0, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -454,12 +454,12 @@ export const ExpenseModal: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                padding: '10px 12px',
+                padding: '9px 12px',
                 background: 'var(--bg-glass)',
                 borderRadius: '8px',
                 border: '1px solid var(--border-subtle)',
-                marginTop: '10px',
-                marginBottom: '12px',
+                marginTop: '0',
+                marginBottom: '10px',
                 cursor: 'pointer'
               }}
               onClick={() => setIsRecurring(prev => !prev)}
@@ -582,7 +582,7 @@ export const ExpenseModal: React.FC = () => {
             if (isRefundMode) {
               if (selectedPm?.type === 'credit') {
                 return (
-                  <div style={{ marginTop: '10px', background: 'rgba(99, 102, 241, 0.05)', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                  <div style={{ marginTop: '0', marginBottom: '10px', background: 'rgba(99, 102, 241, 0.05)', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                       <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent-brand)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <CreditCard size={15} /> Abono a Tarjeta de Crédito
@@ -596,7 +596,7 @@ export const ExpenseModal: React.FC = () => {
                 );
               }
               return (
-                <div style={{ marginTop: '10px', background: 'rgba(16, 185, 129, 0.05)', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                <div style={{ marginTop: '0', marginBottom: '10px', background: 'rgba(16, 185, 129, 0.05)', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent-success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Wallet size={15} /> Abono a Cuenta Débito / Efectivo
@@ -612,7 +612,7 @@ export const ExpenseModal: React.FC = () => {
 
             if (selectedPm?.type === 'credit') {
               return (
-                <div style={{ marginTop: '10px', background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ marginTop: '0', marginBottom: '4px', background: 'var(--bg-subtle)', padding: '11px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
                     <label className="form-label" style={{ margin: 0, fontWeight: 600 }}>Fecha de pago estimada</label>
                     <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Crédito</span>
@@ -622,19 +622,22 @@ export const ExpenseModal: React.FC = () => {
                     onChange={setOverrideDueDate}
                     title="Puedes ajustar la fecha si tu banco la trasladó por feriado o fin de semana"
                   />
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                     {modalDueDateDetail.wasAdjusted ? (
-                      <span style={{ color: 'var(--accent-info)', display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                        <Sparkles size={12} /> <strong>Ajustado a día hábil:</strong> Vencía {modalDueDateDetail.originalDayOfWeek ? modalDueDateDetail.originalDayOfWeek.toLowerCase() : ''} {formatDisplayDate(modalDueDateDetail.nominalDueDate)}, trasladado al <strong>{formatDisplayDate(modalDueDateDetail.dueDate)}</strong> por feriado o fin de semana.
-                      </span>
+                      <div style={{ color: 'var(--accent-info)', display: 'flex', alignItems: 'flex-start', gap: '6px', lineHeight: '1.4' }}>
+                        <Sparkles size={13} style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <span><strong>Ajustado a día hábil:</strong> Vencía {modalDueDateDetail.originalDayOfWeek ? modalDueDateDetail.originalDayOfWeek.toLowerCase() : ''} {formatDisplayDate(modalDueDateDetail.nominalDueDate)}, trasladado al <strong>{formatDisplayDate(modalDueDateDetail.dueDate)}</strong> por feriado o fin de semana.</span>
+                      </div>
                     ) : (
-                      <span>
-                        📅 Vencimiento según tu ciclo: <strong>{formatDisplayDate(modalCalculatedDueDate)}</strong>. Puedes ajustarlo si tu banco asignó otra fecha.
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', lineHeight: '1.4' }}>
+                        <span>📅</span>
+                        <span>Vencimiento según tu ciclo: <strong>{formatDisplayDate(modalCalculatedDueDate)}</strong>. Puedes ajustarlo si tu banco asignó otra fecha.</span>
+                      </div>
                     )}
                     {modalDueDateDetail.closeWasAdjusted && modalDueDateDetail.belongsToNextCycle && (
-                      <div style={{ color: 'var(--accent-success)', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
-                        <Sparkles size={12} /> <strong>Corte adelantado al {modalDueDateDetail.closeOriginalDayOfWeek ? modalDueDateDetail.closeOriginalDayOfWeek.toLowerCase() : ''} {formatDisplayDate(modalDueDateDetail.effectiveCloseDate)}</strong> por fin de semana. Esta compra ingresa al siguiente ciclo de facturación.
+                      <div style={{ color: 'var(--accent-success)', display: 'flex', alignItems: 'flex-start', gap: '6px', lineHeight: '1.4' }}>
+                        <Sparkles size={13} style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <span><strong>Corte adelantado al {formatDisplayDate(modalDueDateDetail.effectiveCloseDate)}</strong> por fin de semana. Esta compra ingresa al siguiente ciclo de facturación.</span>
                       </div>
                     )}
                   </div>

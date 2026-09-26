@@ -144,13 +144,13 @@ export const TransactionsTab: React.FC = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-brand)', fontWeight: 600, fontSize: '0.82rem' }}>
           <Sparkles size={16} />
-          <span className="desktop-only">Registro Rápido con IA:</span>
+          <span className="desktop-only">Registro rápido:</span>
         </div>
         <div style={{ flex: 1, minWidth: '220px' }}>
           <input
             id="input-natural-expense"
             type="text"
-            placeholder="Ej: 'Cena chifa 45 soles ayer tarjeta bcp' o 'Uber 18 soles hoy'..."
+            placeholder="Ej: Cena chifa S/ 45 ayer con BCP o Uber 18 hoy..."
             value={naturalText}
             onChange={e => setNaturalText(e.target.value)}
             onKeyDown={async e => {
@@ -203,7 +203,7 @@ export const TransactionsTab: React.FC = () => {
           ) : (
             <>
               <Sparkles size={13} />
-              <span>Registrar con IA</span>
+              <span>Registrar</span>
             </>
           )}
         </button>

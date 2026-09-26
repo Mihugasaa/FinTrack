@@ -97,7 +97,7 @@ export const ExpenseModal: React.FC = () => {
               onClick={() => setIsRefundMode(false)}
             >
               <CreditCard size={14} />
-              <span>Gasto Regular</span>
+              <span>Gasto</span>
             </button>
             <button
               type="button"
@@ -108,14 +108,14 @@ export const ExpenseModal: React.FC = () => {
               }}
             >
               <TrendingUp size={14} />
-              <span>Reembolso / Abono a Favor</span>
+              <span>Reembolso / Abono</span>
             </button>
           </div>
         )}
 
         {isRefundMode && (
           <div style={{ padding: '10px 12px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)', marginBottom: '14px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-            🟢 <strong>Abono a favor de tu tarjeta o cuenta:</strong> Este registro reduce la deuda acumulada de tu tarjeta o suma a tu saldo positivo • sin descontar de tu cuenta débito.
+            🟢 Reduce la deuda en tarjetas de crédito o suma saldo a favor en cuentas de débito.
           </div>
         )}
 
@@ -126,7 +126,7 @@ export const ExpenseModal: React.FC = () => {
               <input
                 id="input-modal-natural-expense"
                 type="text"
-                placeholder="Describe tu gasto: 'ej. Almuerzo Bembos 35 ayer tarjeta bcp'..."
+                placeholder="Ej: Almuerzo S/ 35 ayer con BCP..."
                 value={modalNaturalText}
                 onChange={e => setModalNaturalText(e.target.value)}
                 onKeyDown={async e => {
@@ -165,7 +165,7 @@ export const ExpenseModal: React.FC = () => {
                 style={{ padding: '7px 10px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '5px' }}
               >
                 <Sparkles size={13} color="var(--accent-brand)" />
-                <span>{isParsingNaturalExpense ? 'Analizando...' : 'Autocompletar'}</span>
+                <span>{isParsingNaturalExpense ? 'Completando...' : 'Autocompletar'}</span>
               </button>
             </div>
 
@@ -200,12 +200,12 @@ export const ExpenseModal: React.FC = () => {
             >
               <Camera size={15} color="var(--accent-brand)" />
               {isScanningReceipt ? (
-                <span>Analizando voucher con Gemini IA...</span>
+                <span>Extrayendo datos del comprobante...</span>
               ) : (
-                <span>Escanear Comprobante o Voucher con IA</span>
+                <span>Escanear comprobante</span>
               )}
               <span className="reconciliation-ai-chip" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '0.68rem' }}>
-                <Sparkles size={11} /> Gemini Flash
+                <Sparkles size={11} /> Inteligente
               </span>
             </button>
             {scanReceiptError && (
@@ -250,10 +250,10 @@ export const ExpenseModal: React.FC = () => {
                   setSelectedCategoryId(aiSuggestion.categoryId);
                   if (aiSuggestion.isFixedSuggestion) setIsRecurring(true);
                 }}
-                title="Clic para confirmar categoría sugerida por IA"
+                title="Clic para aplicar categoría sugerida"
               >
                 <Sparkles size={13} />
-                <span>Auto-clasificado por IA: <strong>{aiSuggestion.categoryName}</strong> • {Math.round(aiSuggestion.confidence * 100)}%</span>
+                <span>Sugerencia: <strong>{aiSuggestion.categoryName}</strong></span>
                 {aiSuggestion.isFixedSuggestion && <span>• 📌 Fijo</span>}
               </div>
             )}
@@ -389,11 +389,11 @@ export const ExpenseModal: React.FC = () => {
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                   {tcInfo?.buyRate && tcInfo?.sellRate ? (
                     <span>
-                      SUNAT {tcInfo.date}: Venta <strong>S/ {tcInfo.sellRate.toFixed(3)}</strong> | Compra <strong>S/ {tcInfo.buyRate.toFixed(3)}</strong>. Puedes editarlo libremente si tu banco cobró otra tasa.
+                      SUNAT {tcInfo.date}: Venta <strong>S/ {tcInfo.sellRate.toFixed(3)}</strong> | Compra <strong>S/ {tcInfo.buyRate.toFixed(3)}</strong>. Puedes modificarlo si tu banco aplicó otra tasa.
                     </span>
                   ) : (
                     <span>
-                      Precio real del día de la compra en SUNAT/SBS. Puedes editarlo libremente si tu banco aplicó otro valor.
+                      Cotización oficial SUNAT/SBS. Puedes modificarla si tu banco aplicó otra tasa.
                     </span>
                   )}
                 </div>
@@ -481,10 +481,10 @@ export const ExpenseModal: React.FC = () => {
                   onClick={e => e.stopPropagation()}
                   style={{ fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none', color: 'var(--text-primary)', margin: 0 }}
                 >
-                  <strong>Gasto fijo recurrente *</strong>
+                  <strong>Gasto recurrente mensual</strong>
                 </label>
                 <span className="modal-footnote-note">
-                  * Se proyecta automáticamente cada mes para estimar tu presupuesto y flujo de caja.
+                  Se proyectará cada mes en tu presupuesto y flujo de caja.
                 </span>
               </div>
             </div>
@@ -512,7 +512,7 @@ export const ExpenseModal: React.FC = () => {
                       style={{ accentColor: 'var(--accent-primary)', width: '16px', height: '16px', cursor: 'pointer' }}
                     />
                     <label htmlFor="checkIsInstallment" onClick={e => e.stopPropagation()} style={{ margin: 0, fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
-                      💳 ¿Deseas diferir esta compra en cuotas?
+                      💳 Pagar en cuotas
                     </label>
                   </div>
 
@@ -562,15 +562,12 @@ export const ExpenseModal: React.FC = () => {
                       )}
 
                       <div style={{ padding: '8px 10px', background: 'rgba(99, 102, 241, 0.08)', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.2)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                        ✨ <strong>Plan financiero:</strong> Se crearán {installmentsCount} cuotas mensuales de aproximadamente{' '}
-                        <strong>
-                          {formatSoles(
-                            hasInterest && monthlyInstallmentAmount
-                              ? parseFloat(monthlyInstallmentAmount)
-                              : (parseFloat(amount || '0') / (parseInt(installmentsCount, 10) || 1)) * (currency === 'USD' ? parseFloat(exchangeRate || '1') : 1)
-                          )}
-                        </strong>{' '}
-                        cada una, con su fecha de vencimiento ajustada mes a mes al ciclo de tu tarjeta.
+                        ✨ <strong>{installmentsCount} cuotas estimadas de{' '}
+                        {formatSoles(
+                          hasInterest && monthlyInstallmentAmount
+                            ? parseFloat(monthlyInstallmentAmount)
+                            : (parseFloat(amount || '0') / (parseInt(installmentsCount, 10) || 1)) * (currency === 'USD' ? parseFloat(exchangeRate || '1') : 1)
+                        )} al mes</strong>, según el ciclo de tu tarjeta.
                       </div>
                     </div>
                   )}
@@ -617,27 +614,27 @@ export const ExpenseModal: React.FC = () => {
               return (
                 <div style={{ marginTop: '10px', background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
-                    <label className="form-label" style={{ margin: 0, fontWeight: 600 }}>Fecha de Pago Real (Vencimiento Bancario)</label>
-                    <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Diferido a Crédito</span>
+                    <label className="form-label" style={{ margin: 0, fontWeight: 600 }}>Fecha de pago estimada</label>
+                    <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Crédito</span>
                   </div>
                   <CustomDatePicker
                     value={overrideDueDate || modalCalculatedDueDate}
                     onChange={setOverrideDueDate}
-                    title="Puedes ajustar este día si el banco lo movió por ser fin de semana o feriado"
+                    title="Puedes ajustar la fecha si tu banco la trasladó por feriado o fin de semana"
                   />
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                     {modalDueDateDetail.wasAdjusted ? (
                       <span style={{ color: 'var(--accent-info)', display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                        <Sparkles size={12} /> <strong>Ajuste a Día Hábil Bancario:</strong> Ciclo nominal {formatDisplayDate(modalDueDateDetail.nominalDueDate)} ({modalDueDateDetail.originalDayOfWeek}), trasladado al <strong>{formatDisplayDate(modalDueDateDetail.dueDate)}</strong> por fin de semana o feriado.
+                        <Sparkles size={12} /> <strong>Ajustado a día hábil:</strong> Vencía {modalDueDateDetail.originalDayOfWeek ? modalDueDateDetail.originalDayOfWeek.toLowerCase() : ''} {formatDisplayDate(modalDueDateDetail.nominalDueDate)}, trasladado al <strong>{formatDisplayDate(modalDueDateDetail.dueDate)}</strong> por feriado o fin de semana.
                       </span>
                     ) : (
                       <span>
-                        📅 Ciclo estimado: <strong>{formatDisplayDate(modalCalculatedDueDate)}</strong>. Si tu banco lo trasladó a otro día, puedes cambiarlo aquí libremente.
+                        📅 Vencimiento según tu ciclo: <strong>{formatDisplayDate(modalCalculatedDueDate)}</strong>. Puedes ajustarlo si tu banco asignó otra fecha.
                       </span>
                     )}
                     {modalDueDateDetail.closeWasAdjusted && modalDueDateDetail.belongsToNextCycle && (
                       <div style={{ color: 'var(--accent-success)', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
-                        <Sparkles size={12} /> <strong>Corte hábil adelantado:</strong> Tu tarjeta cortó el <strong>{formatDisplayDate(modalDueDateDetail.effectiveCloseDate)}</strong> (adelantado del {modalDueDateDetail.closeOriginalDayOfWeek} {modalDueDateDetail.nominalCloseDate?.split('-')[2]}). ¡Esta compra entra al ciclo siguiente y ganas un mes de crédito!
+                        <Sparkles size={12} /> <strong>Corte adelantado al {modalDueDateDetail.closeOriginalDayOfWeek ? modalDueDateDetail.closeOriginalDayOfWeek.toLowerCase() : ''} {formatDisplayDate(modalDueDateDetail.effectiveCloseDate)}</strong> por fin de semana. Esta compra ingresa al siguiente ciclo de facturación.
                       </div>
                     )}
                   </div>
@@ -646,9 +643,9 @@ export const ExpenseModal: React.FC = () => {
             }
             return (
               <div className="modal-due-date-preview">
-                <span className="text-muted">Fecha de Salida Real:</span>
+                <span className="text-muted">Fecha de cargo:</span>
                 <span style={{ color: 'var(--accent-success)', fontWeight: 700 }}>
-                  {formatDisplayDate(txDate)} • Inmediato Débito / Efectivo
+                  {formatDisplayDate(txDate)} • Cargo inmediato
                 </span>
               </div>
             );

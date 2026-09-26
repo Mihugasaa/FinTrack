@@ -356,7 +356,7 @@ export function useTransactions({
       }
     } catch (err: any) {
       console.warn('Error al escanear comprobante:', err);
-      setScanReceiptError(err.message || 'Error al procesar el comprobante con Gemini IA');
+      setScanReceiptError(err.message || 'No se pudo leer el comprobante. Intenta con otra imagen o ingresa los datos manualmente.');
     } finally {
       setIsScanningReceipt(false);
       e.target.value = '';
@@ -403,7 +403,7 @@ export function useTransactions({
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'No se pudo interpretar el gasto con IA');
+        throw new Error(json.error || 'No se pudo interpretar el texto ingresado.');
       }
 
       const data = json.data;
@@ -443,7 +443,7 @@ export function useTransactions({
       setIsExpenseModalOpen(true);
     } catch (err: any) {
       console.warn('Error al interpretar gasto con lenguaje natural:', err);
-      setNaturalExpenseError(err.message || 'Error al procesar con IA');
+      setNaturalExpenseError(err.message || 'No se pudo interpretar el texto. Puedes completar los campos directamente.');
     } finally {
       setIsParsingNaturalExpense(false);
     }

@@ -342,7 +342,7 @@ export const AnalysisTab: React.FC = () => {
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>Copiloto CFO • Salud Financiera</span>
+                  <span>Diagnóstico de Salud Financiera</span>
                   <span
                     className={`badge ${scoreBadgeClass}`}
                     style={{ fontSize: '0.725rem' }}
@@ -457,7 +457,7 @@ export const AnalysisTab: React.FC = () => {
                 <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-brand)' }}>
                     <span>🎯</span>
-                    <span>Acción Inmediata CFO</span>
+                    <span>Recomendación prioritaria</span>
                   </div>
                   <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: '1.45' }}>
                     {cleanNarrativeText(cfoNarrative.actionableRecommendation)}
@@ -472,7 +472,7 @@ export const AnalysisTab: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface)', borderRadius: '10px', padding: '12px 16px', border: '1px dashed var(--border-default)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                 <span>💡</span>
-                <span>Tu puntaje ya está arriba. Pulsa <strong>Explicar en simple</strong> para leerlo en lenguaje claro y ver la acción que más te conviene esta semana.</span>
+                <span>Pulsa <strong>Explicar en simple</strong> para ver un resumen en lenguaje claro y la recomendación clave del mes.</span>
               </div>
             </div>
           )}

@@ -130,7 +130,7 @@ export const ReceivableModal: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Fecha en que realizaste el préstamo</label>
+            <label className="form-label">Fecha del préstamo</label>
             <CustomDatePicker
               id="input-loan-date"
               value={loanDate}
@@ -243,8 +243,8 @@ export const ReceivableModal: React.FC = () => {
                 background: 'var(--bg-subtle)',
                 borderRadius: '8px',
                 border: '1px solid var(--border-subtle)',
-                marginTop: '10px',
-                marginBottom: '16px',
+                marginTop: '0',
+                marginBottom: '12px',
                 cursor: 'pointer'
               }}
               onClick={() => setLoanIsDebitedFromAccount(prev => !prev)}
@@ -266,11 +266,11 @@ export const ReceivableModal: React.FC = () => {
                   onClick={e => e.stopPropagation()}
                   style={{ fontSize: '0.825rem', color: 'var(--text-primary)', cursor: 'pointer', margin: 0, lineHeight: 1.45 }}
                 >
-                  <strong>¿El dinero que presté sale de mi saldo en cuenta Débito?</strong>
+                  <strong>Descontar de mi cuenta bancaria</strong>
                   <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '2px' }}>
                     {loanCurrency === 'USD' && loanAmount && !isNaN(parseFloat(loanAmount))
                       ? `Se debitarán S/ ${(parseFloat(loanAmount) * (parseFloat(loanExchangeRate) || FALLBACK_USD_PEN_RATE)).toFixed(2)} • $${parseFloat(loanAmount).toFixed(2)} USD al cambio • de tu saldo disponible y se registrará la salida en tus movimientos.`
-                      : 'Marca esta opción si el dinero salió de tu cuenta bancaria para descontar de tu saldo disponible y registrarlo en tus movimientos.'}
+                      : 'Registra la salida en tus movimientos y descuenta el monto de tu saldo disponible actual.'}
                   </span>
                 </label>
               </div>
@@ -281,7 +281,7 @@ export const ReceivableModal: React.FC = () => {
                   onClick={e => e.stopPropagation()}
                 >
                   <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>
-                    Cuenta de débito de la cual salió el dinero:
+                    Cuenta de débito de origen:
                   </label>
                   <CustomSelect
                     id="select-loan-payment-method"

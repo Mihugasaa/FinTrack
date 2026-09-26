@@ -303,9 +303,9 @@ export const CardModal: React.FC = () => {
 
               <div className="form-group">
                 <label className="form-label">
-                  Deuda Previa Arrastrada (S/)
+                  Deuda previa acumulada (S/)
                   <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: '6px' }}>
-                    (opcional: si ya tienes consumos de meses previos pendientes de pago)
+                    (opcional: consumos pendientes de meses anteriores)
                   </span>
                 </label>
                 <input
@@ -329,7 +329,7 @@ export const CardModal: React.FC = () => {
               Cancelar
             </button>
             <button type="submit" className="btn-primary">
-              Crear Tarjeta
+              {newCardType === 'credit' ? 'Crear Tarjeta' : 'Crear Cuenta'}
             </button>
           </div>
         </form>

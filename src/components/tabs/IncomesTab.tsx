@@ -230,11 +230,11 @@ export const IncomesTab: React.FC = () => {
 
           {/* Pie de ayuda sutil que equilibra la altura */}
           <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', paddingTop: '12px', borderTop: '1px dashed var(--border-subtle)', marginTop: '16px' }}>
-            💡 Los sueldos se reflejan automáticamente en tu liquidez bancaria al cumplirse su día de abono programado.
+            💡 Los sueldos programados se acreditan a tu saldo disponible en su fecha de pago.
           </div>
         </div>
 
-        {/* Columna Derecha: Panel de Destino del Sueldo & Salud Financiera (100% Dinámico) */}
+        {/* Columna Derecha: Panel de Destino del Sueldo & Salud Financiera */}
         <div className="clean-card" style={{ padding: '22px', background: 'var(--bg-subtle)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', marginBottom: 0 }}>
           <div>
             <div className="section-header" style={{ marginBottom: '14px' }}>
@@ -242,7 +242,6 @@ export const IncomesTab: React.FC = () => {
                 <PieChart size={16} color="var(--accent-brand)" />
                 <span>Destino y Salud del Sueldo</span>
               </h3>
-              <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>Dinámico</span>
             </div>
 
             <p className="text-body-sm text-muted" style={{ marginBottom: '14px' }}>

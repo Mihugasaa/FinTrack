@@ -67,7 +67,7 @@ export const IncomeModal: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Fecha del Ingreso</label>
+            <label className="form-label">Fecha de ingreso</label>
             <CustomDatePicker
               id="input-income-date"
               value={incomeDate}
@@ -76,7 +76,7 @@ export const IncomeModal: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Monto Ingresado • Soles</label>
+            <label className="form-label">Monto (S/)</label>
             <input
               id="input-income-amount"
               type="number"
@@ -98,7 +98,7 @@ export const IncomeModal: React.FC = () => {
               Cancelar
             </button>
             <button type="submit" className="btn-primary">
-              Agregar a Débito
+              Guardar Ingreso
             </button>
           </div>
         </form>

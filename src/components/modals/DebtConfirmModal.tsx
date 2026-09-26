@@ -61,7 +61,6 @@ export const DebtConfirmModal: React.FC = () => {
         style={{
           maxWidth: '530px',
           width: '100%',
-          padding: '22px 26px',
           borderTop: isPayable ? '3px solid var(--accent-warning)' : '3px solid var(--accent-success)',
           borderRadius: '16px'
         }}
@@ -132,7 +131,7 @@ export const DebtConfirmModal: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '14px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {isPayable ? 'Acreedor (A quien debes)' : 'Deudor (A quien prestaste)'}
+                {isPayable ? 'Acreedor' : 'Deudor'}
               </div>
               <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
                 {item.partyName}
@@ -145,7 +144,7 @@ export const DebtConfirmModal: React.FC = () => {
               className={isPayable ? 'badge badge-warning' : 'badge badge-success'}
               style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: '8px', flexShrink: 0 }}
             >
-              {isPayable ? 'Deuda Mía' : 'Préstamo por Cobrar'}
+              {isPayable ? 'Deuda' : 'Por Cobrar'}
             </span>
           </div>
 
@@ -235,7 +234,7 @@ export const DebtConfirmModal: React.FC = () => {
                 }}
               >
                 <CheckCircle2 size={13} />
-                <span>¡Quedará 100% saldado!</span>
+                <span>Quedará saldado en su totalidad</span>
               </span>
             ) : (
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -265,7 +264,7 @@ export const DebtConfirmModal: React.FC = () => {
         </div>
 
         {/* Botones de Acción */}
-        <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+        <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button
             type="button"
             className="btn-secondary"

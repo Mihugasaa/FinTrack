@@ -58,7 +58,7 @@ export const PayableModal: React.FC = () => {
           <div className="modal-drag-handle" />
         </div>
         <div className="modal-title-row">
-          <span className="text-h2 font-bold">{isEditing ? 'Editar Deuda Mía' : 'Registrar Deuda Mía'}</span>
+          <span className="text-h2 font-bold">{isEditing ? 'Editar Deuda' : 'Registrar Deuda'}</span>
           <button id="btn-close-payable-modal" className="month-nav-btn modal-close-btn" onClick={onClose}>
             <X size={16} />
           </button>
@@ -66,7 +66,7 @@ export const PayableModal: React.FC = () => {
 
         <form onSubmit={onSubmit}>
           <div className="form-group">
-            <label className="form-label">¿Quién te prestó el dinero? • Acreedor</label>
+            <label className="form-label">¿Quién te prestó el dinero?</label>
             <input
               id="input-payable-creditor"
               type="text"
@@ -127,7 +127,7 @@ export const PayableModal: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Fecha en que te prestaron el dinero</label>
+            <label className="form-label">Fecha del préstamo</label>
             <CustomDatePicker
               id="input-payable-issue-date"
               value={payableIssueDate}
@@ -231,7 +231,7 @@ export const PayableModal: React.FC = () => {
           )}
 
           <div className="form-group">
-            <label className="form-label">Fecha Límite de Devolución • Opcional</label>
+            <label className="form-label">Fecha límite de pago (opcional)</label>
             <CustomDatePicker
               id="input-payable-due-date"
               value={payableDueDate}
@@ -250,8 +250,8 @@ export const PayableModal: React.FC = () => {
               background: 'var(--bg-subtle)',
               borderRadius: '8px',
               border: '1px solid var(--border-subtle)',
-              marginTop: '8px',
-              marginBottom: '16px',
+              marginTop: '0',
+              marginBottom: '12px',
               cursor: 'pointer'
             }}
             onClick={() => setPayableIsCreditedToDebit(prev => !prev)}
@@ -272,11 +272,11 @@ export const PayableModal: React.FC = () => {
               onClick={e => e.stopPropagation()}
               style={{ fontSize: '0.825rem', color: 'var(--text-primary)', cursor: 'pointer', margin: 0, lineHeight: 1.45 }}
             >
-              <strong>¿Abonar este monto inicial a mi saldo en cuenta Débito?</strong>
+              <strong>Sumar a mi cuenta bancaria</strong>
               <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '2px' }}>
                 {payableCurrency === 'USD' && payableAmount && !isNaN(parseFloat(payableAmount))
                   ? `Se abonarán S/ ${(parseFloat(payableAmount) * (parseFloat(payableExchangeRate) || FALLBACK_USD_PEN_RATE)).toFixed(2)} • $${parseFloat(payableAmount).toFixed(2)} USD al cambio • a tu saldo disponible actual.`
-                  : 'Marca esta opción si el dinero ingresó a tu cuenta bancaria para sumar a tu saldo disponible actual.'}
+                  : 'Registra el ingreso en tu saldo disponible actual.'}
               </span>
             </label>
           </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Sparkles } from 'lucide-react';
+import { X, Sparkles, Info } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
@@ -53,12 +53,12 @@ export const AdjustDebitModal: React.FC = () => {
 
         <form onSubmit={onSubmit}>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-<strong>{monthNames[currentMonth]} {currentYear}</strong> arranca con el saldo con que cerró el mes pasado. Escribe un monto aquí solo si quieres fijar otro valor a mano.
+            <strong>{monthNames[currentMonth]} {currentYear}</strong> inicia con el saldo de cierre del mes anterior. Ingresa un monto aquí solo si deseas fijar un saldo inicial personalizado.
           </p>
 
           {isInitialDebitAuto && (
             <p style={{ fontSize: '0.75rem', color: 'var(--accent-info)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Sparkles size={13} /> Este mes está usando el saldo que viene del mes pasado.
+              <Info size={13} /> Saldo sincronizado automáticamente con el mes anterior.
             </p>
           )}
 

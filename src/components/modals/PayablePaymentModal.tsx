@@ -49,7 +49,6 @@ export const PayablePaymentModal: React.FC = () => {
         style={{
           maxWidth: '530px',
           width: '100%',
-          padding: '22px 26px',
           borderTop: '3px solid var(--accent-warning)',
           borderRadius: '16px',
           overflow: 'visible'
@@ -116,7 +115,7 @@ export const PayablePaymentModal: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Acreedor (A quien debes)
+                  Acreedor
                 </div>
                 <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
                   {payingCreditorGroup ? payingCreditorGroup.creditorName : payingPayable?.creditorName}
@@ -131,7 +130,7 @@ export const PayablePaymentModal: React.FC = () => {
                 className="badge badge-warning"
                 style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: '8px', flexShrink: 0 }}
               >
-                Deuda Mía
+                Deuda
               </span>
             </div>
 
@@ -201,7 +200,7 @@ export const PayablePaymentModal: React.FC = () => {
 
           {/* Campo Notas / Constancia */}
           <div className="form-group">
-            <label className="form-label">Notas / Constancia • Opcional</label>
+            <label className="form-label">Notas o constancia (opcional)</label>
             <input
               type="text"
               placeholder="ej. Transferencia BCP, Yape, Efectivo"
@@ -212,12 +211,12 @@ export const PayablePaymentModal: React.FC = () => {
           </div>
 
           {/* Efecto Financiero */}
-          <div style={{ padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginBottom: '16px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-            💡 <strong>Efecto financiero:</strong> Este pago amortiza la deuda con tu acreedor y se descuenta de tu flujo disponible sin duplicar gastos de consumo.
+          <div style={{ padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginBottom: '14px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+            💡 <strong>Nota:</strong> Este pago amortiza tu deuda pendiente y se registra en tus movimientos sin duplicar gastos.
           </div>
 
           {/* Acciones */}
-          <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
             <button
               type="button"
               className="btn-secondary"

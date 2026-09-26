@@ -50,7 +50,6 @@ export const CollectModal: React.FC = () => {
         style={{
           maxWidth: '530px',
           width: '100%',
-          padding: '22px 26px',
           borderTop: '3px solid var(--accent-success)',
           borderRadius: '16px',
           overflow: 'visible'
@@ -117,7 +116,7 @@ export const CollectModal: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Deudor (A quien prestaste)
+                  Deudor
                 </div>
                 <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
                   {collectingDebtorGroup ? collectingDebtorGroup.debtorName : collectingRec?.debtorName}
@@ -132,7 +131,7 @@ export const CollectModal: React.FC = () => {
                 className="badge badge-success"
                 style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: '8px', flexShrink: 0 }}
               >
-                Préstamo por Cobrar
+                Por Cobrar
               </span>
             </div>
 
@@ -156,7 +155,7 @@ export const CollectModal: React.FC = () => {
 
           {/* Monto Input y Botones Rápidos */}
           <div className="form-group">
-            <label className="form-label">Monto recibido • Soles</label>
+            <label className="form-label">Monto recibido (S/)</label>
             <input
               id="input-collect-amount"
               type="number"
@@ -192,7 +191,7 @@ export const CollectModal: React.FC = () => {
 
           {/* Selector de Fecha de Cobranza */}
           <div className="form-group">
-            <label className="form-label">Fecha de Cobranza</label>
+            <label className="form-label">Fecha de cobro</label>
             <CustomDatePicker
               value={collectPaymentDate}
               onChange={setCollectPaymentDate}
@@ -201,7 +200,7 @@ export const CollectModal: React.FC = () => {
 
           {/* Notas / Constancia Opcional */}
           <div className="form-group">
-            <label className="form-label">Notas / Constancia • Opcional</label>
+            <label className="form-label">Notas o constancia (opcional)</label>
             <input
               type="text"
               placeholder="ej. Yape, Plin, Transferencia BCP, Efectivo"
@@ -212,12 +211,12 @@ export const CollectModal: React.FC = () => {
           </div>
 
           {/* Efecto Financiero */}
-          <div style={{ padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginBottom: '16px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-            💡 <strong>Efecto financiero:</strong> Este abono ingresa a tu flujo y reduce directamente el saldo que te debe tu prestatario.
+          <div style={{ padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginBottom: '14px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+            💡 <strong>Nota:</strong> Este cobro se registra en tus movimientos y reduce el saldo pendiente por cobrar.
           </div>
 
           {/* Acciones */}
-          <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
             <button
               type="button"
               className="btn-secondary"

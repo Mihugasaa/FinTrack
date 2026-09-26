@@ -525,7 +525,7 @@ export const OverviewTab: React.FC = () => {
                               Amortización a {pay.creditorName}
                             </span>
                             <span className="badge badge-warning" style={{ fontSize: '0.625rem', padding: '1px 5px', flexShrink: 0 }}>
-                              Deuda Mía
+                              Deuda
                             </span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', fontSize: '0.72rem', color: '#10b981' }}>
@@ -783,7 +783,7 @@ export const OverviewTab: React.FC = () => {
                         <div className="mobile-tx-info">
                           <div className="mobile-tx-title-row">
                             <span className="mobile-tx-title">Amortización a {pay.creditorName}</span>
-                            <span className="badge badge-warning" style={{ fontSize: '0.625rem', padding: '1px 4px' }}>Deuda Mía</span>
+                            <span className="badge badge-warning" style={{ fontSize: '0.625rem', padding: '1px 4px' }}>Deuda</span>
                           </div>
                           <div className="mobile-tx-meta">
                             <span>{formatDisplayDate(pay.paymentDate)}</span>

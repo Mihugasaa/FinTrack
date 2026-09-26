@@ -155,12 +155,12 @@ export const ReconciliationTab: React.FC = () => {
               Arrastra tu Estado de Cuenta en PDF, Excel o CSV o haz clic para examinar
             </strong>
             <p style={{ margin: '4px 0 0 0', fontSize: '0.775rem', color: 'var(--text-muted)' }}>
-              Compatible con estados de cuenta en PDF de BCP, BBVA, Interbank y Scotiabank mediante IA Gemini, así como planillas Excel y CSV.
+              Compatible con estados de cuenta en PDF (BCP, BBVA, Interbank, Scotiabank), Excel y CSV.
             </p>
           </div>
           {isParsingStatement && (
             <span className="reconciliation-ai-chip">
-              <Sparkles size={12} /> Procesando y auditando con IA...
+              <Sparkles size={12} /> Auditando estado de cuenta...
             </span>
           )}
         </div>

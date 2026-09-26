@@ -47,7 +47,6 @@ export const EditCollectModal: React.FC = () => {
         style={{
           maxWidth: '500px',
           width: '100%',
-          padding: '24px 26px',
           borderTop: '3px solid var(--accent-success)',
           borderRadius: '16px',
           overflow: 'visible'
@@ -160,7 +159,7 @@ export const EditCollectModal: React.FC = () => {
           <div className="form-group" style={{ marginBottom: '14px' }}>
             <div style={{ marginBottom: '6px' }}>
               <label className="form-label" style={{ margin: 0, fontWeight: 600, fontSize: '0.84rem' }}>
-                Fecha de Cobranza
+                Fecha de cobro
               </label>
             </div>
 
@@ -171,9 +170,9 @@ export const EditCollectModal: React.FC = () => {
           </div>
 
           {/* Notas / Referencia */}
-          <div className="form-group" style={{ marginBottom: '22px' }}>
+          <div className="form-group" style={{ marginBottom: '16px' }}>
             <label className="form-label" style={{ fontWeight: 600, fontSize: '0.84rem' }}>
-              Notas / Referencia (Opcional)
+              Notas o referencia (opcional)
             </label>
             <input
               type="text"
@@ -185,7 +184,7 @@ export const EditCollectModal: React.FC = () => {
           </div>
 
           {/* Botones de Acción */}
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '4px' }}>
+          <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button
               type="button"
               className="btn-secondary"

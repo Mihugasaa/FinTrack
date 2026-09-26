@@ -440,7 +440,7 @@ export const TransactionsTab: React.FC = () => {
                           <td>
                             <div className="tx-concept-main">
                               <span>Amortización a {pay.creditorName}</span>
-                              <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Deuda Mía</span>
+                              <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Deuda</span>
                             </div>
                             <div className="tx-concept-sub">
                               {pay.description || 'Devolución de deuda'}

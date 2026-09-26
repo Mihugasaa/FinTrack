@@ -330,7 +330,7 @@ export const ReceivablesTab: React.FC = () => {
               title="Registrar un nuevo compromiso o deuda que debes devolver"
             >
               <Plus size={15} />
-              <span>Registrar Deuda Mía</span>
+              <span>Registrar Deuda</span>
             </button>
           )}
         </div>
@@ -357,18 +357,18 @@ export const ReceivablesTab: React.FC = () => {
           {/* Cuadrícula Armónica de Fichas de Deudores */}
           <div className="loans-harmonious-grid">
             {filteredDebtorGroups.length === 0 ? (
-              <div className="clean-card" style={{ width: '100%', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                <Users size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                <p style={{ fontWeight: 600 }}>
+              <div className="clean-card" style={{ width: '100%', textAlign: 'center', padding: '24px 16px', color: 'var(--text-muted)' }}>
+                <Users size={32} style={{ opacity: 0.35, marginBottom: '8px' }} />
+                <p style={{ fontWeight: 600, margin: '0 0 4px 0' }}>
                   {receivablesFilter === 'pending'
-                    ? '¡Excelente! No tienes cuentas por cobrar pendientes'
+                    ? 'Sin cuentas por cobrar pendientes'
                     : receivablesFilter === 'paid'
-                    ? 'Aún no hay préstamos saldados en el historial'
-                    : 'No tienes personas ni préstamos registrados'}
+                    ? 'No hay préstamos saldados en el historial'
+                    : 'No tienes préstamos registrados'}
                 </p>
-                <p style={{ fontSize: '0.85rem' }}>
+                <p style={{ fontSize: '0.825rem', margin: 0 }}>
                   {receivablesFilter === 'pending'
-                    ? 'Todos los deudores están al día o saldados.'
+                    ? 'No registras saldos pendientes de cobro.'
                     : 'Registra un préstamo personal usando el botón superior.'}
                 </p>
               </div>
@@ -716,19 +716,19 @@ export const ReceivablesTab: React.FC = () => {
           {/* Cuadrícula Armónica de Fichas de Acreedores */}
           <div className="loans-harmonious-grid">
             {filteredCreditorGroups.length === 0 ? (
-              <div className="clean-card" style={{ width: '100%', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                <CheckCircle2 size={40} style={{ opacity: 0.3, marginBottom: '12px', color: 'var(--accent-success)' }} />
-                <p style={{ fontWeight: 600 }}>
+              <div className="clean-card" style={{ width: '100%', textAlign: 'center', padding: '24px 16px', color: 'var(--text-muted)' }}>
+                <CheckCircle2 size={32} style={{ opacity: 0.35, marginBottom: '8px', color: 'var(--accent-success)' }} />
+                <p style={{ fontWeight: 600, margin: '0 0 4px 0' }}>
                   {payablesFilter === 'pending'
-                    ? '¡Excelente! No tienes compromisos o deudas pendientes'
+                    ? 'Sin deudas pendientes'
                     : payablesFilter === 'paid'
-                    ? 'Aún no hay deudas saldadas en el historial'
-                    : 'No tienes personas ni deudas registradas'}
+                    ? 'No hay deudas saldadas en el historial'
+                    : 'No tienes deudas registradas'}
                 </p>
-                <p style={{ fontSize: '0.85rem' }}>
+                <p style={{ fontSize: '0.825rem', margin: 0 }}>
                   {payablesFilter === 'pending'
-                    ? 'Todos tus compromisos están al día o saldados.'
-                    : 'Usa el botón "+ Registrar Deuda Mía" para registrar un compromiso.'}
+                    ? 'No registras obligaciones de pago pendientes.'
+                    : 'Usa el botón "+ Registrar Deuda" para registrar un compromiso.'}
                 </p>
               </div>
             ) : (

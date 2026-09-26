@@ -32,6 +32,7 @@ import {
   formatDisplayDate,
   formatSoles,
   getEffectiveDayOfMonth,
+  getEffectiveBillingCloseDate,
   getEndOfMonthDate,
   getFallbackReceivablePaymentDate
 } from '@/lib/calculations';
@@ -1182,15 +1183,20 @@ function useFinanceController() {
       let scorePayByDate: string | null = null;
       if (closeDay > 0) {
         let cy = nowRef.getFullYear();
-        let cm = nowRef.getMonth(); // 0-indexado
-        if (nowRef.getDate() > closeDay) {
+        let cm = nowRef.getMonth() + 1; // 1-12
+        const closeThisMonth = getEffectiveBillingCloseDate(cy, cm, closeDay);
+        if (todayStr > closeThisMonth.effectiveDate) {
           cm += 1;
-          if (cm > 11) { cm = 0; cy += 1; }
+          if (cm > 12) {
+            cm = 1;
+            cy += 1;
+          }
         }
-        const clampedDay = Math.min(closeDay, new Date(cy, cm + 1, 0).getDate());
-        nextCloseDate = `${cy}-${(cm + 1).toString().padStart(2, '0')}-${clampedDay.toString().padStart(2, '0')}`;
-        // Sugerencia: abonar ~2 días antes del corte para que el pago alcance a procesar.
-        const sd = new Date(cy, cm, clampedDay, 12, 0, 0);
+        const effectiveClose = getEffectiveBillingCloseDate(cy, cm, closeDay);
+        nextCloseDate = effectiveClose.effectiveDate;
+        // Sugerencia: abonar ~2 días antes del corte efectivo para que el pago alcance a procesar.
+        const [clY, clM, clD] = nextCloseDate.split('-').map(Number);
+        const sd = new Date(clY, clM - 1, clD, 12, 0, 0);
         sd.setDate(sd.getDate() - 2);
         scorePayByDate = `${sd.getFullYear()}-${(sd.getMonth() + 1).toString().padStart(2, '0')}-${sd.getDate().toString().padStart(2, '0')}`;
       }

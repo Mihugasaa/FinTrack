@@ -148,6 +148,37 @@ export function useTransactions({
     }
   }, [paymentMethods, selectedMethodId]);
 
+  // Auto-sanación silenciosa: alinea automáticamente vencimientos de tarjetas de crédito
+  // al corte hábil bancario real en segundo plano, sin requerir acciones manuales ni botones extras.
+  useEffect(() => {
+    if (!paymentMethods || paymentMethods.length === 0 || transactions.length === 0) return;
+    let hasChanges = false;
+    const healed = transactions.map(t => {
+      const pm = resolvePaymentMethod(t, paymentMethods);
+      if (pm && pm.type === 'credit' && pm.billingCloseDay) {
+        const correctDueDate = calculatePaymentDueDate(t.date, pm);
+        if (correctDueDate && t.paymentDueDate !== correctDueDate) {
+          hasChanges = true;
+          SupabaseDataService.updateTransaction({
+            ...t,
+            paymentMethodId: pm.id,
+            paymentDueDate: correctDueDate
+          });
+          return {
+            ...t,
+            paymentMethodId: pm.id,
+            paymentDueDate: correctDueDate
+          };
+        }
+      }
+      return t;
+    });
+
+    if (hasChanges) {
+      setTransactions(healed);
+    }
+  }, [paymentMethods, transactions]);
+
   const currentMonthTransactions = useMemo(() => {
     // Orden: fecha desc y, dentro del mismo día, el MÁS RECIENTE primero según el
     // timestamp de creación embebido en notes (`[created:ISO]`). Así un gasto recién
@@ -233,10 +264,17 @@ export function useTransactions({
     setHasUserManuallyEditedTc(true); // Tratar como valor customizado para no sobreescribir involuntariamente
     setSelectedCategoryId(tx.categoryId);
     const resolvedPm = resolvePaymentMethod(tx, paymentMethods);
-    setSelectedMethodId(resolvedPm?.id || tx.paymentMethodId || paymentMethods[0]?.id || '');
+    const resolvedPmId = resolvedPm?.id || tx.paymentMethodId || paymentMethods[0]?.id || '';
+    setSelectedMethodId(resolvedPmId);
     setTxDate(tx.date);
     setIsRecurring(!!tx.isFixedSubscription);
-    setOverrideDueDate(tx.paymentDueDate || '');
+
+    // Auto-alineación al ciclo bancario hábil real:
+    const properDueDate = (resolvedPm && resolvedPm.type === 'credit' && resolvedPm.billingCloseDay)
+      ? calculatePaymentDueDate(tx.date, resolvedPm)
+      : (tx.paymentDueDate || tx.date);
+
+    setOverrideDueDate(properDueDate);
     setIsRefundMode(!!tx.isRefund);
     setIsInstallment(!!tx.isInstallment);
     setInstallmentsCount(tx.totalInstallments ? tx.totalInstallments.toString() : '3');

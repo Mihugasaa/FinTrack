@@ -77,11 +77,107 @@ export function adjustToNextBusinessDay(dateStr: string): {
   };
 }
 
+/**
+ * Traslada una fecha al día hábil bancario anterior si cae sábado, domingo o feriado oficial
+ * (regla estándar bancaria para el corte contable de facturación de tarjetas de crédito)
+ */
+export function adjustToPreviousBusinessDay(dateStr: string): {
+  originalDate: string;
+  adjustedDate: string;
+  wasAdjusted: boolean;
+  originalDayOfWeek?: string;
+} {
+  if (!dateStr || !dateStr.includes('-')) {
+    return { originalDate: dateStr, adjustedDate: dateStr, wasAdjusted: false };
+  }
+
+  const [yStr, mStr, dStr] = dateStr.split('-');
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  const d = parseInt(dStr, 10);
+
+  // Usar las 12:00 para evitar desajustes por horario de verano o zonas horarias
+  const dateObj = new Date(y, m - 1, d, 12, 0, 0);
+  const originalDay = dateObj.getDay();
+  let wasAdjusted = false;
+
+  while (true) {
+    const dayOfWeek = dateObj.getDay(); // 0 = Domingo, 6 = Sábado
+    const curMonth = dateObj.getMonth() + 1;
+    const curDay = dateObj.getDate();
+
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isHoliday = isPeruvianBankHoliday(curMonth, curDay);
+
+    if (isWeekend || isHoliday) {
+      wasAdjusted = true;
+      dateObj.setDate(dateObj.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  const finalY = dateObj.getFullYear();
+  const finalM = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+  const finalD = dateObj.getDate().toString().padStart(2, '0');
+  const daysMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+  return {
+    originalDate: dateStr,
+    adjustedDate: `${finalY}-${finalM}-${finalD}`,
+    wasAdjusted,
+    originalDayOfWeek: daysMap[originalDay]
+  };
+}
+
+/**
+ * Retorna la fecha exacta de corte de facturación para un año y mes dados,
+ * ajustando al día hábil anterior si cae sábado, domingo o feriado oficial bancario.
+ */
+export function getEffectiveBillingCloseDate(
+  year: number,
+  month: number,
+  billingCloseDay: number,
+  adjustPriorBusinessDay: boolean = true
+): {
+  nominalDate: string;
+  effectiveDate: string;
+  wasAdjusted: boolean;
+  originalDayOfWeek?: string;
+} {
+  const maxDays = getDaysInMonth(year, month);
+  const clampedDay = Math.min(billingCloseDay, maxDays);
+  const mStr = month.toString().padStart(2, '0');
+  const dStr = clampedDay.toString().padStart(2, '0');
+  const nominalDate = `${year}-${mStr}-${dStr}`;
+
+  if (!adjustPriorBusinessDay) {
+    return {
+      nominalDate,
+      effectiveDate: nominalDate,
+      wasAdjusted: false
+    };
+  }
+
+  const adjustment = adjustToPreviousBusinessDay(nominalDate);
+  return {
+    nominalDate,
+    effectiveDate: adjustment.adjustedDate,
+    wasAdjusted: adjustment.wasAdjusted,
+    originalDayOfWeek: adjustment.originalDayOfWeek
+  };
+}
+
 export interface DueDateDetail {
   nominalDueDate: string;
   dueDate: string;
   wasAdjusted: boolean;
   originalDayOfWeek?: string;
+  nominalCloseDate?: string;
+  effectiveCloseDate?: string;
+  closeWasAdjusted?: boolean;
+  closeOriginalDayOfWeek?: string;
+  belongsToNextCycle?: boolean;
 }
 
 /**
@@ -211,7 +307,8 @@ export function formatDisplayDate(dateStr?: string | null, fallback: string = 'S
 
 /**
  * Calcula la fecha de pago real según el ciclo de facturación de la tarjeta y ajusta a días hábiles
- * Réplica matemática exacta de la lógica del Excel bancario
+ * - Corte de facturación: si cae sábado, domingo o feriado bancario, se traslada al día hábil anterior.
+ * - Fecha límite de pago: si cae sábado, domingo o feriado, se traslada al siguiente día hábil.
  */
 export function calculatePaymentDueDate(
   dateStr: string,
@@ -222,23 +319,21 @@ export function calculatePaymentDueDate(
     return dateStr;
   }
 
-  const [yStr, mStr, dStr] = dateStr.split('-');
+  const [yStr, mStr] = dateStr.split('-');
   const year = parseInt(yStr, 10);
   const month = parseInt(mStr, 10); // 1-12
-  const day = parseInt(dStr, 10);
 
-  const daysInCurrentMonth = getDaysInMonth(year, month);
   const corte = method.billingCloseDay;
-  // En meses cortos (ej. febrero), el corte no puede exceder el fin de mes
-  const effectiveCorte = Math.min(corte, daysInCurrentMonth);
   const pago = method.paymentDueDay || corte;
 
-  // 1. Determinar fecha de cierre de facturación
+  // 1. Determinar fecha de cierre de facturación efectiva (ajustada al día hábil anterior si cae no hábil)
+  const closeInfo = getEffectiveBillingCloseDate(year, month, corte);
+
   let cierreYear = year;
   let cierreMonth = month;
 
-  if (day > effectiveCorte) {
-    // Si la compra fue después del corte, entra en el ciclo del mes siguiente
+  // Si la compra ocurrió estrictamente después de la fecha efectiva de corte, entra en el ciclo del mes siguiente
+  if (dateStr > closeInfo.effectiveDate) {
     cierreMonth += 1;
     if (cierreMonth > 12) {
       cierreMonth = 1;
@@ -275,7 +370,8 @@ export function calculatePaymentDueDate(
 }
 
 /**
- * Retorna detalles ampliados del vencimiento (fecha nominal vs ajustada por día hábil)
+ * Retorna detalles ampliados del vencimiento (fecha nominal vs ajustada por día hábil,
+ * así como la fecha de corte efectiva ajustada al día hábil anterior).
  */
 export function calculatePaymentDueDateDetail(
   dateStr: string,
@@ -289,6 +385,13 @@ export function calculatePaymentDueDateDetail(
     };
   }
 
+  const [yStr, mStr] = dateStr.split('-');
+  const year = parseInt(yStr, 10);
+  const month = parseInt(mStr, 10);
+
+  const closeInfo = getEffectiveBillingCloseDate(year, month, method.billingCloseDay);
+  const belongsToNextCycle = dateStr > closeInfo.effectiveDate;
+
   const nominalDueDate = calculatePaymentDueDate(dateStr, method, false);
   const adjustment = adjustToNextBusinessDay(nominalDueDate);
 
@@ -296,7 +399,12 @@ export function calculatePaymentDueDateDetail(
     nominalDueDate,
     dueDate: adjustment.adjustedDate,
     wasAdjusted: adjustment.wasAdjusted,
-    originalDayOfWeek: adjustment.originalDayOfWeek
+    originalDayOfWeek: adjustment.originalDayOfWeek,
+    nominalCloseDate: closeInfo.nominalDate,
+    effectiveCloseDate: closeInfo.effectiveDate,
+    closeWasAdjusted: closeInfo.wasAdjusted,
+    closeOriginalDayOfWeek: closeInfo.originalDayOfWeek,
+    belongsToNextCycle
   };
 }
 
@@ -333,25 +441,25 @@ export function getBestCardRecommendation(
     const diffTime = dueDate.getTime() - referenceDate.getTime();
     const creditDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
-    // Días hasta el próximo corte evitando desbordamiento de fin de mes en JS
+    // Días hasta el próximo corte considerando ajuste a día hábil anterior
     const curYear = referenceDate.getFullYear();
-    const curMonth = referenceDate.getMonth(); // 0-11
-    const daysThisMonth = getDaysInMonth(curYear, curMonth + 1);
-    const effCloseDayThisMonth = Math.min(card.billingCloseDay || 1, daysThisMonth);
+    const curMonth = referenceDate.getMonth() + 1; // 1-12
+    const closeThisMonth = getEffectiveBillingCloseDate(curYear, curMonth, card.billingCloseDay || 1);
 
-    let closeDateThisMonth = new Date(curYear, curMonth, effCloseDayThisMonth);
-    if (referenceDate.getDate() > effCloseDayThisMonth) {
+    let nextEffectiveCloseDateStr = closeThisMonth.effectiveDate;
+    if (todayStr > closeThisMonth.effectiveDate) {
       let nextMonthYear = curYear;
       let nextMonth = curMonth + 1;
-      if (nextMonth > 11) {
-        nextMonth = 0;
+      if (nextMonth > 12) {
+        nextMonth = 1;
         nextMonthYear += 1;
       }
-      const daysNextMonth = getDaysInMonth(nextMonthYear, nextMonth + 1);
-      const effCloseDayNextMonth = Math.min(card.billingCloseDay || 1, daysNextMonth);
-      closeDateThisMonth = new Date(nextMonthYear, nextMonth, effCloseDayNextMonth);
+      const closeNextMonth = getEffectiveBillingCloseDate(nextMonthYear, nextMonth, card.billingCloseDay || 1);
+      nextEffectiveCloseDateStr = closeNextMonth.effectiveDate;
     }
-    const daysUntilClose = Math.max(0, Math.ceil((closeDateThisMonth.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const [cYear, cMonth, cDay] = nextEffectiveCloseDateStr.split('-').map(Number);
+    const closeDateObj = new Date(cYear, cMonth - 1, cDay, 12, 0, 0);
+    const daysUntilClose = Math.max(0, Math.ceil((closeDateObj.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)));
 
     const utilization = Math.max(0, Math.min(100, utilizationByCard[card.id] ?? 0));
 
@@ -376,7 +484,18 @@ export function getBestCardRecommendation(
   });
 
   const best = evaluated[0];
-  let reason = `Te da ${best.creditDays} días sin intereses: su corte es el ${best.card.billingCloseDay} (en ${best.daysUntilClose} días) y pagas recién el ${formatDisplayDate(calculatePaymentDueDate(todayStr, best.card))}.`;
+  const curM = referenceDate.getMonth() + 1;
+  const curY = referenceDate.getFullYear();
+  const nextCloseInfo = getEffectiveBillingCloseDate(curY, curM, best.card.billingCloseDay || 1);
+  const targetCloseInfo = todayStr > nextCloseInfo.effectiveDate
+    ? getEffectiveBillingCloseDate(curM === 12 ? curY + 1 : curY, curM === 12 ? 1 : curM + 1, best.card.billingCloseDay || 1)
+    : nextCloseInfo;
+
+  const closeLabel = targetCloseInfo.wasAdjusted
+    ? `su corte es el ${best.card.billingCloseDay} (adelantado al hábil ${formatDisplayDate(targetCloseInfo.effectiveDate)})`
+    : `su corte es el ${best.card.billingCloseDay}`;
+
+  let reason = `Te da ${best.creditDays} días sin intereses: ${closeLabel} (en ${best.daysUntilClose} días) y pagas recién el ${formatDisplayDate(calculatePaymentDueDate(todayStr, best.card))}.`;
   if (best.utilization >= 80) {
     reason += ` Uso al ${Math.round(best.utilization)}%. Conviene reducir el saldo antes de seguir.`;
   } else if (best.utilization > 30) {
@@ -1181,24 +1300,23 @@ export function calculateCardsDebtSummary(
     const paidThisMonth = paidPenThisMonth + (paidThisMonthUsd * cardUsdRate);
     const paidToDate = paidPenToDate + (paidToDateUsd * cardUsdRate);
 
-    // Días hasta corte y pago
-    const daysInCurMonth = getDaysInMonth(currentYear, currentMonth);
-    const effCloseDay = Math.min(card.billingCloseDay || 1, daysInCurMonth);
-
-    let nextCloseYear = currentYear;
-    let nextCloseMonth = currentMonth;
-    if (now.getDate() > effCloseDay) {
-      nextCloseMonth += 1;
+    // Días hasta corte y pago (corte efectivo ajustado al día hábil anterior)
+    const closeThisMonth = getEffectiveBillingCloseDate(currentYear, currentMonth, card.billingCloseDay || 1);
+    let nextEffectiveCloseDateStr = closeThisMonth.effectiveDate;
+    if (todayStr > closeThisMonth.effectiveDate) {
+      let nextCloseYear = currentYear;
+      let nextCloseMonth = currentMonth + 1;
       if (nextCloseMonth > 12) {
         nextCloseMonth = 1;
         nextCloseYear += 1;
       }
+      nextEffectiveCloseDateStr = getEffectiveBillingCloseDate(nextCloseYear, nextCloseMonth, card.billingCloseDay || 1).effectiveDate;
     }
-    const daysInCloseMonth = getDaysInMonth(nextCloseYear, nextCloseMonth);
-    const finalCloseDay = Math.min(card.billingCloseDay || 1, daysInCloseMonth);
-    const closeDate = new Date(nextCloseYear, nextCloseMonth - 1, finalCloseDay);
+    const [cYear, cMonth, cDay] = nextEffectiveCloseDateStr.split('-').map(Number);
+    const closeDate = new Date(cYear, cMonth - 1, cDay, 12, 0, 0);
     const daysUntilClose = Math.max(0, Math.ceil((closeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 
+    const daysInCurMonth = getDaysInMonth(currentYear, currentMonth);
     const effPayDay = Math.min(card.paymentDueDay || 1, daysInCurMonth);
     let nextPayYear = currentYear;
     let nextPayMonth = currentMonth;

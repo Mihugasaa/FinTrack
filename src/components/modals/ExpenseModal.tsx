@@ -635,6 +635,11 @@ export const ExpenseModal: React.FC = () => {
                         📅 Ciclo estimado: <strong>{formatDisplayDate(modalCalculatedDueDate)}</strong>. Si tu banco lo trasladó a otro día, puedes cambiarlo aquí libremente.
                       </span>
                     )}
+                    {modalDueDateDetail.closeWasAdjusted && modalDueDateDetail.belongsToNextCycle && (
+                      <div style={{ color: 'var(--accent-success)', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+                        <Sparkles size={12} /> <strong>Corte hábil adelantado:</strong> Tu tarjeta cortó el <strong>{formatDisplayDate(modalDueDateDetail.effectiveCloseDate)}</strong> (adelantado del {modalDueDateDetail.closeOriginalDayOfWeek} {modalDueDateDetail.nominalCloseDate?.split('-')[2]}). ¡Esta compra entra al ciclo siguiente y ganas un mes de crédito!
+                      </div>
+                    )}
                   </div>
                 </div>
               );

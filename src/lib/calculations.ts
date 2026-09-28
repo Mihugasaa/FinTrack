@@ -1,4 +1,18 @@
-import { PaymentMethod, Transaction, MonthlyBudget, Receivable, LiquidityDiagnostic, CardDebtSummary, OtherIncome, Payable, CardPayment } from '@/types';
+import {
+  PaymentMethod,
+  Transaction,
+  MonthlyBudget,
+  Receivable,
+  LiquidityDiagnostic,
+  CardDebtSummary,
+  OtherIncome,
+  Payable,
+  CardPayment,
+  CardLiquidityStatus,
+  CardLiquidityCoverage,
+  CardPaymentPlanItem,
+  CardsGlobalLiquidityAssessment
+} from '@/types';
 import { FALLBACK_USD_PEN_RATE } from './constants';
 
 /**
@@ -437,7 +451,7 @@ export function getBestCardRecommendation(
   if (creditCards.length === 0) {
     return {
       creditDays: 0,
-      reason: 'No tienes tarjetas de crédito configuradas.',
+      reason: 'Sin tarjetas de crédito activas registradas.',
       allRanked: []
     };
   }
@@ -504,14 +518,14 @@ export function getBestCardRecommendation(
     : nextCloseInfo;
 
   const closeLabel = targetCloseInfo.wasAdjusted
-    ? `su corte es el ${best.card.billingCloseDay} (adelantado al hábil ${formatDisplayDate(targetCloseInfo.effectiveDate)})`
-    : `su corte es el ${best.card.billingCloseDay}`;
+    ? `Corte el día ${best.card.billingCloseDay} (adelantado a día hábil ${formatDisplayDate(targetCloseInfo.effectiveDate)})`
+    : `Corte el día ${best.card.billingCloseDay}`;
 
-  let reason = `Te da ${best.creditDays} días sin intereses: ${closeLabel} (en ${best.daysUntilClose} días) y pagas recién el ${formatDisplayDate(calculatePaymentDueDate(todayStr, best.card))}.`;
+  let reason = `Financiamiento: ${best.creditDays} días sin intereses • ${closeLabel} (${best.daysUntilClose} d restantes) • Vencimiento: ${formatDisplayDate(calculatePaymentDueDate(todayStr, best.card))}.`;
   if (best.utilization >= 80) {
-    reason += ` Uso al ${Math.round(best.utilization)}%. Conviene reducir el saldo antes de seguir.`;
+    reason += ` Utilización crítica (${Math.round(best.utilization)}%). Priorizar amortización antes de registrar nuevos consumos.`;
   } else if (best.utilization > 30) {
-    reason += ` Vas al ${Math.round(best.utilization)}% de la línea. Bájala del 30% para el corte y cuidas tu historial.`;
+    reason += ` Ratio de uso al ${Math.round(best.utilization)}% de la línea (objetivo prudencial: ≤ 30%).`;
   }
 
   return {
@@ -1510,5 +1524,290 @@ export function getFallbackReceivablePaymentDate(r: Receivable, monthKey: string
     return upDay;
   }
   return currentDateStr;
+}
+
+/**
+ * Evalúa la liquidez real a la FECHA DE PAGO de cada tarjeta de crédito frente
+ * a la fecha de abono del sueldo (análisis de desfase de flujo de caja).
+ *
+ * Resuelve el "espejismo de fin de mes": si una tarjeta vence el día 15 y el sueldo
+ * ingresa el día 30, el saldo proyectado a fin de mes puede ser positivo, pero en la
+ * fecha exacta del vencimiento la persona no tendrá liquidez suficiente.
+ */
+export function evaluateCardsLiquidityCoverage(params: {
+  paymentPlans: {
+    cardId: string;
+    cardName: string;
+    cardColor: string;
+    billingCloseDay: number;
+    paymentDueDay: number;
+    limit: number;
+    totalUnpaid: number;
+    utilizationPct: number;
+    nextDueDate: string | null;
+    nextDueAmount: number;
+    isOverdue: boolean;
+    nextCloseDate: string | null;
+    scorePayByDate: string | null;
+  }[];
+  currentDebitBalanceToday: number;
+  projectedDebitBalanceMonthEnd: number;
+  salaries: { id: string; source: string; amount: number; payDay: number }[];
+  otherIncomes?: OtherIncome[];
+  payables?: Payable[];
+  receivables?: Receivable[];
+  monthTransactions?: Transaction[];
+  currentDateStr: string;
+  currentYear: number;
+  currentMonth: number;
+}): CardsGlobalLiquidityAssessment {
+  const {
+    paymentPlans,
+    currentDebitBalanceToday,
+    projectedDebitBalanceMonthEnd,
+    salaries,
+    otherIncomes = [],
+    payables = [],
+    receivables = [],
+    monthTransactions = [],
+    currentDateStr,
+    currentYear,
+    currentMonth
+  } = params;
+
+  const todayStr = currentDateStr || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
+  const [curY, curM, curD] = todayStr.split('-').map(Number);
+
+  // 1. Sueldo principal y calendario de abono
+  const primarySalary = salaries[0] || { amount: 2126.49, payDay: 30 };
+  const effectiveSalaryDay = getEffectiveDayOfMonth(curY, curM, primarySalary.payDay || 30);
+  const totalSalaries = salaries.reduce((acc, s) => acc + (s.amount || 0), 0);
+  const isSalaryCreditedToday = curD >= effectiveSalaryDay;
+
+  // Fecha del próximo sueldo esperado (en el mes actual o en el siguiente)
+  let salaryYear = curY;
+  let salaryMonth = curM;
+  let salaryDay = effectiveSalaryDay;
+
+  if (isSalaryCreditedToday) {
+    // El sueldo de este mes ya se cobró (está en currentDebitBalanceToday).
+    // El próximo sueldo corresponde al mes siguiente.
+    salaryMonth += 1;
+    if (salaryMonth > 12) {
+      salaryMonth = 1;
+      salaryYear += 1;
+    }
+    salaryDay = getEffectiveDayOfMonth(salaryYear, salaryMonth, primarySalary.payDay || 30);
+  }
+
+  const upcomingSalaryDate = `${salaryYear}-${salaryMonth.toString().padStart(2, '0')}-${salaryDay.toString().padStart(2, '0')}`;
+
+  // 2. Tarjetas ordenadas por fecha de vencimiento ascendente
+  const sortedPlans = [...paymentPlans].sort((a, b) => {
+    const dueA = a.nextDueDate || '9999-12-31';
+    const dueB = b.nextDueDate || '9999-12-31';
+    return dueA.localeCompare(dueB);
+  });
+
+  let runningAvailable = currentDebitBalanceToday;
+  let lastEvaluatedDate = todayStr;
+  let totalDueSoon = 0;
+  let totalDueBeforeSalary = 0;
+  let shortfallBeforeSalary = 0;
+  let hasAnySalaryMismatch = false;
+  let hasAnyDeficit = false;
+
+  const enrichedItems: CardPaymentPlanItem[] = [];
+
+  for (const plan of sortedPlans) {
+    const hasDue = plan.nextDueAmount > 0.005 && !!plan.nextDueDate;
+
+    if (!hasDue) {
+      enrichedItems.push({
+        ...plan,
+        liquidityCoverage: {
+          status: 'PAID',
+          estimatedDebitAtDueDate: runningAvailable,
+          requiredAmount: 0,
+          shortfallAmount: 0,
+          salaryPayDay: effectiveSalaryDay,
+          salaryDate: upcomingSalaryDate,
+          salaryIsAfterDue: false,
+          salaryAmount: totalSalaries,
+          projectedBalanceMonthEnd: projectedDebitBalanceMonthEnd,
+          daysDiffSalaryVsDue: 0,
+          headline: 'Al día',
+          message: 'Sin obligaciones pendientes en el período.'
+        }
+      });
+      continue;
+    }
+
+    const dueDate = plan.nextDueDate!;
+    const dueAmt = plan.nextDueAmount;
+    totalDueSoon += dueAmt;
+
+    // ¿El sueldo entra después del vencimiento?
+    const salaryIsAfterDue = dueDate < upcomingSalaryDate;
+
+    // Calcular días de desfase: sueldo date vs due date
+    const dueTime = new Date(`${dueDate}T12:00:00`).getTime();
+    const salaryTime = new Date(`${upcomingSalaryDate}T12:00:00`).getTime();
+    const daysDiffSalaryVsDue = Math.round((salaryTime - dueTime) / 86400000);
+
+    // Flujos entre lastEvaluatedDate y dueDate
+    let periodInflows = 0;
+    let periodOutflows = 0;
+
+    // Otros ingresos en ese intervalo
+    otherIncomes.forEach(oi => {
+      if (oi.receivedDate > lastEvaluatedDate && oi.receivedDate <= dueDate) {
+        periodInflows += oi.amount || 0;
+      }
+    });
+
+    // Cobranzas a deudores que vencen en ese intervalo
+    receivables.forEach(r => {
+      if (r.dueDate && r.dueDate > lastEvaluatedDate && r.dueDate <= dueDate && r.status !== 'paid') {
+        const isUsd = r.currency === 'USD';
+        const rem = r.remainingAmount ?? 0;
+        const pen = isUsd ? rem * (r.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
+        periodInflows += pen;
+      }
+    });
+
+    // Si el sueldo ingresa justamente en este intervalo (antes o el mismo día del vencimiento):
+    if (upcomingSalaryDate > lastEvaluatedDate && upcomingSalaryDate <= dueDate) {
+      periodInflows += totalSalaries;
+    }
+
+    // Salidas por deudas personales en ese intervalo
+    payables.forEach(p => {
+      if (p.dueDate && p.dueDate > lastEvaluatedDate && p.dueDate <= dueDate && p.status !== 'PAID') {
+        const isUsd = p.currency === 'USD';
+        const rem = p.remainingAmount ?? (p.totalAmount ?? p.originalAmount ?? 0);
+        const pen = isUsd ? rem * (p.exchangeRate || FALLBACK_USD_PEN_RATE) : rem;
+        periodOutflows += pen;
+      }
+    });
+
+    // Gastos débito registrados en ese intervalo
+    monthTransactions.forEach(t => {
+      if (t.paymentMethodId && (t.paymentMethodId === 'pm-1' || t.paymentMethodId.includes('deb') || t.paymentMethodId.includes('cash'))) {
+        if (t.date > lastEvaluatedDate && t.date <= dueDate) {
+          periodOutflows += t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
+        }
+      }
+    });
+
+    const estimatedDebitAtDueDate = Math.round((runningAvailable + periodInflows - periodOutflows) * 100) / 100;
+
+    let status: CardLiquidityStatus = 'COVERED';
+    let shortfallAmount = 0;
+    let headline = 'Cobertura confirmada';
+    let message = '';
+    let actionTip: string | undefined;
+
+    if (estimatedDebitAtDueDate >= dueAmt) {
+      status = 'COVERED';
+      shortfallAmount = 0;
+      headline = 'Cobertura confirmada';
+      runningAvailable = Math.max(0, Math.round((estimatedDebitAtDueDate - dueAmt) * 100) / 100);
+      message = salaryIsAfterDue
+        ? `Caja disponible suficiente (${formatSoles(estimatedDebitAtDueDate)}) previo al abono del día ${effectiveSalaryDay}.`
+        : `Abono de haberes ingresa previo a la fecha límite (${formatDisplayDate(dueDate)}). Caja est.: ${formatSoles(estimatedDebitAtDueDate)}.`;
+    } else {
+      shortfallAmount = Math.round((dueAmt - estimatedDebitAtDueDate) * 100) / 100;
+      runningAvailable = 0;
+
+      if (salaryIsAfterDue) {
+        totalDueBeforeSalary += dueAmt;
+        shortfallBeforeSalary += shortfallAmount;
+
+        // Comprobar si al ingresar el sueldo a fin de mes el saldo alcanza
+        const canCoverWithSalary = projectedDebitBalanceMonthEnd >= 0 || (estimatedDebitAtDueDate + totalSalaries >= dueAmt);
+
+        if (canCoverWithSalary) {
+          status = 'SALARY_MISMATCH';
+          hasAnySalaryMismatch = true;
+          headline = 'Desfase pre-abono';
+          message = `Vencimiento el ${formatDisplayDate(dueDate)} previo al abono de haberes (Día ${effectiveSalaryDay}, +${daysDiffSalaryVsDue} d). Solvencia de cierre mensual confirmada.`;
+
+          if (estimatedDebitAtDueDate > 0) {
+            actionTip = `Abono parcial sugerido de ${formatSoles(estimatedDebitAtDueDate)} con caja disponible para mitigar intereses punitorios.`;
+          } else {
+            actionTip = `Sincronización bancaria: solicitar traslado de fecha de pago al día ${Math.min(28, effectiveSalaryDay + 3)}.`;
+          }
+        } else {
+          status = 'DEFICIT';
+          hasAnyDeficit = true;
+          headline = 'Déficit de ciclo';
+          message = `Los compromisos del período superan la capacidad de caja proyectada al cierre (Brecha: ${formatSoles(shortfallAmount)}).`;
+          actionTip = 'Priorizar liquidación de líneas con mayor TCEA o evaluar consolidación de pasivos.';
+        }
+      } else {
+        status = 'DEFICIT';
+        hasAnyDeficit = true;
+        headline = 'Déficit de ciclo';
+        message = `Vencimiento el ${formatDisplayDate(dueDate)}. Brecha proyectada tras ingresos de ciclo: -${formatSoles(shortfallAmount)}.`;
+        actionTip = 'Evaluar reprogramación de pago o refinanciamiento directo con la entidad.';
+      }
+    }
+
+    lastEvaluatedDate = dueDate > lastEvaluatedDate ? dueDate : lastEvaluatedDate;
+
+    enrichedItems.push({
+      ...plan,
+      liquidityCoverage: {
+        status,
+        estimatedDebitAtDueDate,
+        requiredAmount: dueAmt,
+        shortfallAmount,
+        salaryPayDay: effectiveSalaryDay,
+        salaryDate: upcomingSalaryDate,
+        salaryIsAfterDue,
+        salaryAmount: totalSalaries,
+        projectedBalanceMonthEnd: projectedDebitBalanceMonthEnd,
+        daysDiffSalaryVsDue,
+        headline,
+        message,
+        actionTip
+      }
+    });
+  }
+
+  // Resumen global para el Asesor de Tarjetas y Hero
+  let summaryMessage = '';
+  let recommendedAction: string | undefined;
+
+  const allCovered = !hasAnySalaryMismatch && !hasAnyDeficit && totalDueSoon > 0;
+
+  if (totalDueSoon <= 0.005) {
+    summaryMessage = 'Sin obligaciones de tarjeta pendientes en el ciclo.';
+  } else if (hasAnySalaryMismatch) {
+    summaryMessage = `Compromisos exigibles por ${formatSoles(totalDueBeforeSalary)} previo al abono de haberes (Día ${effectiveSalaryDay}). Brecha puntual de ${formatSoles(shortfallBeforeSalary)} frente a la caja actual (${formatSoles(currentDebitBalanceToday)}).`;
+    recommendedAction = `Efectuar abono parcial con caja disponible y evaluar sincronizar el ciclo de facturación al día ${Math.min(28, effectiveSalaryDay + 3)}.`;
+  } else if (hasAnyDeficit) {
+    summaryMessage = `Déficit proyectado: Los compromisos del ciclo (${formatSoles(totalDueSoon)}) exceden la capacidad de caja proyectada.`;
+    recommendedAction = 'Revisar salidas discrecionales y priorizar amortización de líneas con mayor costo financiero.';
+  } else if (allCovered) {
+    summaryMessage = `Compromisos próximos (${formatSoles(totalDueSoon)}) cubiertos con liquidez disponible en cuenta.`;
+  }
+
+  return {
+    items: enrichedItems,
+    hasAnySalaryMismatch,
+    hasAnyDeficit,
+    allCovered,
+    totalDueSoon: Math.round(totalDueSoon * 100) / 100,
+    totalDueBeforeSalary: Math.round(totalDueBeforeSalary * 100) / 100,
+    currentAvailableToday: Math.round(currentDebitBalanceToday * 100) / 100,
+    shortfallBeforeSalary: Math.round(shortfallBeforeSalary * 100) / 100,
+    primarySalaryPayDay: effectiveSalaryDay,
+    primarySalaryAmount: totalSalaries,
+    isSalaryCreditedToday,
+    summaryMessage,
+    recommendedAction
+  };
 }
 

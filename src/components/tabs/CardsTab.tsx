@@ -18,6 +18,7 @@ export const CardsTab: React.FC = () => {
     debitStats,
     cardDebtSummary,
     cardPaymentPlan,
+    cardsLiquidityAssessment,
     paymentMethods,
     handleOpenEditCard,
     showAllHistoricalPayments,
@@ -434,10 +435,45 @@ export const CardsTab: React.FC = () => {
               </span>
             </div>
 
+            {/* Control de flujo y sincronización de haberes */}
+            {cardsLiquidityAssessment.hasAnySalaryMismatch && (
+              <div
+                style={{
+                  marginBottom: '16px',
+                  padding: '12px 16px',
+                  background: 'var(--bg-subtle)',
+                  border: '1px solid rgba(234, 179, 8, 0.35)',
+                  borderLeft: '4px solid var(--accent-warning)',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--text-primary)' }}>
+                    Control de Flujo de Pagos · Ciclo en Curso
+                  </span>
+                  <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>
+                    Desfase Pre-Abono
+                  </span>
+                </div>
+                <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                  Existen compromisos por <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> con fecha límite previa al abono de haberes (Día {cardsLiquidityAssessment.primarySalaryPayDay}). Con la caja disponible actual ({formatSoles(cardsLiquidityAssessment.currentAvailableToday)}), la brecha puntual es de <strong className="tabular-nums text-danger">-{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong>. El cierre de mes proyecta solvencia tras la acreditación del sueldo.
+                </div>
+                {cardsLiquidityAssessment.recommendedAction && (
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
+                    <strong>Alineación sugerida:</strong> {cardsLiquidityAssessment.recommendedAction}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {cardPaymentPlan.length === 0 && (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '24px 0' }}>
-                  No tienes tarjetas de crédito registradas.
+                  Sin tarjetas de crédito registradas en el sistema.
                 </p>
               )}
               {(() => {
@@ -464,11 +500,16 @@ export const CardsTab: React.FC = () => {
                   const overdue = r.hasDue && r.days != null && r.days < 0;
                   const countdownLabel = r.days == null ? '' : r.days < 0 ? `venció hace ${Math.abs(r.days)} d` : r.days === 0 ? 'vence hoy' : `en ${r.days} d`;
                   const countdownColor = overdue ? 'var(--accent-danger)' : r.days != null && r.days <= 3 ? 'var(--accent-warning)' : 'var(--accent-info)';
+                  const coverage = plan.liquidityCoverage;
+                  const isMismatch = coverage?.status === 'SALARY_MISMATCH';
+
                   const statusBadge = !r.hasDue
-                    ? { cls: 'badge-success', txt: '✅ Al día' }
+                    ? { cls: 'badge-success', txt: 'Al día' }
+                    : isMismatch
+                    ? { cls: 'badge-warning', txt: `Pre-abono (-${formatSoles(coverage?.shortfallAmount || 0)})` }
                     : overdue
-                    ? { cls: 'badge-danger', txt: '⚠️ Vencido' }
-                    : { cls: 'badge-warning', txt: '⏳ Por pagar' };
+                    ? { cls: 'badge-danger', txt: 'Vencido' }
+                    : { cls: 'badge-warning', txt: 'Por pagar' };
 
                   return (
                     <div key={plan.cardId} className="clean-card" style={{ borderLeft: `4px solid ${plan.cardColor}`, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -478,7 +519,7 @@ export const CardsTab: React.FC = () => {
                           <CreditCard size={16} style={{ color: plan.cardColor }} />
                           <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{plan.cardName}</span>
                         </div>
-                        <span className={`badge ${statusBadge.cls} nowrap`} style={{ fontSize: '0.72rem' }}>{statusBadge.txt}</span>
+                        <span className={`badge ${statusBadge.cls} nowrap tabular-nums`} style={{ fontSize: '0.72rem' }}>{statusBadge.txt}</span>
                       </div>
 
                       {/* Próximo pago REAL (forward-looking, cruza meses) */}
@@ -496,6 +537,61 @@ export const CardsTab: React.FC = () => {
                       ) : (
                         <div style={{ fontSize: '0.85rem', color: 'var(--accent-success)', fontWeight: 600 }}>
                           Sin pagos pendientes · estás al día.
+                        </div>
+                      )}
+
+                      {/* Diagnóstico de liquidez al vencimiento */}
+                      {r.hasDue && coverage && coverage.status !== 'PAID' && (
+                        <div
+                          style={{
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            background: 'var(--bg-subtle)',
+                            border: `1px solid ${
+                              isMismatch
+                                ? 'rgba(234, 179, 8, 0.35)'
+                                : coverage.status === 'COVERED'
+                                ? 'rgba(16, 185, 129, 0.3)'
+                                : 'rgba(239, 68, 68, 0.35)'
+                            }`,
+                            borderLeft: `4px solid ${
+                              isMismatch
+                                ? 'var(--accent-warning)'
+                                : coverage.status === 'COVERED'
+                                ? 'var(--accent-success)'
+                                : 'var(--accent-danger)'
+                            }`,
+                            fontSize: '0.76rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '5px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                            <span style={{
+                              fontWeight: 700,
+                              color: isMismatch
+                                ? 'var(--accent-warning)'
+                                : coverage.status === 'COVERED'
+                                ? 'var(--accent-success)'
+                                : 'var(--accent-danger)'
+                            }}>
+                              {coverage.headline || (isMismatch ? 'Desfase Pre-Abono' : coverage.status === 'COVERED' ? 'Cobertura Confirmada' : 'Déficit de Ciclo')}
+                            </span>
+                            {isMismatch && (
+                              <span className="tabular-nums text-danger" style={{ fontWeight: 700, fontSize: '0.74rem' }}>
+                                Brecha al corte: -{formatSoles(coverage.shortfallAmount)}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                            {coverage.message}
+                          </div>
+                          {coverage.actionTip && (
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '5px', marginTop: '2px' }}>
+                              <strong>Acción sugerida:</strong> {coverage.actionTip}
+                            </div>
+                          )}
                         </div>
                       )}
 

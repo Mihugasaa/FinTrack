@@ -53,6 +53,7 @@ export const OverviewTab: React.FC = () => {
     paymentMethods,
     categories,
     cardPaymentPlan,
+    cardsLiquidityAssessment,
     resolvePaymentMethod,
     handleOpenEditTransaction,
     promptDeleteTransaction,
@@ -235,7 +236,7 @@ export const OverviewTab: React.FC = () => {
           <div className="suggestion-pill-content">
             <Sparkles size={15} className="suggestion-pill-icon" />
             <span>
-              Tienes <strong>{aiAnomalies.length} {aiAnomalies.length === 1 ? 'sugerencia de revisión' : 'sugerencias de revisión'}</strong> en tus gastos de este mes.
+              <strong>{aiAnomalies.length} {aiAnomalies.length === 1 ? 'observación detectada' : 'observaciones detectadas'}</strong> en los gastos del período.
             </span>
           </div>
           <div className="suggestion-pill-actions">
@@ -291,6 +292,11 @@ export const OverviewTab: React.FC = () => {
               {dues.slice(0, 4).map(d => {
                 const color = d.days < 0 ? 'var(--accent-danger)' : d.days <= 3 ? 'var(--accent-warning)' : 'var(--accent-info)';
                 const label = d.days < 0 ? `venció hace ${Math.abs(d.days)} d` : d.days === 0 ? 'vence hoy' : `en ${d.days} d`;
+                const coverage = d.p.liquidityCoverage;
+                const isMismatch = coverage?.status === 'SALARY_MISMATCH';
+                const isDeficit = coverage?.status === 'DEFICIT';
+                const isCovered = coverage?.status === 'COVERED';
+
                 return (
                   <div key={d.p.cardId} style={{ flex: '1 1 180px', minWidth: '160px', border: '1px solid var(--border-subtle)', borderLeft: `4px solid ${d.p.cardColor}`, borderRadius: '10px', padding: '8px 12px', background: 'var(--bg-subtle)' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>{d.p.cardName}</div>
@@ -298,6 +304,41 @@ export const OverviewTab: React.FC = () => {
                       {d.weekday} {formatDisplayDate(d.p.nextDueDate!)} <span style={{ color: 'var(--border-medium)', fontWeight: 400 }}>|</span> <span style={{ color, fontWeight: 700 }}>{label}</span>
                     </div>
                     <div className="tabular-nums" style={{ fontWeight: 800, color: 'var(--accent-danger)', marginTop: '2px' }}>{formatSoles(d.p.nextDueAmount)}</div>
+                    {coverage && coverage.status !== 'PAID' && (
+                      <div style={{ marginTop: '6px' }}>
+                        {isMismatch && (
+                          <span
+                            className="badge badge-warning"
+                            style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            title={coverage.message}
+                          >
+                            <span>Pre-abono</span>
+                            <span style={{ opacity: 0.6 }}>•</span>
+                            <span className="tabular-nums">Brecha -{formatSoles(coverage.shortfallAmount)}</span>
+                          </span>
+                        )}
+                        {isCovered && (
+                          <span
+                            className="badge badge-success"
+                            style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center' }}
+                            title={coverage.message}
+                          >
+                            Cubierto con saldo
+                          </span>
+                        )}
+                        {isDeficit && (
+                          <span
+                            className="badge badge-danger"
+                            style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            title={coverage.message}
+                          >
+                            <span>Déficit de ciclo</span>
+                            <span style={{ opacity: 0.6 }}>•</span>
+                            <span className="tabular-nums">-{formatSoles(coverage.shortfallAmount)}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -950,25 +991,133 @@ export const OverviewTab: React.FC = () => {
               <p className="card-item-subtitle" style={{ margin: 0 }}>
                 {cardAdvisor.reason}
               </p>
-              {/* Nota de "¿podré pagarlo?": compara lo que vence pronto en tarjetas con
-                  tu saldo proyectado a fin de mes. */}
+              {/* Control de Cobertura de Vencimientos */}
               {(() => {
-                const totalCardDue = cardPaymentPlan.reduce((a, c) => a + c.nextDueAmount, 0);
-                if (totalCardDue < 0.01) return null;
-                const projected = debitStats.projectedDebitBalanceMonthEnd;
-                const ok = projected >= totalCardDue;
+                if (cardsLiquidityAssessment.totalDueSoon < 0.01) return null;
+                const { hasAnySalaryMismatch, hasAnyDeficit, primarySalaryPayDay } = cardsLiquidityAssessment;
+
+                if (hasAnySalaryMismatch) {
+                  return (
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        padding: '12px 14px',
+                        background: 'var(--bg-subtle)',
+                        border: '1px solid rgba(234, 179, 8, 0.35)',
+                        borderLeft: '4px solid var(--accent-warning)',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                        <span style={{ fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent-warning)' }}>
+                          Control de Liquidez Pre-Abono
+                        </span>
+                        <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                          Desfase de Ciclo
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', padding: '8px 10px', background: 'var(--bg-surface)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                        <div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Exigible pre-sueldo:</div>
+                          <div className="tabular-nums" style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--text-primary)' }}>
+                            {formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Caja disponible hoy:</div>
+                          <div className="tabular-nums" style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--text-primary)' }}>
+                            {formatSoles(cardsLiquidityAssessment.currentAvailableToday)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--accent-danger)' }}>Brecha al vencimiento:</div>
+                          <div className="tabular-nums text-danger" style={{ fontWeight: 800, fontSize: '0.86rem' }}>
+                            -{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                        Abono de haberes: <strong>Día {primarySalaryPayDay}</strong> • Cierre proyectado: <strong className="text-success">{formatSoles(debitStats.projectedDebitBalanceMonthEnd)}</strong> (solvente tras abono).
+                      </div>
+
+                      {cardsLiquidityAssessment.recommendedAction && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
+                          <strong>Acción operativa:</strong> {cardsLiquidityAssessment.recommendedAction}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (hasAnyDeficit) {
+                  return (
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        padding: '12px 14px',
+                        background: 'var(--bg-subtle)',
+                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                        borderLeft: '4px solid var(--accent-danger)',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                        <span style={{ fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent-danger)' }}>
+                          Déficit de Ciclo Proyectado
+                        </span>
+                        <span className="badge badge-danger" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                          Déficit
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', padding: '8px 10px', background: 'var(--bg-surface)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                        <div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Compromisos totales:</div>
+                          <div className="tabular-nums" style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--accent-danger)' }}>
+                            {formatSoles(cardsLiquidityAssessment.totalDueSoon)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Cierre proyectado:</div>
+                          <div className="tabular-nums text-danger" style={{ fontWeight: 700, fontSize: '0.86rem' }}>
+                            {formatSoles(debitStats.projectedDebitBalanceMonthEnd)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {cardsLiquidityAssessment.recommendedAction && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
+                          <strong>Acción operativa:</strong> {cardsLiquidityAssessment.recommendedAction}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     style={{
-                      marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--border-subtle)',
-                      fontSize: '0.76rem', color: 'var(--text-secondary)', display: 'flex', gap: '6px', alignItems: 'flex-start'
+                      marginTop: '10px',
+                      paddingTop: '10px',
+                      borderTop: '1px dashed var(--border-subtle)',
+                      fontSize: '0.76rem',
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      gap: '8px',
+                      alignItems: 'center'
                     }}
                   >
-                    <span>{ok ? '✅' : '⚠️'}</span>
+                    <span className="badge badge-success" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>Cubierto</span>
                     <span>
-                      Vencen pronto <strong className="tabular-nums">{formatSoles(totalCardDue)}</strong> en tarjetas.
-                      Tu proyección a fin de mes es <strong className="tabular-nums" style={{ color: ok ? 'var(--accent-success)' : 'var(--accent-danger)' }}>{formatSoles(projected)}</strong>
-                      {ok ? ', alcanza para cubrirlas.' : ', quedarías corto: abona lo que puedas antes del corte.'}
+                      Vencimientos de ciclo ({formatSoles(cardsLiquidityAssessment.totalDueSoon)}) respaldados por saldo en cuenta.
                     </span>
                   </div>
                 );

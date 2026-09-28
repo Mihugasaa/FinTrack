@@ -20,7 +20,7 @@ import {
 } from '@/lib/defaults';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 import { generateUUID, resolvePaymentMethod, deduplicateTransactions } from '@/lib/utils';
-import { DebtConfirmData } from '@/types';
+import { DebtConfirmData, CardPaymentPlanItem, CardsGlobalLiquidityAssessment } from '@/types';
 import {
   getBestCardRecommendation,
   calculateMonthlyDiagnostic,
@@ -34,7 +34,8 @@ import {
   getEffectiveDayOfMonth,
   getEffectiveBillingCloseDate,
   getEndOfMonthDate,
-  getFallbackReceivablePaymentDate
+  getFallbackReceivablePaymentDate,
+  evaluateCardsLiquidityCoverage
 } from '@/lib/calculations';
 import {
   Transaction,
@@ -1154,7 +1155,7 @@ function useFinanceController() {
   // utilización total. Agrupa por mes de vencimiento y asigna los abonos en FIFO
   // (paga lo más antiguo primero). Así el usuario ve "cuándo y cuánto pagar" sin
   // navegar entre meses.
-  const cardPaymentPlan = useMemo(() => {
+  const rawCardPaymentPlan = useMemo(() => {
     const nowRef = new Date();
     const todayStr = `${nowRef.getFullYear()}-${(nowRef.getMonth() + 1).toString().padStart(2, '0')}-${nowRef.getDate().toString().padStart(2, '0')}`;
     const creditCards = paymentMethods.filter(p => p.type === 'credit' && p.isActive);
@@ -1247,6 +1248,39 @@ function useFinanceController() {
       };
     });
   }, [paymentMethods, transactions, cardPayments]);
+
+  // Evaluación prospectiva de liquidez a la fecha exacta de vencimiento vs fecha de sueldo
+  const cardsLiquidityAssessment = useMemo(() => {
+    return evaluateCardsLiquidityCoverage({
+      paymentPlans: rawCardPaymentPlan,
+      currentDebitBalanceToday: debitStats.currentDebitBalanceToday,
+      projectedDebitBalanceMonthEnd: debitStats.projectedDebitBalanceMonthEnd,
+      salaries,
+      otherIncomes: currentOtherIncomes,
+      payables,
+      receivables: monthReceivables,
+      monthTransactions: currentMonthTransactions,
+      currentDateStr,
+      currentYear,
+      currentMonth
+    });
+  }, [
+    rawCardPaymentPlan,
+    debitStats.currentDebitBalanceToday,
+    debitStats.projectedDebitBalanceMonthEnd,
+    salaries,
+    currentOtherIncomes,
+    payables,
+    monthReceivables,
+    currentMonthTransactions,
+    currentDateStr,
+    currentYear,
+    currentMonth
+  ]);
+
+  const cardPaymentPlan: CardPaymentPlanItem[] = useMemo(() => {
+    return cardsLiquidityAssessment.items;
+  }, [cardsLiquidityAssessment]);
 
   // Agrupación y Consolidación de Cuentas por Cobrar por Persona (Ficha de Deudor)
   // Agrupación y Consolidación de Mis Deudas por Acreedor (Ficha de Acreedor)
@@ -2444,6 +2478,7 @@ function useFinanceController() {
     cardAdvisor,
     cardDebtSummary,
     cardPaymentPlan,
+    cardsLiquidityAssessment,
     categoryBreakdown,
     annualCategoryBreakdown,
     fixedExpensesTotal,

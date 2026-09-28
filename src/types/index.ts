@@ -294,3 +294,54 @@ export interface DebtConfirmData {
   onConfirm: () => void;
 }
 
+export type CardLiquidityStatus = 'COVERED' | 'SALARY_MISMATCH' | 'DEFICIT' | 'PAID';
+
+export interface CardLiquidityCoverage {
+  status: CardLiquidityStatus;
+  estimatedDebitAtDueDate: number; // Saldo disponible estimado a la fecha del pago
+  requiredAmount: number;          // Monto a pagar de esta tarjeta
+  shortfallAmount: number;         // Déficit puntual a la fecha del pago (si aplica)
+  salaryPayDay: number;            // Día programado de abono del sueldo principal
+  salaryDate: string;              // Fecha estimada del próximo sueldo (YYYY-MM-DD)
+  salaryIsAfterDue: boolean;       // True si el sueldo ingresa después de la fecha de vencimiento
+  salaryAmount: number;            // Monto de sueldo que entra después
+  projectedBalanceMonthEnd: number;// Saldo proyectado a fin de mes
+  daysDiffSalaryVsDue: number;     // Días de desfase entre sueldo y vencimiento (positivo = sueldo llega N días después)
+  headline?: string;               // Título de estado formal fintech (ej. 'Desfase pre-abono')
+  message: string;                 // Diagnóstico técnico y conciso
+  actionTip?: string;              // Sugerencia operativa (pago parcial, cambio de ciclo)
+}
+
+export interface CardPaymentPlanItem {
+  cardId: string;
+  cardName: string;
+  cardColor: string;
+  billingCloseDay: number;
+  paymentDueDay: number;
+  limit: number;
+  totalUnpaid: number;
+  utilizationPct: number;
+  nextDueDate: string | null;
+  nextDueAmount: number;
+  isOverdue: boolean;
+  nextCloseDate: string | null;
+  scorePayByDate: string | null;
+  liquidityCoverage?: CardLiquidityCoverage;
+}
+
+export interface CardsGlobalLiquidityAssessment {
+  items: CardPaymentPlanItem[];
+  hasAnySalaryMismatch: boolean;
+  hasAnyDeficit: boolean;
+  allCovered: boolean;
+  totalDueSoon: number;
+  totalDueBeforeSalary: number;
+  currentAvailableToday: number;
+  shortfallBeforeSalary: number;
+  primarySalaryPayDay: number;
+  primarySalaryAmount: number;
+  isSalaryCreditedToday: boolean;
+  summaryMessage: string;
+  recommendedAction?: string;
+}
+

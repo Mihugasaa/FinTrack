@@ -312,9 +312,9 @@ export const OverviewTab: React.FC = () => {
                             style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                             title={coverage.message}
                           >
-                            <span>Pre-abono</span>
+                            <span>Pre-sueldo</span>
                             <span style={{ opacity: 0.6 }}>•</span>
-                            <span className="tabular-nums">Brecha -{formatSoles(coverage.shortfallAmount)}</span>
+                            <span className="tabular-nums">Faltan {formatSoles(coverage.shortfallAmount)}</span>
                           </span>
                         )}
                         {isCovered && (

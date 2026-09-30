@@ -180,29 +180,55 @@ export const CardsTab: React.FC = () => {
         </h3>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           {isCurrentActiveMonth ? (
-            <>
-              Deuda total:{' '}
-              <strong className="tabular-nums" style={{ color: totalCreditDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
-                {formatSoles(totalCreditDebt)}
-              </strong>
-              {totalCreditDebtUsd > 0.009 && (
-                <span className="tabular-nums" style={{ color: 'var(--text-secondary)', marginLeft: '6px', fontSize: '0.76rem', fontWeight: 500 }}>
-                  (incl. ${totalCreditDebtUsd.toFixed(2)} USD)
+            totalCreditDebtUsd > 0.009 ? (
+              <>
+                Deuda total:{' '}
+                <strong className="tabular-nums" style={{ color: totalCreditDebtPen > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
+                  {formatSoles(totalCreditDebtPen)}
+                </strong>
+                <span style={{ color: 'var(--border-medium)', margin: '0 5px' }}>•</span>
+                <strong className="tabular-nums" style={{ color: 'var(--accent-info)', fontSize: '0.84rem' }}>
+                  ${totalCreditDebtUsd.toFixed(2)} USD
+                </strong>
+                <span style={{ color: 'var(--border-medium)', margin: '0 8px' }}>|</span>
+                <span style={{ color: 'var(--text-muted)' }}>Total estimado:</span>{' '}
+                <span className="tabular-nums" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {formatSoles(totalCreditDebt)}
                 </span>
-              )}
-            </>
+              </>
+            ) : (
+              <>
+                Deuda total:{' '}
+                <strong className="tabular-nums" style={{ color: totalCreditDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
+                  {formatSoles(totalCreditDebt)}
+                </strong>
+              </>
+            )
           ) : isFutureMonth ? (
-            <>
-              A pagar en {monthNames[currentMonth]}:{' '}
-              <strong className="tabular-nums" style={{ color: totalMonthDue > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
-                {formatSoles(totalMonthDue)}
-              </strong>
-              {totalMonthDueUsd > 0.009 && (
-                <span className="tabular-nums" style={{ color: 'var(--text-secondary)', marginLeft: '6px', fontSize: '0.76rem', fontWeight: 500 }}>
-                  (incl. ${totalMonthDueUsd.toFixed(2)} USD)
+            totalMonthDueUsd > 0.009 ? (
+              <>
+                A pagar en {monthNames[currentMonth]}:{' '}
+                <strong className="tabular-nums" style={{ color: totalMonthDuePen > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
+                  {formatSoles(totalMonthDuePen)}
+                </strong>
+                <span style={{ color: 'var(--border-medium)', margin: '0 5px' }}>•</span>
+                <strong className="tabular-nums" style={{ color: 'var(--accent-info)', fontSize: '0.84rem' }}>
+                  ${totalMonthDueUsd.toFixed(2)} USD
+                </strong>
+                <span style={{ color: 'var(--border-medium)', margin: '0 8px' }}>|</span>
+                <span style={{ color: 'var(--text-muted)' }}>Total estimado:</span>{' '}
+                <span className="tabular-nums" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {formatSoles(totalMonthDue)}
                 </span>
-              )}
-            </>
+              </>
+            ) : (
+              <>
+                A pagar en {monthNames[currentMonth]}:{' '}
+                <strong className="tabular-nums" style={{ color: totalMonthDue > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
+                  {formatSoles(totalMonthDue)}
+                </strong>
+              </>
+            )
           ) : (
             <>
               Facturado en {monthNames[currentMonth]}:{' '}
@@ -680,11 +706,11 @@ export const CardsTab: React.FC = () => {
                     Control de Flujo de Pagos · Ciclo en Curso
                   </span>
                   <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>
-                    Desfase Pre-Abono
+                    Desfase Pre-Sueldo
                   </span>
                 </div>
                 <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                  Existen compromisos por <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> con fecha límite previa al abono de haberes (Día {cardsLiquidityAssessment.primarySalaryPayDay}). Con la caja disponible actual ({formatSoles(cardsLiquidityAssessment.currentAvailableToday)}), la brecha puntual es de <strong className="tabular-nums text-danger">-{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong>. El cierre de mes proyecta solvencia tras la acreditación del sueldo.
+                  Existen compromisos por <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> con fecha límite previa al abono del sueldo (Día {cardsLiquidityAssessment.primarySalaryPayDay}). Con la caja disponible actual ({formatSoles(cardsLiquidityAssessment.currentAvailableToday)}), faltan <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong> para cubrirlos al 100%. El cierre de mes proyecta solvencia tras la acreditación del sueldo.
                 </div>
                 {cardsLiquidityAssessment.recommendedAction && (
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
@@ -730,7 +756,7 @@ export const CardsTab: React.FC = () => {
                   const statusBadge = !r.hasDue
                     ? { cls: 'badge-success', txt: 'Al día' }
                     : isMismatch
-                    ? { cls: 'badge-warning', txt: `Pre-abono (-${formatSoles(coverage?.shortfallAmount || 0)})` }
+                    ? { cls: 'badge-warning', txt: `Pre-sueldo (-${formatSoles(coverage?.shortfallAmount || 0)})` }
                     : overdue
                     ? { cls: 'badge-danger', txt: 'Vencido' }
                     : { cls: 'badge-warning', txt: 'Por pagar' };
@@ -805,11 +831,11 @@ export const CardsTab: React.FC = () => {
                                 ? 'var(--accent-success)'
                                 : 'var(--accent-danger)'
                             }}>
-                              {coverage.headline || (isMismatch ? 'Desfase Pre-Abono' : coverage.status === 'COVERED' ? 'Cobertura Confirmada' : 'Déficit de Ciclo')}
+                              {coverage.headline || (isMismatch ? 'Desfase Pre-Sueldo' : coverage.status === 'COVERED' ? 'Cobertura Confirmada' : 'Déficit de Ciclo')}
                             </span>
                             {isMismatch && (
                               <span className="tabular-nums text-danger" style={{ fontWeight: 700, fontSize: '0.74rem' }}>
-                                Brecha al corte: -{formatSoles(coverage.shortfallAmount)}
+                                Faltan antes de sueldo: {formatSoles(coverage.shortfallAmount)}
                               </span>
                             )}
                           </div>

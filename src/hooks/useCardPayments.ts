@@ -7,6 +7,7 @@ import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constant
 import { initialPaymentMethods } from '@/lib/defaults';
 import { calculateItf } from '@/lib/calculations';
 import { CardPayment, PaymentMethod, CurrencyCode } from '@/types';
+import { generateUUID } from '@/lib/utils';
 
 interface UseCardPaymentsDeps {
   paymentMethods: PaymentMethod[];
@@ -103,9 +104,9 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setIsPaymentModalOpen(true);
   };
 
-  const handleOpenEditCardPayment = (pay: CardPayment, idx: number) => {
-    setEditingCardPaymentId(pay.id || `cp-${idx}`);
-    setEditingCardPaymentIndex(idx);
+  const handleOpenEditCardPayment = (pay: CardPayment, _idx?: number) => {
+    setEditingCardPaymentId(pay.id || null);
+    setEditingCardPaymentIndex(null);
     setPaymentCardId(pay.paymentMethodId);
     const isUsd = pay.currency === 'USD';
     setPaymentCurrency(isUsd ? 'USD' : 'PEN');
@@ -147,28 +148,46 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       }
     }
 
-    if (editingCardPaymentIndex !== null || editingCardPaymentId !== null) {
-      // Modificar pago existente
-      setCardPayments(prev => prev.map((p, idx) => {
-        const matches = (editingCardPaymentId && p.id === editingCardPaymentId) ||
-          (editingCardPaymentIndex !== null && idx === editingCardPaymentIndex);
-        if (matches) {
-          return {
-            ...p,
-            paymentMethodId: paymentCardId,
-            amountPaid: amountPen,
-            currency: paymentCurrency,
-            originalAmount: num,
-            exchangeRate: rate,
-            amountPen,
-            itfAmount: effectiveItf > 0 ? effectiveItf : 0,
-            paymentDate: targetDate,
-            sourceType: paymentSourceType,
-            targetMonth: paymentTargetMonth || undefined
-          };
-        }
-        return p;
-      }));
+    if (editingCardPaymentId !== null) {
+      // Modificar pago existente de forma precisa por ID único
+      const existing = cardPayments.find(p => p.id === editingCardPaymentId);
+
+      // Limpiar y actualizar tags de notas para que reflejen fielmente la edición
+      let cleanNotes = (existing?.notes || '')
+        .replace(/\[itf:[^\]]*\]/g, '')
+        .replace(/\[target:[^\]]*\]/g, '')
+        .trim();
+      if (paymentTargetMonth) {
+        cleanNotes = `${cleanNotes ? `${cleanNotes} ` : ''}[target:${paymentTargetMonth}]`;
+      }
+      if (effectiveItf > 0) {
+        cleanNotes = `${cleanNotes ? `${cleanNotes} ` : ''}[itf:${effectiveItf.toFixed(2)}]`;
+      }
+      const updatedNotes = cleanNotes.trim() || undefined;
+
+      const updatedPaymentObj: CardPayment = {
+        ...(existing || {}),
+        id: editingCardPaymentId,
+        paymentMethodId: paymentCardId,
+        amountPaid: amountPen,
+        currency: paymentCurrency,
+        originalAmount: num,
+        exchangeRate: rate,
+        amountPen,
+        itfAmount: effectiveItf > 0 ? effectiveItf : 0,
+        paymentDate: targetDate,
+        sourceType: paymentSourceType,
+        targetMonth: paymentTargetMonth || undefined,
+        notes: updatedNotes
+      };
+
+      setCardPayments(prev => prev.map(p => (p.id === editingCardPaymentId ? updatedPaymentObj : p)));
+
+      console.log('[useCardPayments] Calling SupabaseDataService.updateCardPayment with:', updatedPaymentObj);
+      SupabaseDataService.updateCardPayment(updatedPaymentObj).then(res => {
+        console.log('[useCardPayments] updateCardPayment finished with result:', res);
+      });
+
       setIsPaymentModalOpen(false);
       setEditingCardPaymentId(null);
       setEditingCardPaymentIndex(null);
@@ -179,8 +198,19 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       return;
     }
 
+    // Creación de nuevo abono con UUID nativo
+    let newNotes = '';
+    if (paymentTargetMonth) {
+      newNotes = `[target:${paymentTargetMonth}]`;
+    }
+    if (effectiveItf > 0) {
+      newNotes = `${newNotes ? `${newNotes} ` : ''}[itf:${effectiveItf.toFixed(2)}]`;
+    }
+    const finalNewNotes = newNotes.trim() || undefined;
+
+    const generatedId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : generateUUID();
     const newPay: CardPayment = {
-      id: `cp-${Date.now()}`,
+      id: generatedId,
       paymentMethodId: paymentCardId,
       amountPaid: amountPen,
       currency: paymentCurrency,
@@ -190,11 +220,12 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       itfAmount: effectiveItf > 0 ? effectiveItf : 0,
       paymentDate: targetDate,
       sourceType: paymentSourceType,
-      targetMonth: paymentTargetMonth || undefined
+      targetMonth: paymentTargetMonth || undefined,
+      notes: finalNewNotes
     };
 
     setCardPayments(prev => [newPay, ...prev]);
-    // POST a Supabase en la nube
+    // POST a Supabase en la nube con su UUID persistente
     SupabaseDataService.createCardPayment(newPay);
     setIsPaymentModalOpen(false);
     setPaymentAmount('');
@@ -214,16 +245,10 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setItfAmountInput('');
   };
 
-  const handleDeleteCardPayment = (targetId?: string, targetIndex?: number) => {
-    setCardPayments(prev => prev.filter((p, idx) => {
-      if (targetId && p.id && p.id === targetId) return false;
-      if (targetId && !p.id && `cp-${idx}` === targetId) return false;
-      if (!targetId && targetIndex !== undefined && idx === targetIndex) return false;
-      return true;
-    }));
-    if (targetId && !targetId.startsWith('cp-saved-') && !targetId.startsWith('cp-legacy-') && !targetId.startsWith('cp-tx-')) {
-      SupabaseDataService.deleteCardPayment(targetId);
-    }
+  const handleDeleteCardPayment = (targetId?: string, _targetIndex?: number) => {
+    if (!targetId) return;
+    setCardPayments(prev => prev.filter(p => p.id !== targetId));
+    SupabaseDataService.deleteCardPayment(targetId);
   };
 
   return {

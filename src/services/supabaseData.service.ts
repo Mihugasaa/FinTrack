@@ -1521,9 +1521,10 @@ export class SupabaseDataService {
         const amountPen = row.amount_pen !== null && row.amount_pen !== undefined ? parseFloat(row.amount_pen) : amountPaid;
 
         const targetMonth = row.target_month || row.notes?.match(/\[target:([^\]]+)\]/)?.[1] || undefined;
-        const itfFromRow = row.itf_amount !== null && row.itf_amount !== undefined ? parseFloat(row.itf_amount) : null;
-        const itfFromNotes = row.notes?.match(/\[itf:([0-9.]+)\]/)?.[1] ? parseFloat(row.notes.match(/\[itf:([0-9.]+)\]/)[1]) : null;
-        const itfAmount = itfFromRow !== null ? itfFromRow : (itfFromNotes !== null ? itfFromNotes : 0);
+        const hasItfCol = row.itf_amount !== null && row.itf_amount !== undefined;
+        const itfFromRow = hasItfCol ? (parseFloat(row.itf_amount) || 0) : 0;
+        const itfFromNotes = row.notes?.match(/\[itf:([0-9.]+)\]/)?.[1] ? (parseFloat(row.notes.match(/\[itf:([0-9.]+)\]/)[1]) || 0) : 0;
+        const itfAmount = hasItfCol ? itfFromRow : itfFromNotes;
 
         return {
           id: row.id,
@@ -1574,9 +1575,10 @@ export class SupabaseDataService {
         const exchangeRate = row.exchange_rate !== null && row.exchange_rate !== undefined ? parseFloat(row.exchange_rate) : 1.0;
         const amountPen = row.amount_pen !== null && row.amount_pen !== undefined ? parseFloat(row.amount_pen) : amountPaid;
         const targetMonth = row.target_month || row.notes?.match(/\[target:([^\]]+)\]/)?.[1] || undefined;
-        const itfFromRow = row.itf_amount !== null && row.itf_amount !== undefined ? parseFloat(row.itf_amount) : null;
-        const itfFromNotes = row.notes?.match(/\[itf:([0-9.]+)\]/)?.[1] ? parseFloat(row.notes.match(/\[itf:([0-9.]+)\]/)[1]) : null;
-        const itfAmount = itfFromRow !== null ? itfFromRow : (itfFromNotes !== null ? itfFromNotes : 0);
+        const hasItfCol = row.itf_amount !== null && row.itf_amount !== undefined;
+        const itfFromRow = hasItfCol ? (parseFloat(row.itf_amount) || 0) : 0;
+        const itfFromNotes = row.notes?.match(/\[itf:([0-9.]+)\]/)?.[1] ? (parseFloat(row.notes.match(/\[itf:([0-9.]+)\]/)[1]) || 0) : 0;
+        const itfAmount = hasItfCol ? itfFromRow : itfFromNotes;
 
         return {
           id: row.id,
@@ -1617,13 +1619,19 @@ export class SupabaseDataService {
         ? pay.amountPen 
         : (currency === 'USD' ? Math.round(originalAmount * exchangeRate * 100) / 100 : originalAmount);
 
-      let encodedNotes = pay.targetMonth && !(pay.notes || '').includes('[target:')
-        ? `${pay.notes ? `${pay.notes} ` : ''}[target:${pay.targetMonth}]`
-        : (pay.notes || null);
+      let cleanNotes = (pay.notes || '')
+        .replace(/\[itf:[^\]]*\]/g, '')
+        .replace(/\[target:[^\]]*\]/g, '')
+        .trim();
 
-      if (pay.itfAmount && pay.itfAmount > 0 && !(encodedNotes || '').includes('[itf:')) {
+      let encodedNotes: string | null = cleanNotes;
+      if (pay.targetMonth) {
+        encodedNotes = `${encodedNotes ? `${encodedNotes} ` : ''}[target:${pay.targetMonth}]`;
+      }
+      if (pay.itfAmount && pay.itfAmount > 0) {
         encodedNotes = `${encodedNotes ? `${encodedNotes} ` : ''}[itf:${pay.itfAmount.toFixed(2)}]`;
       }
+      encodedNotes = encodedNotes.trim() || null;
 
       const payload: Record<string, any> = {
         user_id: userId,
@@ -1681,6 +1689,134 @@ export class SupabaseDataService {
       return !error;
     } catch (e) {
       this.logSupabaseError('createCardPayment (catch)', e);
+      return false;
+    }
+  }
+
+  // PUT/PATCH: Actualizar abono a tarjeta existente en Supabase
+  public static async updateCardPayment(pay: CardPayment): Promise<boolean> {
+    console.log('[updateCardPayment] Invoked with pay:', pay);
+    if (!supabase || !isSupabaseConfigured) {
+      console.warn('[updateCardPayment] Supabase not configured');
+      return false;
+    }
+
+    let targetRowId = pay.id;
+    if (!targetRowId || !isUUID(targetRowId)) {
+      console.warn('[updateCardPayment] pay.id is not a UUID, finding matching row in Supabase:', pay);
+      try {
+        const { data: matches } = await supabase
+          .from('card_payments')
+          .select('id, payment_method_id, payment_date, amount_paid')
+          .eq('payment_date', pay.paymentDate);
+
+        const found = matches?.find((m: any) =>
+          (isUUID(pay.paymentMethodId) && m.payment_method_id === pay.paymentMethodId) ||
+          Math.abs(parseFloat(m.amount_paid) - (pay.amountPen ?? pay.amountPaid)) < 0.05
+        );
+        if (found?.id) {
+          targetRowId = found.id;
+          console.log('[updateCardPayment] Resolved real row UUID in Supabase:', targetRowId);
+        } else {
+          console.warn('[updateCardPayment] Could not find row in Supabase to update for non-UUID id:', pay.id);
+          return false;
+        }
+      } catch (findErr) {
+        console.warn('[updateCardPayment] Error finding row by date/method:', findErr);
+        return false;
+      }
+    }
+
+    try {
+      const currency = pay.currency || 'PEN';
+      const originalAmount = pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid;
+      const exchangeRate = currency === 'USD' ? (pay.exchangeRate || 1.0) : 1.0;
+      const amountPen = pay.amountPen !== undefined 
+        ? pay.amountPen 
+        : (currency === 'USD' ? Math.round(originalAmount * exchangeRate * 100) / 100 : originalAmount);
+
+      let cleanNotes = (pay.notes || '')
+        .replace(/\[itf:[^\]]*\]/g, '')
+        .replace(/\[target:[^\]]*\]/g, '')
+        .trim();
+
+      let encodedNotes: string | null = cleanNotes;
+      if (pay.targetMonth) {
+        encodedNotes = `${encodedNotes ? `${encodedNotes} ` : ''}[target:${pay.targetMonth}]`;
+      }
+      if (pay.itfAmount && pay.itfAmount > 0) {
+        encodedNotes = `${encodedNotes ? `${encodedNotes} ` : ''}[itf:${pay.itfAmount.toFixed(2)}]`;
+      }
+      encodedNotes = encodedNotes.trim() || null;
+
+      const payload: Record<string, any> = {
+        amount_paid: amountPen,
+        payment_date: pay.paymentDate,
+        source_type: pay.sourceType || 'DEBIT_ACCOUNT',
+        currency,
+        original_amount: originalAmount,
+        exchange_rate: exchangeRate,
+        amount_pen: amountPen,
+        itf_amount: pay.itfAmount !== undefined && pay.itfAmount !== null ? pay.itfAmount : 0,
+        notes: encodedNotes,
+        target_month: pay.targetMonth || null
+      };
+
+      if (isUUID(pay.paymentMethodId)) {
+        payload.payment_method_id = pay.paymentMethodId;
+      }
+
+      console.log('[updateCardPayment] Sending update to Supabase for id:', targetRowId, 'payload:', payload);
+      let { data, error } = await supabase.from('card_payments').update(payload).eq('id', targetRowId).select();
+
+      // Fallback si la columna itf_amount aún no existe en Supabase
+      if (error && error.message?.includes('itf_amount')) {
+        console.warn('[updateCardPayment] itf_amount column missing, retrying without it...');
+        delete payload.itf_amount;
+        const retryItf = await supabase.from('card_payments').update(payload).eq('id', targetRowId).select();
+        error = retryItf.error;
+        data = retryItf.data;
+      }
+
+      // Fallback si la columna target_month aún no existe en Supabase
+      if (error && error.message?.includes('target_month')) {
+        console.warn('[updateCardPayment] target_month column missing, retrying without it...');
+        delete payload.target_month;
+        const retryTarget = await supabase.from('card_payments').update(payload).eq('id', targetRowId).select();
+        error = retryTarget.error;
+        data = retryTarget.data;
+      }
+
+      // Fallback si columnas de moneda aún no existen en Supabase
+      if (error && (error.message?.includes('currency') || error.message?.includes('original_amount') || error.message?.includes('exchange_rate') || error.message?.includes('amount_pen'))) {
+        console.warn('[updateCardPayment] multicurrency columns missing, retrying without them...');
+        delete payload.currency;
+        delete payload.original_amount;
+        delete payload.exchange_rate;
+        delete payload.amount_pen;
+        const retryCols = await supabase.from('card_payments').update(payload).eq('id', targetRowId).select();
+        error = retryCols.error;
+        data = retryCols.data;
+      }
+
+      // Fallback si source_type no existe en Supabase
+      if (error && error.message?.includes('source_type')) {
+        console.warn('[updateCardPayment] source_type missing, retrying without it...');
+        delete payload.source_type;
+        const retrySource = await supabase.from('card_payments').update(payload).eq('id', targetRowId).select();
+        error = retrySource.error;
+        data = retrySource.data;
+      }
+
+      if (error) {
+        this.logSupabaseError('updateCardPayment', error);
+      } else {
+        console.log('[updateCardPayment] Successfully updated in Supabase! Updated rows count:', data?.length, 'data:', data);
+      }
+
+      return !error && (data?.length ?? 0) > 0;
+    } catch (e) {
+      this.logSupabaseError('updateCardPayment (catch)', e);
       return false;
     }
   }

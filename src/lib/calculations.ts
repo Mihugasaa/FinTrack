@@ -2020,6 +2020,9 @@ export function evaluateCardsLiquidityCoverage(params: {
 
     // ¿El sueldo entra después del vencimiento?
     const salaryIsAfterDue = dueDate < upcomingSalaryDate;
+    if (salaryIsAfterDue) {
+      totalDueBeforeSalary += dueAmt;
+    }
 
     // Calcular días de desfase: sueldo date vs due date
     const dueTime = new Date(`${dueDate}T12:00:00`).getTime();
@@ -2085,14 +2088,13 @@ export function evaluateCardsLiquidityCoverage(params: {
       headline = 'Cobertura confirmada';
       runningAvailable = Math.max(0, Math.round((estimatedDebitAtDueDate - dueAmt) * 100) / 100);
       message = salaryIsAfterDue
-        ? `Caja disponible suficiente (${formatSoles(estimatedDebitAtDueDate)}) previo al abono del día ${effectiveSalaryDay}.`
+        ? `Caja disponible suficiente (${formatSoles(estimatedDebitAtDueDate)}) previo al sueldo del día ${effectiveSalaryDay}.`
         : `Abono de haberes ingresa previo a la fecha límite (${formatDisplayDate(dueDate)}). Caja est.: ${formatSoles(estimatedDebitAtDueDate)}.`;
     } else {
       shortfallAmount = Math.round((dueAmt - estimatedDebitAtDueDate) * 100) / 100;
       runningAvailable = 0;
 
       if (salaryIsAfterDue) {
-        totalDueBeforeSalary += dueAmt;
         shortfallBeforeSalary += shortfallAmount;
 
         // Comprobar si al ingresar el sueldo a fin de mes el saldo alcanza
@@ -2101,8 +2103,8 @@ export function evaluateCardsLiquidityCoverage(params: {
         if (canCoverWithSalary) {
           status = 'SALARY_MISMATCH';
           hasAnySalaryMismatch = true;
-          headline = 'Desfase pre-abono';
-          message = `Vencimiento el ${formatDisplayDate(dueDate)} previo al abono de haberes (Día ${effectiveSalaryDay}, +${daysDiffSalaryVsDue} d). Solvencia de cierre mensual confirmada.`;
+          headline = 'Desfase pre-sueldo';
+          message = `Vencimiento el ${formatDisplayDate(dueDate)} previo al cobro de sueldo (Día ${effectiveSalaryDay}, +${daysDiffSalaryVsDue} d). Solvencia de cierre mensual confirmada.`;
 
           if (estimatedDebitAtDueDate > 0) {
             actionTip = `Abono parcial sugerido de ${formatSoles(estimatedDebitAtDueDate)} con caja disponible para mitigar intereses punitorios.`;
@@ -2156,7 +2158,7 @@ export function evaluateCardsLiquidityCoverage(params: {
   if (totalDueSoon <= 0.005) {
     summaryMessage = 'Sin obligaciones de tarjeta pendientes en el ciclo.';
   } else if (hasAnySalaryMismatch) {
-    summaryMessage = `Compromisos exigibles por ${formatSoles(totalDueBeforeSalary)} previo al abono de haberes (Día ${effectiveSalaryDay}). Brecha puntual de ${formatSoles(shortfallBeforeSalary)} frente a la caja actual (${formatSoles(currentDebitBalanceToday)}).`;
+    summaryMessage = `Compromisos por ${formatSoles(totalDueBeforeSalary)} con vencimiento previo al próximo sueldo (Día ${effectiveSalaryDay}). Brecha puntual de ${formatSoles(shortfallBeforeSalary)} frente a la caja actual (${formatSoles(currentDebitBalanceToday)}).`;
     recommendedAction = `Efectuar abono parcial con caja disponible y evaluar sincronizar el ciclo de facturación al día ${Math.min(28, effectiveSalaryDay + 3)}.`;
   } else if (hasAnyDeficit) {
     summaryMessage = `Déficit proyectado: Los compromisos del ciclo (${formatSoles(totalDueSoon)}) exceden la capacidad de caja proyectada.`;

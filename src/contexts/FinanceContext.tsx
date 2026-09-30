@@ -709,11 +709,20 @@ function useFinanceController() {
               (lp.paymentMethodId === cp.paymentMethodId && Math.abs(lp.amountPaid - cp.amountPaid) < 0.01 && lp.paymentDate === cp.paymentDate)
             );
             return {
+              ...localMatch,
+              ...cp,
               id: cp.id || localMatch?.id || `cp-${monthKey}-${idx}`,
               paymentMethodId: cp.paymentMethodId,
               amountPaid: cp.amountPaid,
               paymentDate: cp.paymentDate,
-              sourceType: cp.sourceType !== 'DEBIT_ACCOUNT' && cp.sourceType ? cp.sourceType : (localMatch?.sourceType || 'DEBIT_ACCOUNT')
+              sourceType: cp.sourceType !== 'DEBIT_ACCOUNT' && cp.sourceType ? cp.sourceType : (localMatch?.sourceType || 'DEBIT_ACCOUNT'),
+              itfAmount: (cp.itfAmount !== undefined && cp.itfAmount !== null) ? cp.itfAmount : (localMatch?.itfAmount ?? 0),
+              currency: cp.currency || localMatch?.currency || 'PEN',
+              originalAmount: cp.originalAmount !== undefined ? cp.originalAmount : (localMatch?.originalAmount ?? cp.amountPaid),
+              exchangeRate: cp.exchangeRate !== undefined ? cp.exchangeRate : (localMatch?.exchangeRate ?? 1.0),
+              amountPen: cp.amountPen !== undefined ? cp.amountPen : (localMatch?.amountPen ?? cp.amountPaid),
+              targetMonth: cp.targetMonth || localMatch?.targetMonth,
+              notes: cp.notes !== undefined ? (cp.notes || undefined) : localMatch?.notes
             };
           });
           const localFiltered = prev.filter(p => !p.paymentDate.startsWith(monthKey));
@@ -760,7 +769,10 @@ function useFinanceController() {
           const byKey = new Map<string, CardPayment>();
           prev.forEach(p => byKey.set(keyOf(p), p));
           allPayments.forEach(cp => {
-            const local = byKey.get(keyOf(cp));
+            const local = byKey.get(keyOf(cp)) || prev.find(lp =>
+              (lp.id && cp.id && lp.id === cp.id) ||
+              (lp.paymentMethodId === cp.paymentMethodId && Math.abs(lp.amountPaid - cp.amountPaid) < 0.01 && lp.paymentDate === cp.paymentDate)
+            );
             byKey.set(keyOf(cp), {
               ...local,
               ...cp,
@@ -772,7 +784,14 @@ function useFinanceController() {
               // registro en la nube todavía lo trae como el genérico DEBIT_ACCOUNT.
               sourceType: (cp.sourceType && cp.sourceType !== 'DEBIT_ACCOUNT')
                 ? cp.sourceType
-                : (local?.sourceType || 'DEBIT_ACCOUNT')
+                : (local?.sourceType || 'DEBIT_ACCOUNT'),
+              itfAmount: (cp.itfAmount !== undefined && cp.itfAmount !== null) ? cp.itfAmount : (local?.itfAmount ?? 0),
+              currency: cp.currency || local?.currency || 'PEN',
+              originalAmount: cp.originalAmount !== undefined ? cp.originalAmount : (local?.originalAmount ?? cp.amountPaid),
+              exchangeRate: cp.exchangeRate !== undefined ? cp.exchangeRate : (local?.exchangeRate ?? 1.0),
+              amountPen: cp.amountPen !== undefined ? cp.amountPen : (local?.amountPen ?? cp.amountPaid),
+              targetMonth: cp.targetMonth || local?.targetMonth,
+              notes: cp.notes !== undefined ? (cp.notes || undefined) : local?.notes
             });
           });
           return Array.from(byKey.values());
@@ -863,11 +882,20 @@ function useFinanceController() {
                   (lp.paymentMethodId === cp.paymentMethodId && Math.abs(lp.amountPaid - cp.amountPaid) < 0.01 && lp.paymentDate === cp.paymentDate)
                 );
                 return {
+                  ...localMatch,
+                  ...cp,
                   id: cp.id || localMatch?.id || `cp-${monthKey}-${idx}`,
                   paymentMethodId: cp.paymentMethodId,
                   amountPaid: cp.amountPaid,
                   paymentDate: cp.paymentDate,
-                  sourceType: cp.sourceType !== 'DEBIT_ACCOUNT' && cp.sourceType ? cp.sourceType : (localMatch?.sourceType || 'DEBIT_ACCOUNT')
+                  sourceType: cp.sourceType !== 'DEBIT_ACCOUNT' && cp.sourceType ? cp.sourceType : (localMatch?.sourceType || 'DEBIT_ACCOUNT'),
+                  itfAmount: (cp.itfAmount !== undefined && cp.itfAmount !== null) ? cp.itfAmount : (localMatch?.itfAmount ?? 0),
+                  currency: cp.currency || localMatch?.currency || 'PEN',
+                  originalAmount: cp.originalAmount !== undefined ? cp.originalAmount : (localMatch?.originalAmount ?? cp.amountPaid),
+                  exchangeRate: cp.exchangeRate !== undefined ? cp.exchangeRate : (localMatch?.exchangeRate ?? 1.0),
+                  amountPen: cp.amountPen !== undefined ? cp.amountPen : (localMatch?.amountPen ?? cp.amountPaid),
+                  targetMonth: cp.targetMonth || localMatch?.targetMonth,
+                  notes: cp.notes !== undefined ? (cp.notes || undefined) : localMatch?.notes
                 };
               });
               const localFiltered = prev.filter(p => !p.paymentDate.startsWith(monthKey));
@@ -900,7 +928,10 @@ function useFinanceController() {
               const byKey = new Map<string, CardPayment>();
               prev.forEach(p => byKey.set(keyOf(p), p));
               allPayments.forEach(cp => {
-                const local = byKey.get(keyOf(cp));
+                const local = byKey.get(keyOf(cp)) || prev.find(lp =>
+                  (lp.id && cp.id && lp.id === cp.id) ||
+                  (lp.paymentMethodId === cp.paymentMethodId && Math.abs(lp.amountPaid - cp.amountPaid) < 0.01 && lp.paymentDate === cp.paymentDate)
+                );
                 byKey.set(keyOf(cp), {
                   ...local,
                   ...cp,
@@ -908,7 +939,14 @@ function useFinanceController() {
                   paymentMethodId: cp.paymentMethodId,
                   amountPaid: cp.amountPaid,
                   paymentDate: cp.paymentDate,
-                  sourceType: (cp.sourceType && cp.sourceType !== 'DEBIT_ACCOUNT') ? cp.sourceType : (local?.sourceType || 'DEBIT_ACCOUNT')
+                  sourceType: (cp.sourceType && cp.sourceType !== 'DEBIT_ACCOUNT') ? cp.sourceType : (local?.sourceType || 'DEBIT_ACCOUNT'),
+                  itfAmount: (cp.itfAmount !== undefined && cp.itfAmount !== null) ? cp.itfAmount : (local?.itfAmount ?? 0),
+                  currency: cp.currency || local?.currency || 'PEN',
+                  originalAmount: cp.originalAmount !== undefined ? cp.originalAmount : (local?.originalAmount ?? cp.amountPaid),
+                  exchangeRate: cp.exchangeRate !== undefined ? cp.exchangeRate : (local?.exchangeRate ?? 1.0),
+                  amountPen: cp.amountPen !== undefined ? cp.amountPen : (local?.amountPen ?? cp.amountPaid),
+                  targetMonth: cp.targetMonth || local?.targetMonth,
+                  notes: cp.notes !== undefined ? (cp.notes || undefined) : local?.notes
                 });
               });
               return Array.from(byKey.values());

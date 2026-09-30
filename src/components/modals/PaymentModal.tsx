@@ -14,7 +14,7 @@ export const PaymentModal: React.FC = () => {
   const {
     handleClosePaymentModal,
     handleMakeCardPayment,
-    editingCardPaymentIndex,
+    editingCardPaymentId,
     paymentMethods,
     paymentCardId,
     setPaymentCardId,
@@ -45,7 +45,7 @@ export const PaymentModal: React.FC = () => {
   } = useFinance();
   const onClose = handleClosePaymentModal;
   const onSubmit = handleMakeCardPayment;
-  const isEditing = editingCardPaymentIndex !== null;
+  const isEditing = editingCardPaymentId !== null;
   const [isEditingItf, setIsEditingItf] = React.useState(false);
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
 

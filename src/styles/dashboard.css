@@ -6606,7 +6606,7 @@ body.modal-open {
   border-radius: 999px;
   background: var(--border-subtle);
   overflow: hidden;
-  margin-bottom: 14px;
+  margin-bottom: 11px;
 }
 
 .card-zen-bar-fill {
@@ -6619,9 +6619,96 @@ body.modal-open {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  padding-top: 12px;
+  padding-top: 10px;
   border-top: 1px dashed var(--border-subtle);
   font-size: 0.775rem;
+}
+
+/* Botón Icono Sutil y Ergonómico */
+.btn-icon-subtle {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-subtle:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Cabecera y Resumen Proporcionado de Deuda */
+.cards-section-header {
+  margin: 24px 0 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cards-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.cards-debt-summary-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.debt-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  font-size: 0.775rem;
+}
+
+.debt-summary-usd-badge {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--accent-info);
+  background: rgba(14, 165, 233, 0.09);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+@media (max-width: 640px) {
+  .cards-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .cards-debt-summary-badge {
+    width: 100%;
+  }
+  .debt-summary-pill {
+    width: 100%;
+    justify-content: space-between;
+    box-sizing: border-box;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+  }
 }
 
 /* 3. Contenedor Unificado: Historial & Cronograma */
@@ -6673,6 +6760,297 @@ body.modal-open {
 
 .tab-pill:hover:not(.active) {
   color: var(--text-primary);
+}
+
+/* Lista y Filas de Pagos a Tarjetas (Flat Design - Sin Card in Card) */
+.card-payment-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-payment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 12px;
+  transition: background 0.15s ease;
+}
+
+.card-payment-row:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.card-payment-row:first-child {
+  padding-top: 2px;
+}
+
+.card-payment-row:hover {
+  background: rgba(0, 0, 0, 0.015);
+  border-radius: 8px;
+}
+
+:root[data-theme="dark"] .card-payment-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 640px) {
+  .tabs-unified-container {
+    padding: 14px 12px;
+  }
+  .credit-card-zen {
+    padding: 15px 14px;
+  }
+  .card-zen-debt-val {
+    font-size: 1.25rem;
+  }
+  .tabs-pills-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .tabs-pill-group {
+    display: flex;
+    width: 100%;
+  }
+  .tab-pill {
+    flex: 1;
+    text-align: center;
+    padding: 7px 6px;
+    font-size: 0.775rem;
+  }
+  .tabs-pills-header > div:last-child {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+}
+
+/* ==============================================================================
+   PRÓXIMOS VENCIMIENTOS - TARJETAS EJECUTIVAS SIN CAJAS ANIDADAS (FINTRACK SIGNATURE)
+   ============================================================================== */
+
+.due-plan-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.due-plan-card:hover {
+  border-color: var(--border-medium);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+}
+
+.due-plan-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.due-plan-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.due-plan-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.due-plan-card-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.due-plan-card-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.due-plan-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.due-plan-dot {
+  color: var(--border-medium);
+}
+
+.due-plan-cycle-tag {
+  color: var(--text-muted);
+  font-size: 0.775rem;
+}
+
+.due-plan-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.due-plan-amount-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.due-plan-amount {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.due-plan-amount-sub {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.due-plan-paid-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 6px;
+  color: var(--accent-success);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Botón Contextual Ergonómico de Pago de Tarjeta */
+.btn-pay-contextual {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-pay-contextual:hover {
+  background: var(--accent-brand);
+  color: #fff;
+  border-color: var(--accent-brand);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
+}
+
+/* Barra de Parámetros del Ciclo (Estilo Chips Planos) */
+.due-plan-params-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-subtle);
+  font-size: 0.775rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.due-plan-param-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.due-plan-param-item span {
+  color: var(--text-muted);
+  font-size: 0.725rem;
+}
+
+/* Cinta Sutil de Tranquilidad (Cobertura Confirmada) */
+.due-plan-reassurance-ribbon {
+  background: rgba(16, 185, 129, 0.07);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.775rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.35;
+}
+
+.due-plan-reassurance-ribbon strong {
+  color: var(--accent-success);
+  font-weight: 600;
+}
+
+/* Caja de Advertencia (Desfase o Déficit) */
+.due-plan-alert-box {
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.775rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.due-plan-alert-box.alert-mismatch {
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.28);
+  border-left: 3px solid var(--accent-warning);
+}
+
+.due-plan-alert-box.alert-deficit {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-left: 3px solid var(--accent-danger);
+}
+
+@media (max-width: 640px) {
+  .due-plan-card {
+    padding: 12px 14px;
+  }
+  .due-plan-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .due-plan-right {
+    justify-content: space-between;
+    width: 100%;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .due-plan-amount-box {
+    align-items: flex-start;
+  }
+  .due-plan-params-bar {
+    gap: 8px 12px;
+    font-size: 0.74rem;
+  }
 }
 
 /* ==============================================================================

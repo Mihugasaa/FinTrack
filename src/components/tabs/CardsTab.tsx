@@ -6,7 +6,9 @@ import {
   Pencil,
   Landmark,
   CreditCard,
-  Trash2
+  Trash2,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 
@@ -99,7 +101,7 @@ export const CardsTab: React.FC = () => {
           </p>
         </div>
         <div className="action-group">
-          <button className="btn-primary" onClick={() => setIsCardModalOpen(true)}>
+          <button className="btn-secondary" onClick={() => setIsCardModalOpen(true)}>
             <Plus size={15} />
             <span>Nueva Tarjeta / Cuenta</span>
           </button>
@@ -123,6 +125,17 @@ export const CardsTab: React.FC = () => {
               >
                 {isCurrentActiveMonth ? 'Disponible' : isFutureMonth ? 'Proyectado' : 'Cierre de mes'}
               </span>
+              <button
+                type="button"
+                className="btn-icon-subtle"
+                style={{ padding: '3px 7px', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                onClick={() => setIsAdjustDebitModalOpen(true)}
+                title="Ajustar saldo inicial de cuenta débito"
+                aria-label="Ajustar saldo"
+              >
+                <Pencil size={11} />
+                <span style={{ fontSize: '0.7rem' }}>Ajustar</span>
+              </button>
             </div>
             <div
               className="debit-balance-val tabular-nums"
@@ -158,86 +171,90 @@ export const CardsTab: React.FC = () => {
               {formatSoles(totalPaidToCardsThisMonth)}
             </span>
           </div>
-
-          <button
-            type="button"
-            className="btn-secondary"
-            style={{ padding: '7px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}
-            onClick={() => setIsAdjustDebitModalOpen(true)}
-            title="Ajustar saldo inicial de cuenta débito"
-          >
-            <Pencil size={12} />
-            <span>Ajustar Saldo</span>
-          </button>
         </div>
       </div>
 
       {/* Grid de Tarjetas de Crédito */}
-      <div style={{ margin: '24px 0 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-        <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* Grid de Tarjetas de Crédito */}
+      <div className="cards-section-header">
+        <h3 className="cards-section-title">
           <CreditCard size={17} style={{ color: 'var(--accent-brand)' }} />
           <span>Tarjetas de Crédito ({cardDebtSummary.length})</span>
         </h3>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        <div className="cards-debt-summary-badge">
           {isCurrentActiveMonth ? (
             totalCreditDebtUsd > 0.009 ? (
-              <>
-                Deuda total:{' '}
-                <strong className="tabular-nums" style={{ color: totalCreditDebtPen > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
-                  {formatSoles(totalCreditDebtPen)}
-                </strong>
-                <span style={{ color: 'var(--border-medium)', margin: '0 5px' }}>•</span>
-                <strong className="tabular-nums" style={{ color: 'var(--accent-info)', fontSize: '0.84rem' }}>
-                  ${totalCreditDebtUsd.toFixed(2)} USD
-                </strong>
-                <span style={{ color: 'var(--border-medium)', margin: '0 8px' }}>|</span>
-                <span style={{ color: 'var(--text-muted)' }}>Total estimado:</span>{' '}
-                <span className="tabular-nums" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  {formatSoles(totalCreditDebt)}
+              <div className="debt-summary-pill">
+                <span>
+                  Deuda:{' '}
+                  <strong className="tabular-nums" style={{ color: totalCreditDebtPen > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
+                    {formatSoles(totalCreditDebtPen)}
+                  </strong>
+                  <span style={{ margin: '0 4px', color: 'var(--border-medium)' }}>•</span>
+                  <span className="debt-summary-usd-badge tabular-nums">
+                    ${totalCreditDebtUsd.toFixed(2)} USD
+                  </span>
                 </span>
-              </>
+                <span style={{ color: 'var(--border-medium)', margin: '0 2px' }}>|</span>
+                <span>
+                  <span style={{ color: 'var(--text-muted)' }}>Total est.:</span>{' '}
+                  <strong className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                    {formatSoles(totalCreditDebt)}
+                  </strong>
+                </span>
+              </div>
             ) : (
-              <>
-                Deuda total:{' '}
-                <strong className="tabular-nums" style={{ color: totalCreditDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
-                  {formatSoles(totalCreditDebt)}
-                </strong>
-              </>
+              <div className="debt-summary-pill">
+                <span>
+                  Deuda total:{' '}
+                  <strong className="tabular-nums" style={{ color: totalCreditDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
+                    {formatSoles(totalCreditDebt)}
+                  </strong>
+                </span>
+              </div>
             )
           ) : isFutureMonth ? (
             totalMonthDueUsd > 0.009 ? (
-              <>
-                A pagar en {monthNames[currentMonth]}:{' '}
-                <strong className="tabular-nums" style={{ color: totalMonthDuePen > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
-                  {formatSoles(totalMonthDuePen)}
-                </strong>
-                <span style={{ color: 'var(--border-medium)', margin: '0 5px' }}>•</span>
-                <strong className="tabular-nums" style={{ color: 'var(--accent-info)', fontSize: '0.84rem' }}>
-                  ${totalMonthDueUsd.toFixed(2)} USD
-                </strong>
-                <span style={{ color: 'var(--border-medium)', margin: '0 8px' }}>|</span>
-                <span style={{ color: 'var(--text-muted)' }}>Total estimado:</span>{' '}
-                <span className="tabular-nums" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  {formatSoles(totalMonthDue)}
+              <div className="debt-summary-pill">
+                <span>
+                  A pagar en {monthNames[currentMonth]}:{' '}
+                  <strong className="tabular-nums" style={{ color: totalMonthDuePen > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
+                    {formatSoles(totalMonthDuePen)}
+                  </strong>
+                  <span style={{ margin: '0 4px', color: 'var(--border-medium)' }}>•</span>
+                  <span className="debt-summary-usd-badge tabular-nums">
+                    ${totalMonthDueUsd.toFixed(2)} USD
+                  </span>
                 </span>
-              </>
+                <span style={{ color: 'var(--border-medium)', margin: '0 2px' }}>|</span>
+                <span>
+                  <span style={{ color: 'var(--text-muted)' }}>Total est.:</span>{' '}
+                  <strong className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                    {formatSoles(totalMonthDue)}
+                  </strong>
+                </span>
+              </div>
             ) : (
-              <>
-                A pagar en {monthNames[currentMonth]}:{' '}
-                <strong className="tabular-nums" style={{ color: totalMonthDue > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
-                  {formatSoles(totalMonthDue)}
-                </strong>
-              </>
+              <div className="debt-summary-pill">
+                <span>
+                  A pagar en {monthNames[currentMonth]}:{' '}
+                  <strong className="tabular-nums" style={{ color: totalMonthDue > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
+                    {formatSoles(totalMonthDue)}
+                  </strong>
+                </span>
+              </div>
             )
           ) : (
-            <>
-              Facturado en {monthNames[currentMonth]}:{' '}
-              <strong className="tabular-nums" style={{ color: 'var(--text-primary)', fontSize: '0.875rem' }}>
-                {formatSoles(totalMonthDue)}
-              </strong>
-            </>
+            <div className="debt-summary-pill">
+              <span>
+                Facturado en {monthNames[currentMonth]}:{' '}
+                <strong className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                  {formatSoles(totalMonthDue)}
+                </strong>
+              </span>
+            </div>
           )}
-        </span>
+        </div>
       </div>
 
       <div className={`credit-cards-grid ${cardDebtSummary.length === 3 ? 'cols-3' : cardDebtSummary.length === 1 ? 'cols-1' : 'cols-2'}`}>
@@ -279,18 +296,18 @@ export const CardsTab: React.FC = () => {
                   {pm && (
                     <button
                       type="button"
-                      className="btn-secondary"
-                      style={{ padding: '4px 9px', fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      className="btn-icon-subtle"
+                      style={{ padding: '4px 6px' }}
                       onClick={() => handleOpenEditCard(pm)}
-                      title="Editar tarjeta y límites"
+                      title={`Editar ${card.cardName} y límites`}
+                      aria-label={`Editar ${card.cardName}`}
                     >
-                      <Pencil size={11} />
-                      <span>Editar</span>
+                      <Pencil size={12} />
                     </button>
                   )}
                 </div>
 
-                <div className="card-zen-debt-row" style={{ alignItems: 'flex-start', minHeight: '48px', marginBottom: '10px' }}>
+                <div className="card-zen-debt-row" style={{ alignItems: 'flex-start', minHeight: '48px', marginBottom: '8px' }}>
                   <span className="card-zen-debt-label" style={{ marginTop: '3px' }}>
                     {isCurrentActiveMonth
                       ? (card.hasPositiveBalance ? 'Saldo a favor' : 'Deuda a la fecha')
@@ -544,127 +561,249 @@ export const CardsTab: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {displayedPayments.map((pay, idx) => {
-                  const cardPm = paymentMethods.find(p => p.id === pay.paymentMethodId);
-                  const payKey = pay.id || `cp-row-${idx}-${pay.paymentMethodId}`;
-                  return (
-                    <div
-                      key={payKey}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '12px 16px',
-                        borderRadius: '10px',
-                        border: '1px solid var(--border-subtle)',
-                        background: 'var(--bg-subtle)',
-                        gap: '12px',
-                        flexWrap: 'wrap'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div
-                          style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '10px',
-                            background: cardPm ? `${cardPm.color}20` : 'rgba(99,102,241,0.15)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: cardPm?.color || 'var(--accent-brand)'
-                          }}
-                        >
-                          <CreditCard size={18} />
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
-                            Pago a {cardPm?.name || 'Tarjeta de Crédito'}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap' }}>
-                            <span>Fecha: {formatDisplayDate(pay.paymentDate)}</span>
-                            <span>•</span>
-                            <span style={{ color: 'var(--accent-brand)', fontWeight: 500 }}>
-                              Origen: {
-                                pay.sourceType === 'MERCHANT_REFUND' ? 'Reembolso de Comercio' :
-                                pay.sourceType === 'BANK_CREDIT' ? 'Abono / Cashback de Banco' :
-                                pay.sourceType === 'USD_SAVINGS_ACCOUNT' ? 'Ahorros Propios en Dólares' :
-                                'Cuenta Bancaria (Débito)'
-                              }
-                            </span>
-                            {pay.targetMonth && pay.targetMonth !== 'EXTRAORDINARY' && (
-                              <>
-                                <span>•</span>
-                                <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
-                                  Para: {formatPaymentTargetMonth(pay.targetMonth)}
-                                </span>
-                              </>
-                            )}
-                            {pay.currency === 'USD' && (
-                              <>
-                                <span>•</span>
-                                <span style={{ color: 'var(--accent-info)', fontWeight: 600 }}>
-                                  T.C. {(pay.exchangeRate || 1).toFixed(4)}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+              <div>
+                {/* 1. Vista Escritorio: Tabla ejecutiva compacta y ergonómica */}
+                <div className="desktop-only table-responsive" style={{ marginTop: '4px' }}>
+                  <table className="tx-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '105px' }}>Fecha</th>
+                        <th>Tarjeta / Destino</th>
+                        <th style={{ width: '150px' }}>Canal de Pago</th>
+                        <th className="text-right" style={{ width: '190px' }}>Monto Pagado</th>
+                        <th className="text-right" style={{ width: '65px' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedPayments.map((pay, idx) => {
+                        const cardPm = paymentMethods.find(p => p.id === pay.paymentMethodId);
+                        const payKey = pay.id || `cp-dt-${idx}-${pay.paymentMethodId}`;
+                        const cardColor = cardPm?.color || 'var(--accent-brand)';
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ textAlign: 'right', marginRight: '4px' }}>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>
-                            {pay.currency === 'USD' ? 'Monto en USD' : 'Monto Pagado'}
-                          </span>
-                          <span className="tabular-nums" style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--accent-danger)', whiteSpace: 'nowrap' }}>
-                            {pay.currency === 'USD'
-                              ? `-$${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD`
-                              : `-${formatSoles(pay.amountPaid)}`}
-                          </span>
-                          {pay.itfAmount ? (
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>
-                              Débito: {formatSoles((pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid) + pay.itfAmount)} (ITF +{formatSoles(pay.itfAmount)})
-                            </span>
-                          ) : (pay.currency === 'USD' && (
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>
-                              ≈ {formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}
-                            </span>
-                          ))}
+                        const sourceBadge =
+                          pay.sourceType === 'USD_SAVINGS_ACCOUNT'
+                            ? { label: '💵 Fondos USD', cls: 'badge-warning' }
+                            : pay.sourceType === 'MERCHANT_REFUND'
+                            ? { label: 'Reembolso', cls: 'badge-info' }
+                            : pay.sourceType === 'BANK_CREDIT'
+                            ? { label: 'Abono Banco', cls: 'badge-neutral' }
+                            : { label: '✓ Débito', cls: 'badge-collected' };
+
+                        const hasTargetCycle = Boolean(pay.targetMonth && pay.targetMonth !== 'EXTRAORDINARY');
+
+                        return (
+                          <tr key={payKey}>
+                            <td className="tabular-nums" style={{ color: 'var(--text-muted)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                              {formatDisplayDate(pay.paymentDate)}
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '26px',
+                                    height: '26px',
+                                    borderRadius: '7px',
+                                    background: `${cardColor}18`,
+                                    color: cardColor,
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  <CreditCard size={14} />
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                                    Pago a {cardPm?.name || 'Tarjeta de Crédito'}
+                                  </span>
+                                  {hasTargetCycle && (
+                                    <span style={{ fontSize: '0.725rem', color: 'var(--accent-success)', fontWeight: 600 }}>
+                                      • Para ciclo de {formatPaymentTargetMonth(pay.targetMonth!)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`badge ${sourceBadge.cls}`} style={{ fontSize: '0.675rem', padding: '2px 8px' }}>
+                                {sourceBadge.label}
+                              </span>
+                            </td>
+                            <td className="tx-amount-cell">
+                              <span style={{ fontWeight: 700, fontSize: '0.925rem', color: 'var(--text-primary)' }}>
+                                {pay.currency === 'USD'
+                                  ? `$${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD`
+                                  : formatSoles(pay.amountPaid)}
+                              </span>
+                              {pay.currency === 'USD' && (
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '1px' }}>
+                                  ≈ {formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)} · T.C. {(pay.exchangeRate || 1).toFixed(4)}
+                                </div>
+                              )}
+                              {Boolean(pay.itfAmount && pay.itfAmount > 0) && (
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '1px' }}>
+                                  ITF: +{formatSoles(pay.itfAmount || 0)}
+                                </div>
+                              )}
+                            </td>
+                            <td className="text-right">
+                              <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                                <button
+                                  type="button"
+                                  className="btn-action-icon"
+                                  onClick={() => handleOpenEditCardPayment(pay, idx)}
+                                  title="Modificar este abono a tarjeta"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-action-icon"
+                                  onClick={() => handleDeleteCardPayment(pay.id, idx)}
+                                  title="Eliminar este pago y revertir el descuento en saldo débito"
+                                  style={{ color: 'var(--accent-danger)' }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 2. Vista Móvil: Feed táctil estructurado */}
+                <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {displayedPayments.map((pay, idx) => {
+                    const cardPm = paymentMethods.find(p => p.id === pay.paymentMethodId);
+                    const payKey = pay.id || `cp-mob-${idx}-${pay.paymentMethodId}`;
+                    const cardColor = cardPm?.color || 'var(--accent-brand)';
+
+                    const sourceBadge =
+                      pay.sourceType === 'USD_SAVINGS_ACCOUNT'
+                        ? { label: '💵 Fondos USD', cls: 'badge-warning' }
+                        : pay.sourceType === 'MERCHANT_REFUND'
+                        ? { label: 'Reembolso', cls: 'badge-info' }
+                        : pay.sourceType === 'BANK_CREDIT'
+                        ? { label: 'Abono Banco', cls: 'badge-neutral' }
+                        : { label: '✓ Débito', cls: 'badge-collected' };
+
+                    const hasTargetCycle = Boolean(pay.targetMonth && pay.targetMonth !== 'EXTRAORDINARY');
+                    const hasUsdInfo = pay.currency === 'USD';
+                    const hasItf = Boolean(pay.itfAmount && pay.itfAmount > 0);
+                    const hasFooter = hasTargetCycle || hasUsdInfo || hasItf;
+
+                    return (
+                      <div
+                        key={payKey}
+                        className="mobile-tx-card"
+                        style={{ borderLeft: `3px solid ${cardColor}` }}
+                      >
+                        <div className="mobile-tx-main-row">
+                          <div className="mobile-tx-left">
+                            <div
+                              className="mobile-tx-icon-wrap"
+                              style={{
+                                background: `${cardColor}18`,
+                                color: cardColor
+                              }}
+                            >
+                              <CreditCard size={16} />
+                            </div>
+                            <div className="mobile-tx-info">
+                              <div className="mobile-tx-title" title={`Pago a ${cardPm?.name || 'Tarjeta de Crédito'}`}>
+                                Pago a {cardPm?.name || 'Tarjeta de Crédito'}
+                              </div>
+                              <div className="mobile-tx-meta">
+                                <span>{formatDisplayDate(pay.paymentDate)}</span>
+                                {hasTargetCycle ? (
+                                  <>
+                                    <span>•</span>
+                                    <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
+                                      Para ciclo {formatPaymentTargetMonth(pay.targetMonth!)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  pay.sourceType === 'USD_SAVINGS_ACCOUNT' && (
+                                    <>
+                                      <span>•</span>
+                                      <span style={{ color: 'var(--accent-warning)', fontWeight: 500 }}>
+                                        Fondos propios USD
+                                      </span>
+                                    </>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mobile-tx-right">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span
+                                className={`badge ${sourceBadge.cls}`}
+                                style={{
+                                  fontSize: '0.65rem',
+                                  padding: '2px 6px',
+                                  flexShrink: 0
+                                }}
+                              >
+                                {sourceBadge.label}
+                              </span>
+                              <span className="mobile-tx-amount tabular-nums" style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                                {pay.currency === 'USD'
+                                  ? `$${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD`
+                                  : formatSoles(pay.amountPaid)}
+                              </span>
+                            </div>
+                            <div className="mobile-tx-actions">
+                              <button
+                                type="button"
+                                className="btn-action-icon"
+                                onClick={() => handleOpenEditCardPayment(pay, idx)}
+                                title="Modificar este abono a tarjeta"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-action-icon"
+                                onClick={() => handleDeleteCardPayment(pay.id, idx)}
+                                title="Eliminar este pago y revertir el descuento en saldo débito"
+                                style={{ color: 'var(--accent-danger)' }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <span
-                          className={`badge ${pay.sourceType === 'USD_SAVINGS_ACCOUNT' || pay.sourceType === 'MERCHANT_REFUND' || pay.sourceType === 'BANK_CREDIT' ? 'badge-warning' : 'badge-collected'}`}
-                          style={{ fontSize: '0.72rem' }}
-                        >
-                          {pay.sourceType === 'USD_SAVINGS_ACCOUNT' ? '💵 Fondos USD' :
-                           pay.sourceType === 'MERCHANT_REFUND' ? 'Devolución' :
-                           pay.sourceType === 'BANK_CREDIT' ? 'Abono Banco' :
-                           '✓ Descontado de Débito'}
-                        </span>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button
-                            type="button"
-                            className="btn-action-icon"
-                            onClick={() => handleOpenEditCardPayment(pay, idx)}
-                            title="Modificar este abono a tarjeta"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-action-icon"
-                            onClick={() => handleDeleteCardPayment(pay.id, idx)}
-                            title="Eliminar este pago y revertir el descuento en saldo débito"
-                            style={{ color: 'var(--accent-danger)' }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+
+                        {hasFooter ? (
+                          <div className="mobile-tx-footer-row">
+                            {hasTargetCycle ? (
+                              <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
+                                Para ciclo de {formatPaymentTargetMonth(pay.targetMonth!)}
+                              </span>
+                            ) : (
+                              <span />
+                            )}
+                            {hasItf ? (
+                              <span className="tabular-nums">
+                                Débito: {formatSoles((pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid) + (pay.itfAmount || 0))} (ITF +{formatSoles(pay.itfAmount || 0)})
+                              </span>
+                            ) : hasUsdInfo ? (
+                              <span className="tabular-nums">
+                                ≈ {formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)} · T.C. {(pay.exchangeRate || 1).toFixed(4)}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -761,121 +900,80 @@ export const CardsTab: React.FC = () => {
                     ? { cls: 'badge-danger', txt: 'Vencido' }
                     : { cls: 'badge-warning', txt: 'Por pagar' };
 
-                  return (
-                    <div key={plan.cardId} className="clean-card" style={{ borderLeft: `4px solid ${plan.cardColor}`, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {/* Cabecera: tarjeta + estado */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <CreditCard size={16} style={{ color: plan.cardColor }} />
-                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{plan.cardName}</span>
+                  return r.hasDue ? (
+                    <div
+                      key={plan.cardId}
+                      className="due-plan-card"
+                      style={{ borderLeft: `4px solid ${plan.cardColor}` }}
+                    >
+                      {/* Fila Principal: Izquierda (Identidad y Vencimiento) - Derecha (Monto y Acción) */}
+                      <div className="due-plan-main">
+                        <div className="due-plan-left">
+                          <div className="due-plan-title-row">
+                            <div className="due-plan-card-identity">
+                              <CreditCard size={17} style={{ color: plan.cardColor, flexShrink: 0 }} />
+                              <span className="due-plan-card-name">{plan.cardName}</span>
+                            </div>
+                            <span className={`badge ${statusBadge.cls} nowrap tabular-nums`} style={{ fontSize: '0.72rem' }}>
+                              {statusBadge.txt}
+                            </span>
+                          </div>
+
+                          <div className="due-plan-meta-row">
+                            <span>
+                              Vence <strong style={{ color: 'var(--text-primary)' }}>{r.weekday} {formatDisplayDate(plan.nextDueDate!)}</strong>
+                            </span>
+                            <span className="due-plan-dot">•</span>
+                            <span className="tabular-nums" style={{ color: countdownColor, fontWeight: 600 }}>
+                              {countdownLabel}
+                            </span>
+                          </div>
                         </div>
-                        <span className={`badge ${statusBadge.cls} nowrap tabular-nums`} style={{ fontSize: '0.72rem' }}>{statusBadge.txt}</span>
+
+                        <div className="due-plan-right">
+                          <div className="due-plan-amount-box">
+                            <span
+                              className="due-plan-amount tabular-nums"
+                              style={{ color: overdue ? 'var(--accent-danger)' : 'var(--accent-warning)' }}
+                            >
+                              {formatSoles(plan.nextDueAmount)}
+                            </span>
+                            {plan.nextDueUsd && plan.nextDueUsd > 0.009 ? (
+                              <span className="due-plan-amount-sub tabular-nums">
+                                ({formatSoles(plan.nextDuePen || 0)} • ${plan.nextDueUsd.toFixed(2)} USD)
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="btn-pay-contextual"
+                            onClick={() => handleOpenCreateCardPayment(r.plan.cardId)}
+                            title={`Registrar pago para ${plan.cardName}`}
+                          >
+                            <CreditCard size={13} style={{ color: 'var(--accent-brand)' }} />
+                            <span>Pagar</span>
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Próximo pago REAL (forward-looking, cruza meses) */}
-                      {r.hasDue ? (
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
-                          <span className="tabular-nums" style={{ fontWeight: 800, fontSize: '1.15rem', color: overdue ? 'var(--accent-danger)' : 'var(--accent-warning)' }}>
-                            {formatSoles(plan.nextDueAmount)}
-                          </span>
-                          {plan.nextDueUsd && plan.nextDueUsd > 0.009 ? (
-                            <span className="tabular-nums" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                              ({formatSoles(plan.nextDuePen || 0)} • ${plan.nextDueUsd.toFixed(2)} USD)
-                            </span>
-                          ) : null}
-                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                            vence <strong style={{ color: 'var(--text-primary)' }}>{r.weekday} {formatDisplayDate(plan.nextDueDate!)}</strong>
-                          </span>
-                          <span aria-hidden style={{ color: 'var(--border-medium)', fontWeight: 400, fontSize: '0.82rem' }}>•</span>
-                          <span className="tabular-nums" style={{ color: countdownColor, fontWeight: 600, fontSize: '0.82rem' }}>{countdownLabel}</span>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--accent-success)', fontWeight: 600 }}>
-                          Sin pagos pendientes · Al día
-                        </div>
-                      )}
-
-                      {/* Diagnóstico de liquidez al vencimiento */}
-                      {r.hasDue && coverage && coverage.status !== 'PAID' && (
-                        <div
-                          style={{
-                            padding: '10px 12px',
-                            borderRadius: '8px',
-                            background: 'var(--bg-subtle)',
-                            border: `1px solid ${
-                              isMismatch
-                                ? 'rgba(234, 179, 8, 0.35)'
-                                : coverage.status === 'COVERED'
-                                ? 'rgba(16, 185, 129, 0.3)'
-                                : 'rgba(239, 68, 68, 0.35)'
-                            }`,
-                            borderLeft: `4px solid ${
-                              isMismatch
-                                ? 'var(--accent-warning)'
-                                : coverage.status === 'COVERED'
-                                ? 'var(--accent-success)'
-                                : 'var(--accent-danger)'
-                            }`,
-                            fontSize: '0.76rem',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '5px'
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                            <span style={{
-                              fontWeight: 700,
-                              color: isMismatch
-                                ? 'var(--accent-warning)'
-                                : coverage.status === 'COVERED'
-                                ? 'var(--accent-success)'
-                                : 'var(--accent-danger)'
-                            }}>
-                              {coverage.headline || (isMismatch ? 'Desfase Pre-Sueldo' : coverage.status === 'COVERED' ? 'Cobertura Confirmada' : 'Déficit de Ciclo')}
-                            </span>
-                            {isMismatch && (
-                              <span className="tabular-nums text-danger" style={{ fontWeight: 700, fontSize: '0.74rem' }}>
-                                Faltan antes de sueldo: {formatSoles(coverage.shortfallAmount)}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                            {coverage.message}
-                          </div>
-                          {coverage.actionTip && (
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '5px', marginTop: '2px' }}>
-                              <strong>Acción sugerida:</strong> {coverage.actionTip}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Parámetros de ciclo de facturación y línea */}
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
-                        gap: '10px',
-                        background: 'var(--bg-subtle)',
-                        borderRadius: '10px',
-                        padding: '10px 14px',
-                        fontSize: '0.78rem'
-                      }}>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>Cierre de facturación:</span>
+                      {/* Parámetros del ciclo en barra limpia */}
+                      <div className="due-plan-params-bar">
+                        <div className="due-plan-param-item">
+                          <span>Cierre mensual:</span>
                           <strong style={{ color: 'var(--text-primary)' }}>
                             Día {plan.billingCloseDay}
                             {plan.nextCloseDate ? ` (${formatDisplayDate(plan.nextCloseDate)})` : ''}
                           </strong>
                         </div>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>Fecha límite de pago:</span>
+                        <div className="due-plan-param-item">
+                          <span>Vencimiento habitual:</span>
                           <strong style={{ color: 'var(--text-primary)' }}>
                             Día {plan.paymentDueDay}
-                            {plan.nextDueDate ? ` (${formatDisplayDate(plan.nextDueDate)})` : ''}
                           </strong>
                         </div>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>Uso de línea:</span>
+                        <div className="due-plan-param-item">
+                          <span>Uso de línea:</span>
                           <strong style={{ color: overUtil ? 'var(--accent-warning)' : 'var(--text-primary)' }}>
                             {r.util.toFixed(0)}%
                             <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>
@@ -885,18 +983,99 @@ export const CardsTab: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Acción */}
-                      {r.hasDue && (
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          style={{ alignSelf: 'flex-start', padding: '6px 14px', fontSize: '0.8rem' }}
-                          onClick={() => handleOpenCreateCardPayment(r.plan.cardId)}
-                        >
-                          <Plus size={13} />
-                          <span>Registrar Pago</span>
-                        </button>
+                      {/* Diagnóstico de liquidez: Cinta sutil si está cubierta, o Caja de alerta si hay desfase */}
+                      {coverage && coverage.status !== 'PAID' && (
+                        coverage.status === 'COVERED' ? (
+                          <div className="due-plan-reassurance-ribbon">
+                            <ShieldCheck size={15} style={{ color: 'var(--accent-success)', flexShrink: 0 }} />
+                            <span>
+                              <strong>Cobertura confirmada:</strong> {coverage.message}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className={`due-plan-alert-box ${isMismatch ? 'alert-mismatch' : 'alert-deficit'}`}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <AlertTriangle size={15} style={{ color: isMismatch ? 'var(--accent-warning)' : 'var(--accent-danger)', flexShrink: 0 }} />
+                                <strong style={{ color: isMismatch ? 'var(--accent-warning)' : 'var(--accent-danger)' }}>
+                                  {coverage.headline || (isMismatch ? 'Desfase Pre-Sueldo' : 'Déficit de Ciclo')}
+                                </strong>
+                              </div>
+                              {isMismatch && (
+                                <span className="tabular-nums text-danger" style={{ fontWeight: 700, fontSize: '0.74rem' }}>
+                                  Faltan antes de sueldo: {formatSoles(coverage.shortfallAmount)}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, marginTop: '2px' }}>
+                              {coverage.message}
+                            </div>
+                            {coverage.actionTip && (
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '4px', marginTop: '3px' }}>
+                                <strong>Acción sugerida:</strong> {coverage.actionTip}
+                              </div>
+                            )}
+                          </div>
+                        )
                       )}
+                    </div>
+                  ) : (
+                    <div
+                      key={plan.cardId}
+                      className="due-plan-card"
+                      style={{ borderLeft: `4px solid ${plan.cardColor}` }}
+                    >
+                      <div className="due-plan-main">
+                        <div className="due-plan-left">
+                          <div className="due-plan-title-row">
+                            <div className="due-plan-card-identity">
+                              <CreditCard size={17} style={{ color: plan.cardColor, flexShrink: 0 }} />
+                              <span className="due-plan-card-name">{plan.cardName}</span>
+                            </div>
+                            <span className={`badge ${statusBadge.cls} nowrap tabular-nums`} style={{ fontSize: '0.72rem' }}>
+                              {statusBadge.txt}
+                            </span>
+                          </div>
+
+                          <div className="due-plan-meta-row">
+                            <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
+                              Sin pagos pendientes · Al día
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="due-plan-right">
+                          <div className="due-plan-paid-badge">
+                            <ShieldCheck size={14} />
+                            <span>Cubierto</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="due-plan-params-bar">
+                        <div className="due-plan-param-item">
+                          <span>Cierre mensual:</span>
+                          <strong style={{ color: 'var(--text-primary)' }}>
+                            Día {plan.billingCloseDay}
+                            {plan.nextCloseDate ? ` (${formatDisplayDate(plan.nextCloseDate)})` : ''}
+                          </strong>
+                        </div>
+                        <div className="due-plan-param-item">
+                          <span>Pago habitual:</span>
+                          <strong style={{ color: 'var(--text-primary)' }}>
+                            Día {plan.paymentDueDay}
+                          </strong>
+                        </div>
+                        <div className="due-plan-param-item">
+                          <span>Uso de línea:</span>
+                          <strong style={{ color: 'var(--text-primary)' }}>
+                            {r.util.toFixed(0)}%
+                            <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>
+                              Óptimo
+                            </span>
+                          </strong>
+                        </div>
+                      </div>
                     </div>
                   );
                 });

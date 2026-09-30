@@ -27,6 +27,7 @@ import {
   calculateCardsDebtSummary,
   calculateCurrentDebitBalance,
   computeMonthlyDebitChain,
+  computeCardBillingAmortization,
   getReceivableCollectionMonth,
   computeFinancialHealthScore,
   formatDisplayDate,
@@ -40,7 +41,8 @@ import {
 import {
   Transaction,
   PaymentMethod,
-  CardPayment
+  CardPayment,
+  CardAmortizationSchedule
 } from '@/types';
 
 const MONTH_NAMES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -352,8 +354,33 @@ function useFinanceController() {
     addExtraIncome,
     creditLoanIncome,
     deleteExtraIncome,
-    handleSaveSalary
-  } = useIncomes({ monthKey, currentYear, currentMonth });
+    handleSaveSalary,
+    handleOpenSalaryModal
+  } = useIncomes({
+    monthKey,
+    currentYear,
+    currentMonth,
+    onSalarySaved: (amt) => {
+      setMonthlySalaries(prev => {
+        const next = { ...prev };
+        next[monthKey] = amt;
+        // Propagar el nuevo sueldo hacia los meses futuros para actualizar la cadena de arrastre
+        const [yStr, mStr] = monthKey.split('-');
+        let curY = parseInt(yStr, 10);
+        let curM = parseInt(mStr, 10);
+        for (let i = 1; i <= 24; i++) {
+          curM += 1;
+          if (curM > 12) {
+            curM = 1;
+            curY += 1;
+          }
+          const futureKey = `${curY}-${curM.toString().padStart(2, '0')}`;
+          next[futureKey] = amt;
+        }
+        return next;
+      });
+    }
+  });
 
   // Abonos a tarjetas: historial, formulario/modal y listado del mes activo
   const {
@@ -379,6 +406,8 @@ function useFinanceController() {
     fetchPaymentSunatRate,
     paymentDate,
     setPaymentDate,
+    paymentTargetMonth,
+    setPaymentTargetMonth,
     editingCardPaymentId,
     editingCardPaymentIndex,
     showAllHistoricalPayments,
@@ -907,6 +936,30 @@ function useFinanceController() {
   // `initialDebitBalances` guarda SOLO overrides explícitos del usuario, que anclan
   // ese mes y cortan el recálculo hacia atrás. El resto se deriva.
   // ==============================================================================
+  // Amortización inteligente y cobertura real de cuotas/estados de cuenta de tarjeta
+  const cardAmortization = useMemo<CardAmortizationSchedule>(() => {
+    return computeCardBillingAmortization({
+      transactions,
+      cardPayments,
+      paymentMethods
+    });
+  }, [transactions, cardPayments, paymentMethods]);
+
+  // Sincronizar nómina activa si existe un sueldo registrado/propagado para este mes
+  useEffect(() => {
+    const knownSalary = monthlySalaries[monthKey];
+    if (knownSalary && knownSalary > 0 && Math.abs((salaries[0]?.amount || 0) - knownSalary) > 0.001) {
+      setSalaries(prev => [
+        {
+          id: prev[0]?.id || 'sal-1',
+          source: prev[0]?.source || 'Empleo Principal',
+          amount: knownSalary,
+          payDay: prev[0]?.payDay || 30
+        }
+      ]);
+    }
+  }, [monthKey, monthlySalaries, salaries, setSalaries]);
+
   const primaryPayDay = salaries[0]?.payDay ?? 30;
   const debitChain = useMemo(() => computeMonthlyDebitChain({
     overrides: initialDebitBalances,
@@ -1005,16 +1058,15 @@ function useFinanceController() {
       }, 0);
 
     // Cuotas/estados de cuenta de TARJETA que vencen ESTE mes (por fecha de vencimiento
-    // bancaria), netos de reembolsos y de lo ya abonado en el mes: es caja que debe
-    // salir del débito para no generar intereses. Solo cuenta en meses en curso o
-    // futuros: en un mes ya cerrado el saldo real refleja lo que efectivamente se pagó.
+    // bancaria), netos de reembolsos y de lo ya abonado en el mes o anticipadamente.
     const creditCardIds = paymentMethods.filter(p => p.type === 'credit').map(p => p.id);
     const cardBillsDueThisMonth = transactions
       .filter(t => creditCardIds.includes(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(monthKey))
       .reduce((acc, t) => acc + (t.isRefund ? -Math.abs(t.amountPen) : t.amountPen), 0);
     const unpaidCardBillsDueThisMonth = isPastMonth
       ? 0
-      : Math.max(0, cardBillsDueThisMonth - cardPaymentsThisMonthTotal);
+      : (cardAmortization.unpaidPenByMonth.get(monthKey) || 0);
+    const cardPaidInAdvanceThisMonth = cardAmortization.paidInAdvanceByMonth.get(monthKey) || 0;
 
     // El saldo PROYECTADO a fin de mes se toma del CIERRE de la cadena de arrastre
     // (misma fuente que alimenta el "saldo base" del mes siguiente), para que lo que
@@ -1032,9 +1084,10 @@ function useFinanceController() {
       projectedDebitBalanceMonthEnd,
       scheduledDebtDueThisMonth: Math.round(scheduledDebtDueThisMonth * 100) / 100,
       cardBillsDueThisMonth: Math.round(Math.max(0, cardBillsDueThisMonth) * 100) / 100,
-      unpaidCardBillsDueThisMonth: Math.round(unpaidCardBillsDueThisMonth * 100) / 100
+      unpaidCardBillsDueThisMonth: Math.round(unpaidCardBillsDueThisMonth * 100) / 100,
+      cardPaidInAdvanceThisMonth: Math.round(cardPaidInAdvanceThisMonth * 100) / 100
     };
-  }, [initialDebitForMonth, salaries, currentOtherIncomes, monthReceivables, currentMonthTransactions, transactions, paymentMethods, cardPayments, monthKey, currentDateStr, payables, isPastMonth, debitChain]);
+  }, [initialDebitForMonth, salaries, currentOtherIncomes, monthReceivables, currentMonthTransactions, transactions, paymentMethods, cardPayments, monthKey, currentDateStr, payables, isPastMonth, debitChain, cardAmortization]);
 
   // Saldo de cierre del mes anterior, tomado de la cadena de saldos (mismo cálculo
   // que alimenta el arrastre automático). Sirve al modal "Ajustar Saldo" como
@@ -1108,7 +1161,7 @@ function useFinanceController() {
     };
   }, [currentYear, currentMonth, currentMonthTransactions, transactions]);
 
-  // Diagnóstico financiero mensual
+  // Diagnóstico financiero mensual (unificado con el motor de amortización de tarjetas)
   const diagnostic = useMemo(() => {
     return calculateMonthlyDiagnostic(
       budget,
@@ -1118,9 +1171,10 @@ function useFinanceController() {
       payables,
       cardPayments,
       paymentMethods,
-      isPastMonth
+      isPastMonth,
+      cardAmortization
     );
-  }, [budget, currentMonthTransactions, monthReceivables, transactions, payables, cardPayments, paymentMethods, isPastMonth]);
+  }, [budget, currentMonthTransactions, monthReceivables, transactions, payables, cardPayments, paymentMethods, isPastMonth, cardAmortization]);
 
   // Resumen de deuda por tarjeta
   const cardDebtSummary = useMemo(() => {
@@ -1149,61 +1203,47 @@ function useFinanceController() {
     return getBestCardRecommendation(paymentMethods, new Date(), utilizationByCard);
   }, [paymentMethods, cardDebtSummary]);
 
-  // Plan de pagos de tarjeta FORWARD-LOOKING (independiente del mes visible): para
-  // cada tarjeta calcula su PRÓXIMO pago real —fecha de vencimiento ya ajustada a
-  // día hábil (viene en t.paymentDueDate) y monto de ese estado de cuenta—, más la
-  // utilización total. Agrupa por mes de vencimiento y asigna los abonos en FIFO
-  // (paga lo más antiguo primero). Así el usuario ve "cuándo y cuánto pagar" sin
-  // navegar entre meses.
+  // Plan de pagos de tarjeta FORWARD-LOOKING (sincronizado con cardAmortization):
+  // Para cada tarjeta calcula su PRÓXIMO pago real utilizando los ciclos pendientes netos
+  // ya computados por el motor de amortización (respetando imputaciones targetMonth y
+  // pagos adelantados).
   const rawCardPaymentPlan = useMemo(() => {
     const nowRef = new Date();
     const todayStr = `${nowRef.getFullYear()}-${(nowRef.getMonth() + 1).toString().padStart(2, '0')}-${nowRef.getDate().toString().padStart(2, '0')}`;
     const creditCards = paymentMethods.filter(p => p.type === 'credit' && p.isActive);
 
     return creditCards.map(card => {
-      const cardTxs = transactions.filter(t => {
-        const resolved = resolvePaymentMethod(t, paymentMethods);
-        return resolved?.id === card.id || t.paymentMethodId === card.id;
-      });
-
-      // Monto facturado por mes de vencimiento + fecha de vencimiento representativa.
-      const dueByMonth = new Map<string, number>();
-      const dateByMonth = new Map<string, string>();
-      cardTxs.forEach(t => {
-        const net = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
-        const dd = t.paymentDueDate || t.date || '';
-        const mk = dd.slice(0, 7);
-        if (!mk) return;
-        dueByMonth.set(mk, (dueByMonth.get(mk) || 0) + net);
-        const prev = dateByMonth.get(mk);
-        if (!prev || dd > prev) dateByMonth.set(mk, dd);
-      });
-
-      const totalPaid = cardPayments
-        .filter(p => p.paymentMethodId === card.id && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT')
-        .reduce((acc, p) => acc + p.amountPaid, 0);
-
-      // Cubetas ordenadas: deuda arrastrada (initialDebt) primero, luego por mes.
-      const initial = card.initialDebt || 0;
-      const buckets: { key: string; dueDate: string; unpaid: number }[] = [];
-      if (initial > 0) buckets.push({ key: 'initial', dueDate: todayStr, unpaid: initial });
-      Array.from(dueByMonth.keys()).sort().forEach(mk => {
-        const billed = Math.max(0, dueByMonth.get(mk) || 0);
-        if (billed > 0.005) buckets.push({ key: mk, dueDate: dateByMonth.get(mk) || `${mk}-15`, unpaid: billed });
-      });
-
-      // FIFO: los abonos cancelan primero lo más antiguo.
-      let remaining = totalPaid;
-      for (const b of buckets) {
-        const applied = Math.min(b.unpaid, remaining);
-        b.unpaid -= applied;
-        remaining -= applied;
-        if (remaining <= 0) break;
-      }
-
-      const totalUnpaid = buckets.reduce((acc, b) => acc + b.unpaid, 0);
-      const next = buckets.find(b => b.unpaid > 0.005) || null;
+      const summary = cardDebtSummary.find(c => c.paymentMethodId === card.id);
       const limit = card.creditLimit || 0;
+      const totalUnpaid = summary && !summary.hasPositiveBalance 
+        ? summary.totalAccumulatedDebt 
+        : (card.initialDebt || 0);
+
+      // Ciclos pendientes netos derivados por el motor de amortización
+      const pendingCycles = cardAmortization.pendingCyclesByCard.get(card.id) || [];
+      const nextCycle = pendingCycles.length > 0 ? pendingCycles[0] : null;
+
+      // Tipo de cambio referencial para componente en USD del ciclo si existiera
+      const latestUsdTx = transactions.find(t => {
+        const resolved = resolvePaymentMethod(t, paymentMethods);
+        return (resolved?.id === card.id || t.paymentMethodId === card.id) && t.currency === 'USD' && t.exchangeRate && t.exchangeRate > 0;
+      });
+      const usdRate = latestUsdTx?.exchangeRate || FALLBACK_USD_PEN_RATE;
+
+      let nextDueDate: string | null = null;
+      let nextDueAmount = 0;
+      let isOverdue = false;
+
+      if (nextCycle) {
+        nextDueDate = nextCycle.dueDate;
+        nextDueAmount = Math.round((nextCycle.unpaidPen + (nextCycle.unpaidUsd * usdRate)) * 100) / 100;
+        isOverdue = nextDueDate < todayStr;
+      } else if (totalUnpaid > 0.005) {
+        // Deuda inicial sin transacciones de ciclo asociadas
+        nextDueDate = todayStr;
+        nextDueAmount = Math.round(totalUnpaid * 100) / 100;
+        isOverdue = false;
+      }
 
       // Próxima fecha de CORTE (distinta al vencimiento). El buró reporta tu saldo el
       // día del corte, así que bajar el saldo antes de esa fecha mejora tu utilización
@@ -1240,14 +1280,14 @@ function useFinanceController() {
         limit,
         totalUnpaid: Math.round(totalUnpaid * 100) / 100,
         utilizationPct: limit > 0 ? Math.min(100, (totalUnpaid / limit) * 100) : 0,
-        nextDueDate: next ? next.dueDate : null,
-        nextDueAmount: next ? Math.round(next.unpaid * 100) / 100 : 0,
-        isOverdue: next ? next.dueDate < todayStr : false,
+        nextDueDate,
+        nextDueAmount,
+        isOverdue,
         nextCloseDate,
         scorePayByDate
       };
     });
-  }, [paymentMethods, transactions, cardPayments]);
+  }, [paymentMethods, cardDebtSummary, cardAmortization, transactions]);
 
   // Evaluación prospectiva de liquidez a la fecha exacta de vencimiento vs fecha de sueldo
   const cardsLiquidityAssessment = useMemo(() => {
@@ -1369,9 +1409,10 @@ function useFinanceController() {
       extraIncomes,
       initialDebitBalances,
       payables,
-      receivables
+      receivables,
+      cardAmortization.unpaidPenByMonth
     );
-  }, [currentYear, currentMonth, debitStats.projectedDebitBalanceMonthEnd, salaries, transactions, currentMonthTransactions, monthKey, forecastHorizon, paymentMethods, extraIncomes, initialDebitBalances, payables, receivables]);
+  }, [currentYear, currentMonth, debitStats.projectedDebitBalanceMonthEnd, salaries, transactions, currentMonthTransactions, monthKey, forecastHorizon, paymentMethods, extraIncomes, initialDebitBalances, payables, receivables, cardAmortization]);
 
   // Detección Inteligente de Anomalías y Cobros Duplicados (IA & NLP).
   // Cargos duplicados y picos se evalúan sobre el mes visible; las suscripciones
@@ -1506,22 +1547,54 @@ function useFinanceController() {
     const yearPrefix = `${currentYear}-`;
 
     // Dos agregados netos por mes del año visible (ambos descuentan reembolsos):
-    //  - outByMonth: salida real de caja (por fecha de vencimiento del pago).
+    //  - outByMonth: salida real de caja (débito/efectivo + pagos ejecutados a tarjetas/deudas + compromisos futuros netos).
     //  - consumedByMonth: gasto devengado (por fecha en que se realizó el gasto).
     const outByMonth = new Map<string, number>();
     const consumedByMonth = new Map<string, number>();
     const candidateMonths = new Set<string>();
+
+    const creditCardIds = paymentMethods.filter(p => p.type === 'credit').map(p => p.id);
+
     transactions.forEach(t => {
       const net = t.isRefund ? -Math.abs(t.amountPen) : t.amountPen;
-      const dueKey = (t.paymentDueDate || t.date || '').slice(0, 7);
-      if (dueKey.startsWith(yearPrefix)) {
-        outByMonth.set(dueKey, (outByMonth.get(dueKey) || 0) + net);
-        candidateMonths.add(dueKey);
-      }
+      const isCard = creditCardIds.includes(t.paymentMethodId);
+
+      // Consumo devengado: fecha en que se realizó la compra
       const dateKey = (t.date || '').slice(0, 7);
       if (dateKey.startsWith(yearPrefix)) {
         consumedByMonth.set(dateKey, (consumedByMonth.get(dateKey) || 0) + net);
         candidateMonths.add(dateKey);
+      }
+
+      // Si es gasto en débito/efectivo, la salida física de caja coincide con la fecha del gasto
+      if (!isCard) {
+        if (dateKey.startsWith(yearPrefix)) {
+          outByMonth.set(dateKey, (outByMonth.get(dateKey) || 0) + net);
+          candidateMonths.add(dateKey);
+        }
+      }
+    });
+
+    // Salidas reales y proyectadas de tarjetas de crédito:
+    // Para meses pasados y en curso (<= realCurrentKey): salidas de caja bancaria reales ejecutadas (abonos desde débito)
+    cardPayments.forEach(p => {
+      if (p.sourceType === 'MERCHANT_REFUND' || p.sourceType === 'BANK_CREDIT' || p.sourceType === 'USD_SAVINGS_ACCOUNT') return;
+      const k = (p.paymentDate || '').slice(0, 7);
+      if (k.startsWith(yearPrefix) && k <= realCurrentKey) {
+        const nom = p.originalAmount !== undefined ? p.originalAmount : p.amountPaid;
+        const pen = p.amountPen !== undefined 
+          ? p.amountPen 
+          : (p.currency === 'USD' && p.exchangeRate ? Math.round(nom * p.exchangeRate * 100) / 100 : p.amountPaid);
+        outByMonth.set(k, (outByMonth.get(k) || 0) + pen);
+        candidateMonths.add(k);
+      }
+    });
+
+    // Para meses futuros (> realCurrentKey): salidas proyectadas según saldo insoluto real de cuotas no cubiertas
+    cardAmortization.unpaidPenByMonth.forEach((unpaidPen, k) => {
+      if (k.startsWith(yearPrefix) && k > realCurrentKey && unpaidPen > 0.005) {
+        outByMonth.set(k, (outByMonth.get(k) || 0) + unpaidPen);
+        candidateMonths.add(k);
       }
     });
 
@@ -1585,7 +1658,7 @@ function useFinanceController() {
       });
     }
     return items;
-  }, [salaries, monthlySalaries, extraIncomes, transactions, payables, monthKey, currentYear]);
+  }, [salaries, monthlySalaries, extraIncomes, transactions, payables, cardPayments, cardAmortization, paymentMethods, monthKey, currentYear]);
 
   // Score de Salud Financiera DETERMINISTA (0-100). Se calcula en código para ser
   // reproducible; la IA solo lo explica/prioriza después. Reutiliza el diagnóstico
@@ -2294,6 +2367,7 @@ function useFinanceController() {
     creditLoanIncome,
     deleteExtraIncome,
     handleSaveSalary,
+    handleOpenSalaryModal,
 
     // Abonos a tarjetas
     cardPayments,
@@ -2318,6 +2392,8 @@ function useFinanceController() {
     fetchPaymentSunatRate,
     paymentDate,
     setPaymentDate,
+    paymentTargetMonth,
+    setPaymentTargetMonth,
     editingCardPaymentId,
     editingCardPaymentIndex,
     showAllHistoricalPayments,
@@ -2471,6 +2547,7 @@ function useFinanceController() {
     // Cálculos derivados
     budget,
     debitStats,
+    cardAmortization,
     prevMonthClosingBalance,
     monthlyComparison,
     diagnostic,

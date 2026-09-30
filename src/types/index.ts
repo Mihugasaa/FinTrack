@@ -136,6 +136,7 @@ export interface CardDebtSummary {
   paidToDateUsd?: number;
   totalAccumulatedDebtUsd?: number;
   netDueInSelectedMonthUsd?: number;
+  paidInAdvanceForSelectedMonth?: number;
 }
 
 export interface CardPayment {
@@ -149,6 +150,32 @@ export interface CardPayment {
   exchangeRate?: number;
   amountPen?: number;
   notes?: string;
+  targetMonth?: string; // Ciclo o mes de vencimiento objetivo (ej. '2026-10' o 'EXTRAORDINARY')
+}
+
+export interface CardMonthCoverage {
+  cardId: string;
+  monthKey: string;              // 'YYYY-MM'
+  representativeDueDate: string; // 'YYYY-MM-DD'
+  billedDuePen: number;
+  billedDueUsd: number;
+  coveredPen: number;
+  coveredUsd: number;
+  unpaidPen: number;
+  unpaidUsd: number;
+  paidInAdvancePen: number;      // Abonado en meses anteriores a monthKey
+  paidInMonthPen: number;        // Abonado en el mismo monthKey
+  isCovered: boolean;
+}
+
+export interface CardAmortizationSchedule {
+  byCardAndMonth: Map<string, CardMonthCoverage>;
+  unpaidPenByMonth: Map<string, number>;
+  unpaidUsdByMonth: Map<string, number>;
+  billedPenByMonth: Map<string, number>;
+  billedUsdByMonth: Map<string, number>;
+  paidInAdvanceByMonth: Map<string, number>;
+  pendingCyclesByCard: Map<string, Array<{ monthKey: string; dueDate: string; unpaidPen: number; unpaidUsd: number; label: string }>>;
 }
 
 export interface PayablePayment {

@@ -1437,7 +1437,7 @@ export class SupabaseDataService {
   }
 
   // PUT: Actualizar sueldo base para un mes específico
-  public static async updateBaseSalary(year: number, month: number, salary: number): Promise<boolean> {
+  public static async updateBaseSalary(year: number, month: number, salary: number, propagateToFuture: boolean = true): Promise<boolean> {
     if (!supabase || !isSupabaseConfigured) return false;
 
     try {
@@ -1457,6 +1457,23 @@ export class SupabaseDataService {
         this.logSupabaseError('updateBaseSalary', error.message);
         return false;
       }
+
+      if (propagateToFuture) {
+        // Actualizar periodos futuros existentes en Supabase para mantener vigencia de la nómina
+        await supabase
+          .from('monthly_periods')
+          .update({ base_salary: salary })
+          .eq('user_id', userId)
+          .eq('year', year)
+          .gt('month', month);
+
+        await supabase
+          .from('monthly_periods')
+          .update({ base_salary: salary })
+          .eq('user_id', userId)
+          .gt('year', year);
+      }
+
       return true;
     } catch (e) {
       this.logSupabaseError('updateBaseSalary (catch)', e);
@@ -1503,6 +1520,8 @@ export class SupabaseDataService {
         const exchangeRate = row.exchange_rate !== null && row.exchange_rate !== undefined ? parseFloat(row.exchange_rate) : 1.0;
         const amountPen = row.amount_pen !== null && row.amount_pen !== undefined ? parseFloat(row.amount_pen) : amountPaid;
 
+        const targetMonth = row.target_month || row.notes?.match(/\[target:([^\]]+)\]/)?.[1] || undefined;
+
         return {
           id: row.id,
           paymentMethodId: row.payment_method_id,
@@ -1513,7 +1532,8 @@ export class SupabaseDataService {
           originalAmount,
           exchangeRate,
           amountPen,
-          notes: row.notes || undefined
+          notes: row.notes || undefined,
+          targetMonth
         };
       });
     } catch (e) {
@@ -1549,6 +1569,7 @@ export class SupabaseDataService {
         const originalAmount = row.original_amount !== null && row.original_amount !== undefined ? parseFloat(row.original_amount) : amountPaid;
         const exchangeRate = row.exchange_rate !== null && row.exchange_rate !== undefined ? parseFloat(row.exchange_rate) : 1.0;
         const amountPen = row.amount_pen !== null && row.amount_pen !== undefined ? parseFloat(row.amount_pen) : amountPaid;
+        const targetMonth = row.target_month || row.notes?.match(/\[target:([^\]]+)\]/)?.[1] || undefined;
 
         return {
           id: row.id,
@@ -1560,7 +1581,8 @@ export class SupabaseDataService {
           originalAmount,
           exchangeRate,
           amountPen,
-          notes: row.notes || undefined
+          notes: row.notes || undefined,
+          targetMonth
         };
       });
     } catch (e) {
@@ -1587,6 +1609,10 @@ export class SupabaseDataService {
         ? pay.amountPen 
         : (currency === 'USD' ? Math.round(originalAmount * exchangeRate * 100) / 100 : originalAmount);
 
+      const encodedNotes = pay.targetMonth && !(pay.notes || '').includes('[target:')
+        ? `${pay.notes ? `${pay.notes} ` : ''}[target:${pay.targetMonth}]`
+        : (pay.notes || null);
+
       const payload: Record<string, any> = {
         user_id: userId,
         monthly_period_id: monthlyPeriodId,
@@ -1598,7 +1624,8 @@ export class SupabaseDataService {
         original_amount: originalAmount,
         exchange_rate: exchangeRate,
         amount_pen: amountPen,
-        notes: pay.notes || null
+        notes: encodedNotes,
+        target_month: pay.targetMonth || null
       };
 
       if (pay.id && isUUID(pay.id)) {
@@ -1606,6 +1633,13 @@ export class SupabaseDataService {
       }
 
       let { error } = await supabase.from('card_payments').insert(payload);
+
+      // Fallback si la columna target_month aún no existe en Supabase
+      if (error && error.message?.includes('target_month')) {
+        delete payload.target_month;
+        const retryTarget = await supabase.from('card_payments').insert(payload);
+        error = retryTarget.error;
+      }
 
       // Fallback si las nuevas columnas de moneda aún no se ejecutaron en PostgreSQL
       if (error && (error.message?.includes('currency') || error.message?.includes('original_amount') || error.message?.includes('exchange_rate') || error.message?.includes('amount_pen'))) {

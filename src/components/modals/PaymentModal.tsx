@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, CreditCard, Banknote, TrendingUp, DollarSign, Sparkles, Repeat } from 'lucide-react';
+import { X, CreditCard, Banknote, TrendingUp, DollarSign, Calendar, CalendarClock, Loader2, RefreshCw } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { useFinance } from '@/contexts/FinanceContext';
@@ -31,6 +31,9 @@ export const PaymentModal: React.FC = () => {
     fetchPaymentSunatRate,
     paymentDate,
     setPaymentDate,
+    cardAmortization,
+    paymentTargetMonth,
+    setPaymentTargetMonth,
     formatSoles,
     handleBackdropMouseDown,
     handleBackdropClick
@@ -43,6 +46,35 @@ export const PaymentModal: React.FC = () => {
   const parsedAmt = parseFloat(paymentAmount) || 0;
   const parsedRate = parseFloat(paymentExchangeRate) || 1;
   const calculatedPen = paymentCurrency === 'USD' ? Math.round(parsedAmt * parsedRate * 100) / 100 : parsedAmt;
+
+  const pendingCycles = cardAmortization?.pendingCyclesByCard?.get(paymentCardId) || [];
+  const matchedCycle = pendingCycles.find(c => c.monthKey === paymentTargetMonth) || (paymentTargetMonth === '' ? pendingCycles[0] : null);
+
+  const cycleOptions = [
+    {
+      value: '',
+      label: 'Automático (según vencimiento)',
+      subtitle: 'Cubre el estado de cuenta más próximo a vencer',
+      icon: <CalendarClock size={15} style={{ color: 'var(--accent-brand)' }} />
+    },
+    ...pendingCycles.map(c => {
+      const parts: string[] = [];
+      if (c.unpaidPen > 0) parts.push(formatSoles(c.unpaidPen));
+      if (c.unpaidUsd > 0) parts.push(`$${c.unpaidUsd.toFixed(2)} USD`);
+      return {
+        value: c.monthKey,
+        label: c.label,
+        subtitle: `Saldo pendiente: ${parts.join(' + ') || formatSoles(0)}`,
+        icon: <Calendar size={15} style={{ color: 'var(--accent-warning)' }} />
+      };
+    }),
+    {
+      value: 'EXTRAORDINARY',
+      label: 'Abono general a la tarjeta',
+      subtitle: 'Reduce tu deuda total sin asignar a un mes específico',
+      icon: <CreditCard size={15} style={{ color: 'var(--accent-success)' }} />
+    }
+  ];
 
   return (
     <div
@@ -77,6 +109,35 @@ export const PaymentModal: React.FC = () => {
                 colorDot: p.color || '#6366f1',
                 icon: <CreditCard size={15} style={{ color: p.color || '#6366f1' }} />
               }))}
+            />
+          </div>
+
+          {/* Mes o estado de cuenta a pagar */}
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '4px' }}>
+              <label className="form-label" style={{ margin: 0 }}>Mes o estado de cuenta</label>
+              {matchedCycle && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}
+                  onClick={() => {
+                    const dueAmt = paymentCurrency === 'USD'
+                      ? (matchedCycle.unpaidUsd > 0 ? matchedCycle.unpaidUsd : matchedCycle.unpaidPen)
+                      : matchedCycle.unpaidPen;
+                    setPaymentAmount(dueAmt.toFixed(2));
+                  }}
+                  title="Usar el saldo pendiente de este mes"
+                >
+                  Pagar mes completo ({paymentCurrency === 'USD' && matchedCycle.unpaidUsd > 0 ? `$${matchedCycle.unpaidUsd.toFixed(2)}` : formatSoles(matchedCycle.unpaidPen)})
+                </button>
+              )}
+            </div>
+            <CustomSelect
+              id="select-payment-target-cycle"
+              value={paymentTargetMonth}
+              onChange={val => setPaymentTargetMonth(val)}
+              options={cycleOptions}
             />
           </div>
 
@@ -195,7 +256,7 @@ export const PaymentModal: React.FC = () => {
                       alignItems: 'center',
                       gap: '4px'
                     }}>
-                      <Sparkles size={13} className="spin-slow" />
+                      <Loader2 size={13} className="spin-slow" />
                     </div>
                   )}
                 </div>
@@ -210,7 +271,7 @@ export const PaymentModal: React.FC = () => {
                   title="Restablecer cotización oficial para esta fecha"
                   style={{ fontSize: '0.75rem', padding: '8px 12px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                 >
-                  <Repeat size={13} />
+                  <RefreshCw size={13} />
                   Oficial
                 </button>
               </div>
@@ -223,7 +284,7 @@ export const PaymentModal: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">
-              Monto Abonado / Pagado {paymentCurrency === 'USD' ? '($ USD)' : '(S/ PEN)'}
+              Monto abonado {paymentCurrency === 'USD' ? '($ USD)' : '(S/ PEN)'}
             </label>
             <input
               id="input-card-payment-amount"

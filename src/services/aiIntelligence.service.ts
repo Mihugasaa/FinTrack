@@ -408,7 +408,8 @@ export class AIIntelligenceService {
     // Deudas propias y cobranzas de terceros con fecha de vencimiento: las que caen
     // en un mes futuro se proyectan como salida/entrada programada de caja.
     payables: Payable[] = [],
-    receivables: Receivable[] = []
+    receivables: Receivable[] = [],
+    unpaidCardBillsByMonth?: Map<string, number> | Record<string, number>
   ): CashflowForecastMonth[] {
     const forecast: CashflowForecastMonth[] = [];
     const monthNames = [
@@ -441,16 +442,27 @@ export class AIIntelligenceService {
       const expectedIncome = totalSalary + extraIncomeThisMonth;
 
       // 1. Salidas reales por vencimientos bancarios de tarjetas de crédito en este mes exacto
-      const cardPaymentsDue = allTransactions
+      const rawCardBillsDue = allTransactions
         .filter(t => creditCardIds.includes(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYM))
         .reduce((acc, curr) => acc + curr.amountPen, 0);
+
+      // Si tenemos amortización calculada (considerando pagos realizados con anticipación),
+      // tomamos el saldo neto pendiente para evitar doble deducción en el flujo de caja.
+      const hasAmortization = unpaidCardBillsByMonth && (
+        unpaidCardBillsByMonth instanceof Map 
+          ? unpaidCardBillsByMonth.has(targetYM)
+          : Object.prototype.hasOwnProperty.call(unpaidCardBillsByMonth, targetYM)
+      );
+      const netCardDue = hasAmortization
+        ? (unpaidCardBillsByMonth instanceof Map ? unpaidCardBillsByMonth.get(targetYM)! : (unpaidCardBillsByMonth as Record<string, number>)[targetYM])
+        : rawCardBillsDue;
 
       // Si no hay transacciones programadas para ese mes futuro, proyectar con los fijos de tarjeta recurrentes
       const fallbackCardFixed = fixedExpensesList
         .filter(t => creditCardIds.includes(t.paymentMethodId))
         .reduce((acc, curr) => acc + curr.amountPen, 0);
 
-      const projectedCardOutflows = cardPaymentsDue > 0 ? cardPaymentsDue : fallbackCardFixed;
+      const projectedCardOutflows = rawCardBillsDue > 0 ? Math.max(0, netCardDue) : fallbackCardFixed;
 
       // 2. Gastos fijos directos en Débito o Efectivo (suscripciones y servicios en cuenta)
       const debitFixed = fixedExpensesList

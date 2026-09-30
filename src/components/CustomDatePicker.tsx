@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CustomDatePickerProps {
@@ -34,20 +35,60 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   title
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  // Si no cabe hacia abajo (modal alto cerca del borde), el popover abre hacia arriba.
-  const [openUp, setOpenUp] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; isMobile: boolean }>({
+    top: 0,
+    left: 0,
+    isMobile: false
+  });
+  const [isMounted, setIsMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Calcula posición flotante (Portal) en desktop y modo modal centrado en mobile
+  const updatePosition = () => {
+    if (!containerRef.current) return;
+    const isMobile = window.innerWidth <= 640;
+    if (isMobile) {
+      setCoords({ top: 0, left: 0, isMobile: true });
+      return;
+    }
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const POPOVER_HEIGHT = 355;
+    const POPOVER_WIDTH = 320;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let top: number;
+    // Si cabe abajo con holgura o hay más espacio abajo que arriba:
+    if (spaceBelow >= POPOVER_HEIGHT || spaceBelow >= spaceAbove) {
+      top = rect.bottom + 6;
+    } else {
+      top = rect.top - POPOVER_HEIGHT - 6;
+    }
+
+    // Clamp vertical: que nunca se salga por arriba ni por abajo de la pantalla
+    top = Math.max(12, Math.min(window.innerHeight - POPOVER_HEIGHT - 12, top));
+
+    // Clamp horizontal: alineado a la izquierda del trigger, pero sin desbordar el ancho de pantalla
+    let left = rect.left;
+    if (left + POPOVER_WIDTH > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - POPOVER_WIDTH - 12);
+    }
+    if (left < 12) left = 12;
+
+    setCoords({ top, left, isMobile: false });
+  };
 
   const handleToggleOpen = () => {
     if (disabled) return;
     if (!isOpen) {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        const POPOVER_HEIGHT = 380; // alto aprox. del calendario
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const spaceAbove = rect.top;
-        setOpenUp(spaceBelow < POPOVER_HEIGHT && spaceAbove > spaceBelow);
-      }
+      updatePosition();
     }
     setIsOpen(prev => !prev);
   };
@@ -72,10 +113,35 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     }
   }, [value]);
 
+  // Actualizar posición en resize o scroll (capture: true para capturar scroll de modales)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    updatePosition();
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+
+    return () => {
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+    };
+  }, [isOpen]);
+
   // Click outside y tecla Escape
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        popoverRef.current &&
+        !popoverRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -230,6 +296,87 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
   const calendarDays = generateCalendarDays();
 
+  const renderPopoverContent = () => (
+    <>
+      {/* Barra superior de mes/año y navegación */}
+      <div className="date-picker-header">
+        <button
+          type="button"
+          className="date-nav-btn"
+          onClick={handlePrevMonth}
+          title="Mes anterior"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        <span className="date-picker-month-title">
+          {MONTH_NAMES_ES[viewDate.month]} {viewDate.year}
+        </span>
+
+        <button
+          type="button"
+          className="date-nav-btn"
+          onClick={handleNextMonth}
+          title="Mes siguiente"
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+
+      {/* Días de la semana */}
+      <div className="date-picker-weekdays">
+        {WEEKDAY_NAMES_ES.map(wd => (
+          <span key={wd} className="date-picker-weekday">
+            {wd}
+          </span>
+        ))}
+      </div>
+
+      {/* Cuadrícula de días */}
+      <div className="date-picker-grid">
+        {calendarDays.map((item, idx) => (
+          <button
+            key={`${item.dateStr}-${idx}`}
+            type="button"
+            disabled={item.isDisabled}
+            className={`date-picker-day ${
+              item.isCurrentMonth ? 'current-month' : 'other-month'
+            } ${item.isSelected ? 'selected' : ''} ${
+              item.isToday ? 'today' : ''
+            }`}
+            onClick={() => !item.isDisabled && handleSelectDay(item.year, item.month, item.day)}
+            title={item.dateStr}
+          >
+            <span>{item.day}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Barra inferior de accesos rápidos */}
+      <div className="date-picker-footer">
+        <button
+          type="button"
+          className="date-picker-quick-btn"
+          onClick={handleSelectToday}
+        >
+          Ir a Hoy
+        </button>
+        {value && (
+          <span className="date-picker-current-selected tabular-nums">
+            {formatDisplay(value)}
+          </span>
+        )}
+        <button
+          type="button"
+          className="date-picker-close-btn"
+          onClick={() => setIsOpen(false)}
+        >
+          Listo
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div
       ref={containerRef}
@@ -266,86 +413,41 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         </span>
       </button>
 
-      {/* Popover Calendario Estilizado */}
-      {isOpen && (
-        <div className={`custom-date-picker-popover ${openUp ? 'open-up' : ''}`} role="dialog" aria-modal="true">
-          {/* Barra superior de mes/año y navegación */}
-          <div className="date-picker-header">
-            <button
-              type="button"
-              className="date-nav-btn"
-              onClick={handlePrevMonth}
-              title="Mes anterior"
-            >
-              <ChevronLeft size={16} />
-            </button>
-
-            <span className="date-picker-month-title">
-              {MONTH_NAMES_ES[viewDate.month]} {viewDate.year}
-            </span>
-
-            <button
-              type="button"
-              className="date-nav-btn"
-              onClick={handleNextMonth}
-              title="Mes siguiente"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-
-          {/* Días de la semana */}
-          <div className="date-picker-weekdays">
-            {WEEKDAY_NAMES_ES.map(wd => (
-              <span key={wd} className="date-picker-weekday">
-                {wd}
-              </span>
-            ))}
-          </div>
-
-          {/* Cuadrícula de días */}
-          <div className="date-picker-grid">
-            {calendarDays.map((item, idx) => (
-              <button
-                key={`${item.dateStr}-${idx}`}
-                type="button"
-                disabled={item.isDisabled}
-                className={`date-picker-day ${
-                  item.isCurrentMonth ? 'current-month' : 'other-month'
-                } ${item.isSelected ? 'selected' : ''} ${
-                  item.isToday ? 'today' : ''
-                }`}
-                onClick={() => !item.isDisabled && handleSelectDay(item.year, item.month, item.day)}
-                title={item.dateStr}
-              >
-                <span>{item.day}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Barra inferior de accesos rápidos */}
-          <div className="date-picker-footer">
-            <button
-              type="button"
-              className="date-picker-quick-btn"
-              onClick={handleSelectToday}
-            >
-              Ir a Hoy
-            </button>
-            {value && (
-              <span className="date-picker-current-selected tabular-nums">
-                {formatDisplay(value)}
-              </span>
-            )}
-            <button
-              type="button"
-              className="date-picker-close-btn"
+      {/* Popover Calendario Estilizado Flotante via Portal fuera del Modal */}
+      {isOpen && isMounted && typeof document !== 'undefined' && (
+        createPortal(
+          coords.isMobile ? (
+            <div
+              className="custom-date-picker-mobile-overlay"
               onClick={() => setIsOpen(false)}
             >
-              Listo
-            </button>
-          </div>
-        </div>
+              <div
+                ref={popoverRef}
+                className="custom-date-picker-popover-portal is-mobile"
+                role="dialog"
+                aria-modal="true"
+                onClick={e => e.stopPropagation()}
+              >
+                {renderPopoverContent()}
+              </div>
+            </div>
+          ) : (
+            <div
+              ref={popoverRef}
+              className="custom-date-picker-popover-portal"
+              style={{
+                top: `${coords.top}px`,
+                left: `${coords.left}px`
+              }}
+              role="dialog"
+              aria-modal="true"
+              onClick={e => e.stopPropagation()}
+            >
+              {renderPopoverContent()}
+            </div>
+          ),
+          document.body
+        )
       )}
     </div>
   );

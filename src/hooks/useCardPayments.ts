@@ -35,6 +35,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     const d = new Date();
     return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
   });
+  const [paymentTargetMonth, setPaymentTargetMonth] = useState<string>('');
   const [editingCardPaymentId, setEditingCardPaymentId] = useState<string | null>(null);
   const [editingCardPaymentIndex, setEditingCardPaymentIndex] = useState<number | null>(null);
   const [showAllHistoricalPayments, setShowAllHistoricalPayments] = useState(false);
@@ -71,7 +72,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPaymentModalOpen, paymentCurrency, paymentDate]);
 
-  const handleOpenCreateCardPayment = (preselectedCardId?: string | React.MouseEvent) => {
+  const handleOpenCreateCardPayment = (preselectedCardId?: string | React.MouseEvent, preselectedTargetMonth?: string) => {
     setEditingCardPaymentId(null);
     setEditingCardPaymentIndex(null);
     const creditCards = paymentMethods.filter(p => p.type === 'credit');
@@ -86,6 +87,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setPaymentTcInfo(null);
     setHasUserManuallyEditedPaymentTc(false);
     setPaymentSourceType('DEBIT_ACCOUNT');
+    setPaymentTargetMonth(typeof preselectedTargetMonth === 'string' ? preselectedTargetMonth : '');
     const now = new Date();
     const day = (currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1))
       ? now.getDate().toString().padStart(2, '0')
@@ -104,6 +106,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setPaymentExchangeRate(pay.exchangeRate ? pay.exchangeRate.toString() : FALLBACK_USD_PEN_RATE_STR);
     setHasUserManuallyEditedPaymentTc(true);
     setPaymentDate(pay.paymentDate);
+    setPaymentTargetMonth(pay.targetMonth || '');
     setPaymentSourceType(pay.sourceType || 'DEBIT_ACCOUNT');
     setIsPaymentModalOpen(true);
   };
@@ -135,7 +138,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
             exchangeRate: rate,
             amountPen,
             paymentDate: targetDate,
-            sourceType: paymentSourceType
+            sourceType: paymentSourceType,
+            targetMonth: paymentTargetMonth || undefined
           };
         }
         return p;
@@ -144,6 +148,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       setEditingCardPaymentId(null);
       setEditingCardPaymentIndex(null);
       setPaymentAmount('');
+      setPaymentTargetMonth('');
       return;
     }
 
@@ -156,7 +161,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       exchangeRate: rate,
       amountPen,
       paymentDate: targetDate,
-      sourceType: paymentSourceType
+      sourceType: paymentSourceType,
+      targetMonth: paymentTargetMonth || undefined
     };
 
     setCardPayments(prev => [newPay, ...prev]);
@@ -164,6 +170,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     SupabaseDataService.createCardPayment(newPay);
     setIsPaymentModalOpen(false);
     setPaymentAmount('');
+    setPaymentTargetMonth('');
   };
 
   // Cierra el modal de abono y limpia el estado de edición del formulario
@@ -172,6 +179,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setEditingCardPaymentId(null);
     setEditingCardPaymentIndex(null);
     setPaymentAmount('');
+    setPaymentTargetMonth('');
   };
 
   const handleDeleteCardPayment = (targetId?: string, targetIndex?: number) => {
@@ -209,6 +217,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     fetchPaymentSunatRate,
     paymentDate,
     setPaymentDate,
+    paymentTargetMonth,
+    setPaymentTargetMonth,
     editingCardPaymentId,
     editingCardPaymentIndex,
     showAllHistoricalPayments,

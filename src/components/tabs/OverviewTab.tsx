@@ -90,8 +90,8 @@ export const OverviewTab: React.FC = () => {
   const realizedOutflow = debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidMonth + debtPaidToday;
   const pastOutflow = debitStats.debitExpensesTotalMonth + debitStats.cardPaymentsPaidMonth + debtPaidMonth;
   // Salida programada del mes futuro: gastos débito registrados + cuotas de tarjeta
-  // por vencer + deudas propias programadas de ese mes.
-  const scheduledOutflow = debitStats.debitExpensesTotalMonth + debitStats.cardBillsDueThisMonth + debitStats.scheduledDebtDueThisMonth;
+  // por vencer pendientes de pago (netas de abonos previos o anticipados) + deudas propias programadas de ese mes.
+  const scheduledOutflow = debitStats.debitExpensesTotalMonth + debitStats.unpaidCardBillsDueThisMonth + debitStats.scheduledDebtDueThisMonth;
   // Lo que aún falta pagar en el mes en curso (para no quedar solo con lo "efectuado").
   const pendingThisMonth = debitStats.unpaidCardBillsDueThisMonth + debitStats.scheduledDebtDueThisMonth;
 
@@ -223,7 +223,7 @@ export const OverviewTab: React.FC = () => {
               {isCurrentActiveMonth
                 ? `Débito ${formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidToday > 0 ? ` • Deudas ${formatSoles(debtPaidToday)}` : ''}${pendingThisMonth > 0 ? ` • Por pagar ${formatSoles(pendingThisMonth)}` : ''}`
                 : isFutureMonth
-                ? `Tarjetas ${formatSoles(debitStats.cardBillsDueThisMonth)} • Deudas ${formatSoles(debitStats.scheduledDebtDueThisMonth)}${debitStats.debitExpensesTotalMonth > 0 ? ` • Débito ${formatSoles(debitStats.debitExpensesTotalMonth)}` : ''}`
+                ? `Tarjetas ${formatSoles(debitStats.unpaidCardBillsDueThisMonth)}${debitStats.cardPaidInAdvanceThisMonth > 0 && debitStats.unpaidCardBillsDueThisMonth <= 0 ? ' (al día)' : ''} • Deudas ${formatSoles(debitStats.scheduledDebtDueThisMonth)}${debitStats.debitExpensesTotalMonth > 0 ? ` • Débito ${formatSoles(debitStats.debitExpensesTotalMonth)}` : ''}`
                 : `Débito ${formatSoles(debitStats.debitExpensesTotalMonth)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidMonth > 0 ? ` • Deudas ${formatSoles(debtPaidMonth)}` : ''}`}
             </span>
           </div>

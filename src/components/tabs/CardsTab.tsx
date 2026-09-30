@@ -52,6 +52,15 @@ export const CardsTab: React.FC = () => {
     ? [...cardPayments].sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
     : currentMonthCardPayments;
 
+  const formatPaymentTargetMonth = (ym: string) => {
+    const parts = ym.split('-');
+    if (parts.length !== 2) return ym;
+    const [y, m] = parts;
+    const idx = parseInt(m, 10);
+    const name = monthNames[idx] || ym;
+    return `${name} ${y}`;
+  };
+
   return (
     <div>
       {/* Cabecera Principal de Pestaña */}
@@ -232,15 +241,19 @@ export const CardsTab: React.FC = () => {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
-                    Abonado este mes:
+                    {card.paidThisMonth > 0 ? 'Abonado este mes:' : (card.paidInAdvanceForSelectedMonth || 0) > 0 ? 'Pagado por adelantado:' : 'Abonado este mes:'}
                   </span>
                   <strong
                     className="tabular-nums"
                     style={{
-                      color: card.paidThisMonth > 0 ? 'var(--accent-success)' : 'var(--text-muted)'
+                      color: (card.paidThisMonth > 0 || (card.paidInAdvanceForSelectedMonth || 0) > 0) ? 'var(--accent-success)' : 'var(--text-muted)'
                     }}
                   >
-                    {card.paidThisMonth > 0 ? `+${formatSoles(card.paidThisMonth)}` : formatSoles(0)}
+                    {card.paidThisMonth > 0
+                      ? `+${formatSoles(card.paidThisMonth)}`
+                      : (card.paidInAdvanceForSelectedMonth || 0) > 0
+                      ? `+${formatSoles(card.paidInAdvanceForSelectedMonth!)}`
+                      : formatSoles(0)}
                   </strong>
                 </div>
               </div>
@@ -355,6 +368,14 @@ export const CardsTab: React.FC = () => {
                                 'Cuenta Bancaria (Débito)'
                               }
                             </span>
+                            {pay.targetMonth && pay.targetMonth !== 'EXTRAORDINARY' && (
+                              <>
+                                <span>•</span>
+                                <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
+                                  Para: {formatPaymentTargetMonth(pay.targetMonth)}
+                                </span>
+                              </>
+                            )}
                             {pay.currency === 'USD' && (
                               <>
                                 <span>•</span>

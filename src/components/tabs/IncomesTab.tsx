@@ -19,6 +19,7 @@ export const IncomesTab: React.FC = () => {
     currentYear,
     setIsIncomeModalOpen,
     setIsSalaryModalOpen,
+    handleOpenSalaryModal,
     totalSalaryAmount,
     currentOtherIncomes,
     debitStats,
@@ -68,7 +69,7 @@ export const IncomesTab: React.FC = () => {
             <Plus size={15} />
             <span>Ingreso Extra</span>
           </button>
-          <button id="btn-config-salary" className="btn-primary" onClick={() => setIsSalaryModalOpen(true)}>
+          <button id="btn-config-salary" className="btn-primary" onClick={handleOpenSalaryModal}>
             <Building2 size={15} />
             <span>Configurar Sueldo</span>
           </button>
@@ -172,12 +173,7 @@ export const IncomesTab: React.FC = () => {
                       <button
                         className="btn-secondary"
                         style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                        onClick={() => {
-                          setSalarySource(sal.source);
-                          setSalaryAmount(sal.amount.toString());
-                          setSalaryPayDay(sal.payDay.toString());
-                          setIsSalaryModalOpen(true);
-                        }}
+                        onClick={handleOpenSalaryModal}
                       >
                         Editar
                       </button>

@@ -6486,15 +6486,40 @@ body.modal-open {
   white-space: nowrap !important;
 }
 
-/* 2. Grid Simétrico 2x2 de Tarjetas de Crédito */
+/* 2. Grid Adaptativo de Tarjetas de Crédito */
+.credit-cards-grid,
 .credit-cards-grid-2x2 {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 
+@media (min-width: 1080px) {
+  .credit-cards-grid.cols-3,
+  .credit-cards-grid-2x2.cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .credit-cards-grid.cols-2,
+  .credit-cards-grid-2x2.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .credit-cards-grid.cols-1,
+  .credit-cards-grid-2x2.cols-1 {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+  }
+}
+
+@media (max-width: 1079px) and (min-width: 769px) {
+  .credit-cards-grid,
+  .credit-cards-grid-2x2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
+  .credit-cards-grid,
   .credit-cards-grid-2x2 {
     grid-template-columns: 1fr;
     gap: 12px;

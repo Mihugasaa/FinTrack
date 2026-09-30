@@ -33,10 +33,13 @@ export const CardsTab: React.FC = () => {
     cardsSubTab: activeSubTab,
     setCardsSubTab: setActiveSubTab,
     formatDisplayDate,
-    formatSoles
+    formatSoles,
+    isCurrentActiveMonth,
+    isPastMonth,
+    isFutureMonth
   } = useFinance();
 
-  // Cálculo de Deuda Consolidada Total en Tarjetas de Crédito
+  // Cálculo de Deuda Consolidada Total en Tarjetas de Crédito (a la fecha de hoy)
   const totalCreditDebt = cardDebtSummary.reduce(
     (acc, c) => acc + (c.hasPositiveBalance ? 0 : c.totalAccumulatedDebt),
     0
@@ -47,6 +50,20 @@ export const CardsTab: React.FC = () => {
   );
   const totalCreditDebtUsd = cardDebtSummary.reduce(
     (acc, c) => acc + (c.hasPositiveBalance ? 0 : (c.totalAccumulatedDebtUsd || 0)),
+    0
+  );
+
+  // Totales de compromisos a pagar en el ciclo del mes seleccionado
+  const totalMonthDue = cardDebtSummary.reduce(
+    (acc, c) => acc + (c.netDueInSelectedMonth || 0),
+    0
+  );
+  const totalMonthDuePen = cardDebtSummary.reduce(
+    (acc, c) => acc + (c.netDueInSelectedMonthPen ?? c.netDueInSelectedMonth ?? 0),
+    0
+  );
+  const totalMonthDueUsd = cardDebtSummary.reduce(
+    (acc, c) => acc + (c.netDueInSelectedMonthUsd || 0),
     0
   );
 
@@ -100,20 +117,29 @@ export const CardsTab: React.FC = () => {
               <span style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
                 Cuenta Débito
               </span>
-              <span className="badge badge-collected" style={{ fontSize: '0.65rem' }}>
-                Disponible
+              <span
+                className={`badge ${isCurrentActiveMonth ? 'badge-collected' : isFutureMonth ? 'badge-info' : 'badge-neutral'}`}
+                style={{ fontSize: '0.65rem' }}
+              >
+                {isCurrentActiveMonth ? 'Disponible' : isFutureMonth ? 'Proyectado' : 'Cierre de mes'}
               </span>
             </div>
             <div
               className="debit-balance-val tabular-nums"
               style={{
-                color: debitStats.currentDebitBalanceToday >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)'
+                color: (isCurrentActiveMonth ? debitStats.currentDebitBalanceToday : debitStats.projectedDebitBalanceMonthEnd) >= 0
+                  ? 'var(--accent-success)'
+                  : 'var(--accent-danger)'
               }}
             >
-              {formatSoles(debitStats.currentDebitBalanceToday)}
+              {formatSoles(isCurrentActiveMonth ? debitStats.currentDebitBalanceToday : debitStats.projectedDebitBalanceMonthEnd)}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Saldo disponible en cuenta bancaria
+              {isCurrentActiveMonth
+                ? 'Saldo disponible en cuenta bancaria'
+                : isFutureMonth
+                ? `Saldo estimado al cierre de ${monthNames[currentMonth]}`
+                : `Saldo al cierre de ${monthNames[currentMonth]} ${currentYear}`}
             </div>
           </div>
         </div>
@@ -153,23 +179,58 @@ export const CardsTab: React.FC = () => {
           <span>Tarjetas de Crédito ({cardDebtSummary.length})</span>
         </h3>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          Deuda total:{' '}
-          <strong className="tabular-nums" style={{ color: totalCreditDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
-            {formatSoles(totalCreditDebt)}
-          </strong>
-          {totalCreditDebtUsd > 0.009 && (
-            <span className="tabular-nums" style={{ color: 'var(--text-secondary)', marginLeft: '6px', fontSize: '0.76rem', fontWeight: 500 }}>
-              (incl. ${totalCreditDebtUsd.toFixed(2)} USD)
-            </span>
+          {isCurrentActiveMonth ? (
+            <>
+              Deuda total:{' '}
+              <strong className="tabular-nums" style={{ color: totalCreditDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
+                {formatSoles(totalCreditDebt)}
+              </strong>
+              {totalCreditDebtUsd > 0.009 && (
+                <span className="tabular-nums" style={{ color: 'var(--text-secondary)', marginLeft: '6px', fontSize: '0.76rem', fontWeight: 500 }}>
+                  (incl. ${totalCreditDebtUsd.toFixed(2)} USD)
+                </span>
+              )}
+            </>
+          ) : isFutureMonth ? (
+            <>
+              A pagar en {monthNames[currentMonth]}:{' '}
+              <strong className="tabular-nums" style={{ color: totalMonthDue > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
+                {formatSoles(totalMonthDue)}
+              </strong>
+              {totalMonthDueUsd > 0.009 && (
+                <span className="tabular-nums" style={{ color: 'var(--text-secondary)', marginLeft: '6px', fontSize: '0.76rem', fontWeight: 500 }}>
+                  (incl. ${totalMonthDueUsd.toFixed(2)} USD)
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              Facturado en {monthNames[currentMonth]}:{' '}
+              <strong className="tabular-nums" style={{ color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                {formatSoles(totalMonthDue)}
+              </strong>
+            </>
           )}
         </span>
       </div>
 
-      <div className="credit-cards-grid-2x2">
+      <div className={`credit-cards-grid ${cardDebtSummary.length === 3 ? 'cols-3' : cardDebtSummary.length === 1 ? 'cols-1' : 'cols-2'}`}>
         {cardDebtSummary.map(card => {
           const pm = paymentMethods.find(p => p.id === card.paymentMethodId);
           const limit = pm?.creditLimit || 5000;
           const usedPercent = card.hasPositiveBalance ? 0 : Math.min(100, (card.totalAccumulatedDebt / limit) * 100);
+
+          // Valores del mes seleccionado (ciclo o compromisos exigibles)
+          const cardDueInMonth = card.netDueInSelectedMonth || 0;
+          const cardDuePenInMonth = card.netDueInSelectedMonthPen ?? cardDueInMonth;
+          const cardDueUsdInMonth = card.netDueInSelectedMonthUsd || 0;
+          const hasUsdDueInMonth = cardDueUsdInMonth > 0.009;
+
+          const cardBarPercent = isCurrentActiveMonth
+            ? usedPercent
+            : limit > 0
+            ? Math.min(100, (cardDueInMonth / limit) * 100)
+            : 0;
 
           return (
             <div key={card.paymentMethodId} className="credit-card-zen" style={{ borderLeft: `4px solid ${card.cardColor}` }}>
@@ -180,7 +241,13 @@ export const CardsTab: React.FC = () => {
                       {card.cardName}
                     </div>
                     <div className="card-zen-limit">
-                      Límite: {formatSoles(limit)} • Uso: {card.hasPositiveBalance ? '0%' : `${usedPercent.toFixed(0)}%`}
+                      {isCurrentActiveMonth ? (
+                        <>Límite: {formatSoles(limit)} • Uso: {card.hasPositiveBalance ? '0%' : `${usedPercent.toFixed(0)}%`}</>
+                      ) : isFutureMonth ? (
+                        <>Límite: {formatSoles(limit)} • Vence: día {card.paymentDueDay}</>
+                      ) : (
+                        <>Límite: {formatSoles(limit)}</>
+                      )}
                     </div>
                   </div>
                   {pm && (
@@ -197,33 +264,113 @@ export const CardsTab: React.FC = () => {
                   )}
                 </div>
 
-                <div className="card-zen-debt-row" style={{ alignItems: 'flex-start', minHeight: '44px', marginBottom: '8px' }}>
-                  <span className="card-zen-debt-label">
-                    {card.hasPositiveBalance ? 'Saldo a favor' : 'Deuda actual'}
+                <div className="card-zen-debt-row" style={{ alignItems: 'flex-start', minHeight: '48px', marginBottom: '10px' }}>
+                  <span className="card-zen-debt-label" style={{ marginTop: '3px' }}>
+                    {isCurrentActiveMonth
+                      ? (card.hasPositiveBalance ? 'Saldo a favor' : 'Deuda a la fecha')
+                      : isFutureMonth
+                      ? `A pagar en ${monthNames[currentMonth]}`
+                      : `Facturado en ${monthNames[currentMonth]}`}
                   </span>
-                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                    {card.hasPositiveBalance ? (
-                      <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-success)', lineHeight: 1.1 }}>
-                        +{formatSoles(card.creditBalanceAmount || 0)}
-                      </div>
-                    ) : card.hasUsdDebt && (card.totalAccumulatedDebtUsd || 0) > 0.009 ? (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                          <span className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-warning)', lineHeight: 1.1 }}>
-                            {formatSoles(card.totalAccumulatedDebtPen ?? card.totalAccumulatedDebt)}
-                          </span>
-                          <span className="tabular-nums" style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent-info)' }}>
-                            ${(card.totalAccumulatedDebtUsd || 0).toFixed(2)} <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>USD</span>
-                          </span>
-                        </div>
-                        <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          Total estimado: {formatSoles(card.totalAccumulatedDebt)}
-                        </div>
-                      </>
+                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                    {isCurrentActiveMonth ? (
+                      card.hasPositiveBalance ? (
+                        <>
+                          <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-success)', lineHeight: 1.1 }}>
+                            +{formatSoles(card.creditBalanceAmount || 0)}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', visibility: 'hidden', userSelect: 'none' }}>
+                            &nbsp;
+                          </div>
+                        </>
+                      ) : card.hasUsdDebt && (card.totalAccumulatedDebtUsd || 0) > 0.009 ? (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            <span className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-warning)', lineHeight: 1.1 }}>
+                              {formatSoles(card.totalAccumulatedDebtPen ?? card.totalAccumulatedDebt)}
+                            </span>
+                            <span className="tabular-nums" style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              color: 'var(--accent-info)',
+                              background: 'rgba(14, 165, 233, 0.09)',
+                              padding: '2px 6px',
+                              borderRadius: '5px',
+                              border: '1px solid rgba(14, 165, 233, 0.22)',
+                              lineHeight: 1.2
+                            }}>
+                              ${(card.totalAccumulatedDebtUsd || 0).toFixed(2)} USD
+                            </span>
+                          </div>
+                          <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            Total estimado: {formatSoles(card.totalAccumulatedDebt)}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="card-zen-debt-val tabular-nums" style={{ color: card.totalAccumulatedDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', lineHeight: 1.1 }}>
+                            {formatSoles(card.totalAccumulatedDebt)}
+                          </div>
+                          <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', visibility: 'hidden', userSelect: 'none' }}>
+                            &nbsp;
+                          </div>
+                        </>
+                      )
                     ) : (
-                      <div className="card-zen-debt-val tabular-nums" style={{ color: card.totalAccumulatedDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', lineHeight: 1.1 }}>
-                        {formatSoles(card.totalAccumulatedDebt)}
-                      </div>
+                      /* Modo Mes Futuro o Pasado */
+                      cardDueInMonth > 0.009 ? (
+                        hasUsdDueInMonth ? (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                              <span className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-warning)', lineHeight: 1.1 }}>
+                                {formatSoles(cardDuePenInMonth)}
+                              </span>
+                              <span className="tabular-nums" style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                color: 'var(--accent-info)',
+                                background: 'rgba(14, 165, 233, 0.09)',
+                                padding: '2px 6px',
+                                borderRadius: '5px',
+                                border: '1px solid rgba(14, 165, 233, 0.22)',
+                                lineHeight: 1.2
+                              }}>
+                                ${cardDueUsdInMonth.toFixed(2)} USD
+                              </span>
+                            </div>
+                            <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                              Total estimado: {formatSoles(cardDueInMonth)}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-warning)', lineHeight: 1.1 }}>
+                              {formatSoles(cardDueInMonth)}
+                            </div>
+                            <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                              Vence el {card.paymentDueDay} de {monthNames[currentMonth]}
+                            </div>
+                          </>
+                        )
+                      ) : card.isPaidThisMonth ? (
+                        <>
+                          <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-success)', lineHeight: 1.1 }}>
+                            {formatSoles(0)}
+                          </div>
+                          <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--accent-success)' }}>
+                            Ciclo cubierto
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-success)', lineHeight: 1.1 }}>
+                            {formatSoles(0)}
+                          </div>
+                          <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            Sin vencimientos
+                          </div>
+                        </>
+                      )
                     )}
                   </div>
                 </div>
@@ -231,7 +378,7 @@ export const CardsTab: React.FC = () => {
                 <div className="card-zen-bar">
                   <div
                     className="card-zen-bar-fill"
-                    style={{ width: `${usedPercent}%`, background: card.cardColor }}
+                    style={{ width: `${cardBarPercent}%`, background: card.cardColor }}
                   />
                 </div>
               </div>
@@ -242,25 +389,57 @@ export const CardsTab: React.FC = () => {
                     Facturación:
                   </span>
                   <strong style={{ color: 'var(--text-primary)' }}>
-                    Cierre d. {card.billingCloseDay} • Pago d. {card.paymentDueDay}
+                    Corte: {card.billingCloseDay} <span style={{ color: 'var(--border-medium)', margin: '0 4px' }}>•</span> Pago: {card.paymentDueDay}
                   </strong>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
-                    {card.paidThisMonth > 0 ? 'Abonos del mes:' : (card.paidInAdvanceForSelectedMonth || 0) > 0 ? 'Abono anticipado:' : 'Abonos del mes:'}
-                  </span>
-                  <strong
-                    className="tabular-nums"
-                    style={{
-                      color: (card.paidThisMonth > 0 || (card.paidInAdvanceForSelectedMonth || 0) > 0) ? 'var(--accent-success)' : 'var(--text-muted)'
-                    }}
-                  >
-                    {card.paidThisMonth > 0
-                      ? `+${formatSoles(card.paidThisMonth)}`
-                      : (card.paidInAdvanceForSelectedMonth || 0) > 0
-                      ? `+${formatSoles(card.paidInAdvanceForSelectedMonth!)}`
-                      : formatSoles(0)}
-                  </strong>
+                  {isCurrentActiveMonth ? (
+                    <>
+                      <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
+                        Abonos del mes:
+                      </span>
+                      <strong
+                        className="tabular-nums"
+                        style={{
+                          color: card.paidThisMonth > 0 ? 'var(--accent-success)' : 'var(--text-muted)'
+                        }}
+                      >
+                        {card.paidThisMonth > 0 ? `+${formatSoles(card.paidThisMonth)}` : formatSoles(0)}
+                      </strong>
+                    </>
+                  ) : isFutureMonth ? (
+                    <>
+                      <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
+                        {card.consumedThisMonth > 0 ? 'Consumos del mes:' : 'Abonos del mes:'}
+                      </span>
+                      <strong
+                        className="tabular-nums"
+                        style={{
+                          color: card.consumedThisMonth > 0 ? 'var(--text-primary)' : card.paidThisMonth > 0 ? 'var(--accent-success)' : 'var(--text-muted)'
+                        }}
+                      >
+                        {card.consumedThisMonth > 0
+                          ? formatSoles(card.consumedThisMonth)
+                          : card.paidThisMonth > 0
+                          ? `+${formatSoles(card.paidThisMonth)}`
+                          : formatSoles(0)}
+                      </strong>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
+                        Abonos del mes:
+                      </span>
+                      <strong
+                        className="tabular-nums"
+                        style={{
+                          color: card.paidThisMonth > 0 ? 'var(--accent-success)' : 'var(--text-muted)'
+                        }}
+                      >
+                        {card.paidThisMonth > 0 ? `+${formatSoles(card.paidThisMonth)}` : formatSoles(0)}
+                      </strong>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -277,7 +456,7 @@ export const CardsTab: React.FC = () => {
               className={`tab-pill ${activeSubTab === 'payments' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('payments')}
             >
-              💳 Historial de Pagos ({currentMonthCardPayments.length})
+              💳 {isFutureMonth ? 'Pagos del Mes' : 'Historial de Pagos'} ({currentMonthCardPayments.length})
             </button>
             <button
               type="button"
@@ -316,13 +495,27 @@ export const CardsTab: React.FC = () => {
         {activeSubTab === 'payments' && (
           <div>
             {displayedPayments.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: '10px' }}>
-                <p style={{ fontWeight: 600, fontSize: '0.875rem', margin: 0 }}>
-                  No hay pagos a tarjetas registrados {showAllHistoricalPayments ? 'en el sistema' : `en ${monthNames[currentMonth]} ${currentYear}`}
+              <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: '10px' }}>
+                <p style={{ fontWeight: 600, fontSize: '0.875rem', margin: 0, color: 'var(--text-primary)' }}>
+                  {isFutureMonth
+                    ? `Sin pagos registrados para ${monthNames[currentMonth]} ${currentYear}`
+                    : `No hay pagos a tarjetas registrados ${showAllHistoricalPayments ? 'en el sistema' : `en ${monthNames[currentMonth]} ${currentYear}`}`}
                 </p>
-                <p style={{ fontSize: '0.78rem', margin: '4px 0 0 0' }}>
-                  Cuando amortices la deuda de tu tarjeta, haz clic en &quot;Registrar Pago de Tarjeta&quot;. Se descontará de tu Saldo Débito y reducirá la deuda bancaria.
+                <p style={{ fontSize: '0.78rem', margin: '6px 0 12px 0' }}>
+                  {isFutureMonth
+                    ? 'Los pagos se registran cuando amortices tus tarjetas en este periodo. Puedes consultar los vencimientos calculados.'
+                    : 'Cuando amortices la deuda de tu tarjeta, haz clic en "Registrar Pago". Se descontará de tu Saldo Débito y reducirá la deuda bancaria.'}
                 </p>
+                {isFutureMonth && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: '0.78rem', padding: '6px 14px', margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    onClick={() => setActiveSubTab('schedule')}
+                  >
+                    <span>Ver Próximos Vencimientos</span>
+                  </button>
+                )}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

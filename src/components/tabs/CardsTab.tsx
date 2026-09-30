@@ -89,9 +89,9 @@ export const CardsTab: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="tab-page-container">
       {/* Cabecera Principal de Pestaña */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="panel-header">
         <div>
           <h2 className="panel-header-title">
             Cuentas y Tarjetas
@@ -109,7 +109,7 @@ export const CardsTab: React.FC = () => {
       </div>
 
       {/* Hero Débito (Liquidez en Cuenta) */}
-      <div className="debit-hero-card" style={{ borderLeft: '4px solid var(--accent-success)' }}>
+      <div className="debit-hero-card" style={{ borderLeft: '4px solid var(--accent-success)', marginBottom: 0 }}>
         <div className="debit-hero-main">
           <div className="debit-icon-box">
             <Landmark size={22} />
@@ -130,7 +130,7 @@ export const CardsTab: React.FC = () => {
                 className="btn-icon-subtle"
                 style={{ padding: '3px 7px', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                 onClick={() => setIsAdjustDebitModalOpen(true)}
-                title="Ajustar saldo inicial de cuenta débito"
+                title="Ajustar saldo en cuenta"
                 aria-label="Ajustar saldo"
               >
                 <Pencil size={11} />
@@ -174,13 +174,13 @@ export const CardsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid de Tarjetas de Crédito */}
-      {/* Grid de Tarjetas de Crédito */}
-      <div className="cards-section-header">
-        <h3 className="cards-section-title">
-          <CreditCard size={17} style={{ color: 'var(--accent-brand)' }} />
-          <span>Tarjetas de Crédito ({cardDebtSummary.length})</span>
-        </h3>
+      {/* 2. Grid de Tarjetas de Crédito */}
+      <div className="cards-section-wrapper">
+        <div className="cards-section-header">
+          <h3 className="cards-section-title">
+            <CreditCard size={17} style={{ color: 'var(--accent-brand)' }} />
+            <span>Tarjetas de Crédito ({cardDebtSummary.length})</span>
+          </h3>
         <div className="cards-debt-summary-badge">
           {isCurrentActiveMonth ? (
             totalCreditDebtUsd > 0.009 ? (
@@ -489,6 +489,7 @@ export const CardsTab: React.FC = () => {
           );
         })}
       </div>
+    </div>
 
       {/* 3. Contenedor Píldora Unificado: Historial de Pagos & Cronograma */}
       <div className="tabs-unified-container">
@@ -842,18 +843,18 @@ export const CardsTab: React.FC = () => {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                   <span style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--text-primary)' }}>
-                    Control de Flujo de Pagos · Ciclo en Curso
+                    Control de Pagos del Mes
                   </span>
                   <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>
-                    Desfase Pre-Sueldo
+                    Pago antes de sueldo
                   </span>
                 </div>
                 <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                  Existen compromisos por <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> con fecha límite previa al abono del sueldo (Día {cardsLiquidityAssessment.primarySalaryPayDay}). Con la caja disponible actual ({formatSoles(cardsLiquidityAssessment.currentAvailableToday)}), faltan <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong> para cubrirlos al 100%. El cierre de mes proyecta solvencia tras la acreditación del sueldo.
+                  Tienes pagos por <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> que vencen antes de que cobres tu sueldo (día {cardsLiquidityAssessment.primarySalaryPayDay}). Con tu saldo actual ({formatSoles(cardsLiquidityAssessment.currentAvailableToday)}), faltan <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong> para cubrirlos en su totalidad. Tras el abono de tu sueldo, tu mes se proyecta solvente.
                 </div>
                 {cardsLiquidityAssessment.recommendedAction && (
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
-                    <strong>Alineación sugerida:</strong> {cardsLiquidityAssessment.recommendedAction}
+                    <strong>Recomendación:</strong> {cardsLiquidityAssessment.recommendedAction}
                   </div>
                 )}
               </div>
@@ -862,7 +863,7 @@ export const CardsTab: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {cardPaymentPlan.length === 0 && (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '24px 0' }}>
-                  Sin tarjetas de crédito registradas en el sistema.
+                  Aún no tienes tarjetas de crédito registradas.
                 </p>
               )}
               {(() => {
@@ -949,7 +950,7 @@ export const CardsTab: React.FC = () => {
                             type="button"
                             className="btn-pay-contextual"
                             onClick={() => handleOpenCreateCardPayment(r.plan.cardId)}
-                            title={`Registrar pago para ${plan.cardName}`}
+                            title={`Pagar ${plan.cardName}`}
                           >
                             <CreditCard size={13} style={{ color: 'var(--accent-brand)' }} />
                             <span>Pagar</span>
@@ -960,20 +961,20 @@ export const CardsTab: React.FC = () => {
                       {/* Parámetros del ciclo en barra limpia */}
                       <div className="due-plan-params-bar">
                         <div className="due-plan-param-item">
-                          <span>Cierre mensual:</span>
+                          <span>Corte:</span>
                           <strong style={{ color: 'var(--text-primary)' }}>
                             Día {plan.billingCloseDay}
                             {plan.nextCloseDate ? ` (${formatDisplayDate(plan.nextCloseDate)})` : ''}
                           </strong>
                         </div>
                         <div className="due-plan-param-item">
-                          <span>Vencimiento habitual:</span>
+                          <span>Pago:</span>
                           <strong style={{ color: 'var(--text-primary)' }}>
                             Día {plan.paymentDueDay}
                           </strong>
                         </div>
                         <div className="due-plan-param-item">
-                          <span>Uso de línea:</span>
+                          <span>Línea:</span>
                           <strong style={{ color: overUtil ? 'var(--accent-warning)' : 'var(--text-primary)' }}>
                             {r.util.toFixed(0)}%
                             <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>
@@ -1012,7 +1013,7 @@ export const CardsTab: React.FC = () => {
                             </div>
                             {coverage.actionTip && (
                               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '4px', marginTop: '3px' }}>
-                                <strong>Acción sugerida:</strong> {coverage.actionTip}
+                                <strong>Recomendación:</strong> {coverage.actionTip}
                               </div>
                             )}
                           </div>
@@ -1054,20 +1055,20 @@ export const CardsTab: React.FC = () => {
 
                       <div className="due-plan-params-bar">
                         <div className="due-plan-param-item">
-                          <span>Cierre mensual:</span>
+                          <span>Corte:</span>
                           <strong style={{ color: 'var(--text-primary)' }}>
                             Día {plan.billingCloseDay}
                             {plan.nextCloseDate ? ` (${formatDisplayDate(plan.nextCloseDate)})` : ''}
                           </strong>
                         </div>
                         <div className="due-plan-param-item">
-                          <span>Pago habitual:</span>
+                          <span>Pago:</span>
                           <strong style={{ color: 'var(--text-primary)' }}>
                             Día {plan.paymentDueDay}
                           </strong>
                         </div>
                         <div className="due-plan-param-item">
-                          <span>Uso de línea:</span>
+                          <span>Línea:</span>
                           <strong style={{ color: 'var(--text-primary)' }}>
                             {r.util.toFixed(0)}%
                             <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>

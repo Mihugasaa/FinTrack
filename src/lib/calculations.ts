@@ -2088,8 +2088,8 @@ export function evaluateCardsLiquidityCoverage(params: {
       headline = 'Cobertura confirmada';
       runningAvailable = Math.max(0, Math.round((estimatedDebitAtDueDate - dueAmt) * 100) / 100);
       message = salaryIsAfterDue
-        ? `Caja disponible suficiente (${formatSoles(estimatedDebitAtDueDate)}) previo al sueldo del día ${effectiveSalaryDay}.`
-        : `Abono de haberes ingresa previo a la fecha límite (${formatDisplayDate(dueDate)}). Caja est.: ${formatSoles(estimatedDebitAtDueDate)}.`;
+        ? `Tu saldo disponible (${formatSoles(estimatedDebitAtDueDate)}) cubre este pago antes de tu sueldo (día ${effectiveSalaryDay}).`
+        : `Tu sueldo ingresa antes del vencimiento (${formatDisplayDate(dueDate)}). Saldo proyectado: ${formatSoles(estimatedDebitAtDueDate)}.`;
     } else {
       shortfallAmount = Math.round((dueAmt - estimatedDebitAtDueDate) * 100) / 100;
       runningAvailable = 0;
@@ -2104,26 +2104,26 @@ export function evaluateCardsLiquidityCoverage(params: {
           status = 'SALARY_MISMATCH';
           hasAnySalaryMismatch = true;
           headline = 'Desfase pre-sueldo';
-          message = `Vencimiento el ${formatDisplayDate(dueDate)} previo al cobro de sueldo (Día ${effectiveSalaryDay}, +${daysDiffSalaryVsDue} d). Solvencia de cierre mensual confirmada.`;
+          message = `Vence el ${formatDisplayDate(dueDate)} antes de cobrar tu sueldo (día ${effectiveSalaryDay}, faltan ${daysDiffSalaryVsDue} días). Tu cierre de mes se proyecta solvente.`;
 
           if (estimatedDebitAtDueDate > 0) {
-            actionTip = `Abono parcial sugerido de ${formatSoles(estimatedDebitAtDueDate)} con caja disponible para mitigar intereses punitorios.`;
+            actionTip = `Te sugerimos abonar ${formatSoles(estimatedDebitAtDueDate)} con tu saldo disponible para no generar intereses.`;
           } else {
-            actionTip = `Sincronización bancaria: solicitar traslado de fecha de pago al día ${Math.min(28, effectiveSalaryDay + 3)}.`;
+            actionTip = `Consejo: Puedes solicitar al banco cambiar tu fecha de pago al día ${Math.min(28, effectiveSalaryDay + 3)} para pagar después de tu sueldo.`;
           }
         } else {
           status = 'DEFICIT';
           hasAnyDeficit = true;
           headline = 'Déficit de ciclo';
-          message = `Los compromisos del período superan la capacidad de caja proyectada al cierre (Brecha: ${formatSoles(shortfallAmount)}).`;
-          actionTip = 'Priorizar liquidación de líneas con mayor TCEA o evaluar consolidación de pasivos.';
+          message = `Los pagos del período superan tu saldo estimado al cierre del mes (brecha: ${formatSoles(shortfallAmount)}).`;
+          actionTip = 'Prioriza pagar las tarjetas con mayor tasa de interés o evalúa refinanciar.';
         }
       } else {
         status = 'DEFICIT';
         hasAnyDeficit = true;
         headline = 'Déficit de ciclo';
-        message = `Vencimiento el ${formatDisplayDate(dueDate)}. Brecha proyectada tras ingresos de ciclo: -${formatSoles(shortfallAmount)}.`;
-        actionTip = 'Evaluar reprogramación de pago o refinanciamiento directo con la entidad.';
+        message = `Vence el ${formatDisplayDate(dueDate)}. Con los ingresos del ciclo faltan ${formatSoles(shortfallAmount)} para cubrirlo.`;
+        actionTip = 'Evalúa coordinar con el banco una reprogramación antes del vencimiento.';
       }
     }
 
@@ -2156,15 +2156,15 @@ export function evaluateCardsLiquidityCoverage(params: {
   const allCovered = !hasAnySalaryMismatch && !hasAnyDeficit && totalDueSoon > 0;
 
   if (totalDueSoon <= 0.005) {
-    summaryMessage = 'Sin obligaciones de tarjeta pendientes en el ciclo.';
+    summaryMessage = 'No tienes pagos pendientes de tarjeta este mes.';
   } else if (hasAnySalaryMismatch) {
-    summaryMessage = `Compromisos por ${formatSoles(totalDueBeforeSalary)} con vencimiento previo al próximo sueldo (Día ${effectiveSalaryDay}). Brecha puntual de ${formatSoles(shortfallBeforeSalary)} frente a la caja actual (${formatSoles(currentDebitBalanceToday)}).`;
-    recommendedAction = `Efectuar abono parcial con caja disponible y evaluar sincronizar el ciclo de facturación al día ${Math.min(28, effectiveSalaryDay + 3)}.`;
+    summaryMessage = `Tienes ${formatSoles(totalDueBeforeSalary)} en pagos que vencen antes de tu sueldo (día ${effectiveSalaryDay}). Faltan ${formatSoles(shortfallBeforeSalary)} respecto a tu saldo de hoy (${formatSoles(currentDebitBalanceToday)}).`;
+    recommendedAction = `Puedes hacer un abono parcial con tu saldo disponible o cambiar tu fecha de pago en el banco al día ${Math.min(28, effectiveSalaryDay + 3)}.`;
   } else if (hasAnyDeficit) {
-    summaryMessage = `Déficit proyectado: Los compromisos del ciclo (${formatSoles(totalDueSoon)}) exceden la capacidad de caja proyectada.`;
-    recommendedAction = 'Revisar salidas discrecionales y priorizar amortización de líneas con mayor costo financiero.';
+    summaryMessage = `Los pagos del mes (${formatSoles(totalDueSoon)}) superan tu saldo proyectado.`;
+    recommendedAction = 'Te sugerimos priorizar el pago de las tarjetas con mayor tasa de interés.';
   } else if (allCovered) {
-    summaryMessage = `Compromisos próximos (${formatSoles(totalDueSoon)}) cubiertos con liquidez disponible en cuenta.`;
+    summaryMessage = `Tus próximos pagos (${formatSoles(totalDueSoon)}) están cubiertos con el saldo en tu cuenta.`;
   }
 
   return {

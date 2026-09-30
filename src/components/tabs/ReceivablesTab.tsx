@@ -158,9 +158,9 @@ export const ReceivablesTab: React.FC = () => {
     }, 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+    <div className="tab-page-container">
       {/* Cabecera Principal de Pestaña */}
-      <div className="panel-header" style={{ marginBottom: '2px' }}>
+      <div className="panel-header">
         <div>
           <h2 className="panel-header-title">
             Mis Préstamos y Deudas

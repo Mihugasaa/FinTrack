@@ -226,7 +226,7 @@ export const AnalysisTab: React.FC = () => {
   }, [forecastData]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="tab-page-container">
       {/* 1. Header del hub de Análisis */}
       <div className="analytics-section-title">
         <div>

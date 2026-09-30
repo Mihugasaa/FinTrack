@@ -96,7 +96,7 @@ export const OverviewTab: React.FC = () => {
   const pendingThisMonth = debitStats.unpaidCardBillsDueThisMonth + debitStats.scheduledDebtDueThisMonth;
 
   return (
-    <div>
+    <div className="tab-page-container">
       {/* 1. HERO MASTER: MI DINERO EN DÉBITO (ARMONÍA ZEN Y FOCO EN LIQUIDEZ) */}
       <section className="zen-hero clean-card">
         <div className="zen-hero-left">
@@ -275,7 +275,7 @@ export const OverviewTab: React.FC = () => {
           .sort((a, b) => a.days - b.days);
         if (dues.length === 0) return null;
         return (
-          <section className="clean-card" style={{ marginBottom: '16px', padding: '14px 18px' }}>
+          <section className="clean-card" style={{ padding: '14px 18px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
               <span style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>💳</span> Próximos Vencimientos de Tarjetas
@@ -288,7 +288,13 @@ export const OverviewTab: React.FC = () => {
                 Ver planificador
               </button>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: dues.length === 1 ? '1fr' : dues.length === 2 ? 'repeat(2, minmax(0, 1fr))' : dues.length === 3 ? 'repeat(3, minmax(0, 1fr))' : 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '10px'
+              }}
+            >
               {dues.slice(0, 4).map(d => {
                 const color = d.days < 0 ? 'var(--accent-danger)' : d.days <= 3 ? 'var(--accent-warning)' : 'var(--accent-info)';
                 const label = d.days < 0 ? `venció hace ${Math.abs(d.days)} d` : d.days === 0 ? 'vence hoy' : `en ${d.days} d`;
@@ -298,7 +304,7 @@ export const OverviewTab: React.FC = () => {
                 const isCovered = coverage?.status === 'COVERED';
 
                 return (
-                  <div key={d.p.cardId} style={{ flex: '1 1 180px', minWidth: '160px', border: '1px solid var(--border-subtle)', borderLeft: `4px solid ${d.p.cardColor}`, borderRadius: '10px', padding: '8px 12px', background: 'var(--bg-subtle)' }}>
+                  <div key={d.p.cardId} style={{ minWidth: 0, border: '1px solid var(--border-subtle)', borderLeft: `4px solid ${d.p.cardColor}`, borderRadius: '10px', padding: '10px 14px', background: 'var(--bg-subtle)' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>{d.p.cardName}</div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                       {d.weekday} {formatDisplayDate(d.p.nextDueDate!)} <span style={{ color: 'var(--border-medium)', fontWeight: 400 }}>|</span> <span style={{ color, fontWeight: 700 }}>{label}</span>

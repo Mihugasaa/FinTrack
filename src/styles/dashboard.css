@@ -589,7 +589,7 @@ html.is-resizing *::after {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: var(--space-md);
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -633,7 +633,7 @@ html.is-resizing *::after {
 .transactions-panel,
 .advisor-card,
 .schedule-card {
-  padding: 22px 24px;
+  padding: var(--space-md) 18px;
 }
 
 @media (max-width: 600px) {
@@ -643,7 +643,7 @@ html.is-resizing *::after {
   .transactions-panel,
   .advisor-card,
   .schedule-card {
-    padding: 16px 14px;
+    padding: var(--space-sm) 14px;
     overflow-x: hidden;
     max-width: 100%;
     min-width: 0;
@@ -900,25 +900,44 @@ html.is-resizing *::after {
 
 
 
+/* Contenedor Universal de Pestañas con Ritmo Vertical Sistemático */
+.tab-page-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+.tab-page-container > * {
+  margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+  .tab-page-container {
+    gap: var(--space-sm);
+  }
+}
+
 /* Tarjeta Principal de Mi Débito & Liquidez (Diseño Zen) */
 .zen-hero {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
-  padding: 24px 28px;
+  padding: 18px 20px;
   display: grid;
   grid-template-columns: 1.25fr 1fr;
-  gap: 32px;
+  gap: var(--space-xl);
   align-items: center;
   box-shadow: var(--shadow-card);
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 @media (max-width: 960px) {
   .zen-hero {
     grid-template-columns: 1fr;
-    gap: 20px;
-    padding: 20px;
+    gap: var(--space-md);
+    padding: 14px 14px;
+    margin-bottom: 0;
   }
 }
 
@@ -1044,9 +1063,9 @@ html.is-resizing *::after {
 .overview-grid-balanced {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
+  gap: var(--space-md);
   align-items: stretch;
-  margin-bottom: 24px;
+  margin-bottom: 0;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -1062,7 +1081,7 @@ html.is-resizing *::after {
 @media (max-width: 1040px) {
   .overview-grid-balanced {
     grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
+    gap: var(--space-md);
   }
 }
 
@@ -6487,12 +6506,20 @@ body.modal-open {
 }
 
 /* 2. Grid Adaptativo de Tarjetas de Crédito */
+.cards-section-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin: 0;
+  width: 100%;
+}
+
 .credit-cards-grid,
 .credit-cards-grid-2x2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--space-md);
+  margin-bottom: 0;
 }
 
 @media (min-width: 1080px) {
@@ -6647,7 +6674,7 @@ body.modal-open {
 
 /* Cabecera y Resumen Proporcionado de Deuda */
 .cards-section-header {
-  margin: 24px 0 12px;
+  margin: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -6716,8 +6743,8 @@ body.modal-open {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
-  padding: 18px 20px;
-  margin-top: 20px;
+  padding: var(--space-md) 18px;
+  margin-top: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
@@ -6798,7 +6825,7 @@ body.modal-open {
 
 @media (max-width: 640px) {
   .tabs-unified-container {
-    padding: 14px 12px;
+    padding: var(--space-sm) 12px;
   }
   .credit-card-zen {
     padding: 15px 14px;

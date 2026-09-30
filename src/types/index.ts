@@ -113,28 +113,37 @@ export interface CardDebtSummary {
   paidThisMonth: number;
   paidToDate: number;
   initialDebt?: number;
-  totalAccumulatedDebt: number;
+  totalAccumulatedDebt: number; // Consolidado en Soles (congelado con TC histórico por compra)
+  totalAccumulatedDebtPen?: number; // Componente puro en Soles (Bimonetario)
   hasPositiveBalance?: boolean;
   creditBalanceAmount?: number;
   netBalance?: number;
+  netBalancePen?: number;
   billingCloseDay: number;
   paymentDueDay: number;
   daysUntilClose: number;
   daysUntilPayment: number;
   creditDaysAdvantage: number;
   dueInSelectedMonth: number;
+  dueInSelectedMonthPen?: number;
   paidInSelectedMonth: number;
+  paidInSelectedMonthPen?: number;
   netDueInSelectedMonth: number;
+  netDueInSelectedMonthPen?: number;
   isPaidThisMonth: boolean;
   overdueFromPastMonths?: number;
   // Campos bimoneda (consumos y deudas en USD)
   hasUsdDebt?: boolean;
+  consumedThisMonthPen?: number;
   consumedThisMonthUsd?: number;
+  consumedToDatePen?: number;
   consumedToDateUsd?: number;
   dueInSelectedMonthUsd?: number;
+  paidThisMonthPen?: number;
   paidThisMonthUsd?: number;
+  paidToDatePen?: number;
   paidToDateUsd?: number;
-  totalAccumulatedDebtUsd?: number;
+  totalAccumulatedDebtUsd?: number; // Componente puro en Dólares (Bimonetario)
   netDueInSelectedMonthUsd?: number;
   paidInAdvanceForSelectedMonth?: number;
 }
@@ -149,6 +158,7 @@ export interface CardPayment {
   originalAmount?: number;
   exchangeRate?: number;
   amountPen?: number;
+  itfAmount?: number; // Impuesto ITF retenido por el banco (0.005%)
   notes?: string;
   targetMonth?: string; // Ciclo o mes de vencimiento objetivo (ej. '2026-10' o 'EXTRAORDINARY')
 }
@@ -175,7 +185,7 @@ export interface CardAmortizationSchedule {
   billedPenByMonth: Map<string, number>;
   billedUsdByMonth: Map<string, number>;
   paidInAdvanceByMonth: Map<string, number>;
-  pendingCyclesByCard: Map<string, Array<{ monthKey: string; dueDate: string; unpaidPen: number; unpaidUsd: number; label: string }>>;
+  pendingCyclesByCard: Map<string, Array<{ monthKey: string; dueDate: string; unpaidPen: number; unpaidUsd: number; unpaidUsdInPen?: number; label: string }>>;
 }
 
 export interface PayablePayment {
@@ -350,6 +360,8 @@ export interface CardPaymentPlanItem {
   utilizationPct: number;
   nextDueDate: string | null;
   nextDueAmount: number;
+  nextDuePen?: number;
+  nextDueUsd?: number;
   isOverdue: boolean;
   nextCloseDate: string | null;
   scorePayByDate: string | null;

@@ -1521,6 +1521,9 @@ export class SupabaseDataService {
         const amountPen = row.amount_pen !== null && row.amount_pen !== undefined ? parseFloat(row.amount_pen) : amountPaid;
 
         const targetMonth = row.target_month || row.notes?.match(/\[target:([^\]]+)\]/)?.[1] || undefined;
+        const itfFromRow = row.itf_amount !== null && row.itf_amount !== undefined ? parseFloat(row.itf_amount) : null;
+        const itfFromNotes = row.notes?.match(/\[itf:([0-9.]+)\]/)?.[1] ? parseFloat(row.notes.match(/\[itf:([0-9.]+)\]/)[1]) : null;
+        const itfAmount = itfFromRow !== null ? itfFromRow : (itfFromNotes !== null ? itfFromNotes : 0);
 
         return {
           id: row.id,
@@ -1532,6 +1535,7 @@ export class SupabaseDataService {
           originalAmount,
           exchangeRate,
           amountPen,
+          itfAmount,
           notes: row.notes || undefined,
           targetMonth
         };
@@ -1570,6 +1574,9 @@ export class SupabaseDataService {
         const exchangeRate = row.exchange_rate !== null && row.exchange_rate !== undefined ? parseFloat(row.exchange_rate) : 1.0;
         const amountPen = row.amount_pen !== null && row.amount_pen !== undefined ? parseFloat(row.amount_pen) : amountPaid;
         const targetMonth = row.target_month || row.notes?.match(/\[target:([^\]]+)\]/)?.[1] || undefined;
+        const itfFromRow = row.itf_amount !== null && row.itf_amount !== undefined ? parseFloat(row.itf_amount) : null;
+        const itfFromNotes = row.notes?.match(/\[itf:([0-9.]+)\]/)?.[1] ? parseFloat(row.notes.match(/\[itf:([0-9.]+)\]/)[1]) : null;
+        const itfAmount = itfFromRow !== null ? itfFromRow : (itfFromNotes !== null ? itfFromNotes : 0);
 
         return {
           id: row.id,
@@ -1581,6 +1588,7 @@ export class SupabaseDataService {
           originalAmount,
           exchangeRate,
           amountPen,
+          itfAmount,
           notes: row.notes || undefined,
           targetMonth
         };
@@ -1609,9 +1617,13 @@ export class SupabaseDataService {
         ? pay.amountPen 
         : (currency === 'USD' ? Math.round(originalAmount * exchangeRate * 100) / 100 : originalAmount);
 
-      const encodedNotes = pay.targetMonth && !(pay.notes || '').includes('[target:')
+      let encodedNotes = pay.targetMonth && !(pay.notes || '').includes('[target:')
         ? `${pay.notes ? `${pay.notes} ` : ''}[target:${pay.targetMonth}]`
         : (pay.notes || null);
+
+      if (pay.itfAmount && pay.itfAmount > 0 && !(encodedNotes || '').includes('[itf:')) {
+        encodedNotes = `${encodedNotes ? `${encodedNotes} ` : ''}[itf:${pay.itfAmount.toFixed(2)}]`;
+      }
 
       const payload: Record<string, any> = {
         user_id: userId,
@@ -1624,6 +1636,7 @@ export class SupabaseDataService {
         original_amount: originalAmount,
         exchange_rate: exchangeRate,
         amount_pen: amountPen,
+        itf_amount: pay.itfAmount || 0,
         notes: encodedNotes,
         target_month: pay.targetMonth || null
       };
@@ -1633,6 +1646,13 @@ export class SupabaseDataService {
       }
 
       let { error } = await supabase.from('card_payments').insert(payload);
+
+      // Fallback si la columna itf_amount aún no existe en Supabase
+      if (error && error.message?.includes('itf_amount')) {
+        delete payload.itf_amount;
+        const retryItf = await supabase.from('card_payments').insert(payload);
+        error = retryItf.error;
+      }
 
       // Fallback si la columna target_month aún no existe en Supabase
       if (error && error.message?.includes('target_month')) {

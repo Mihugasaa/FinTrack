@@ -416,7 +416,11 @@ function useFinanceController() {
     handleOpenEditCardPayment,
     handleMakeCardPayment,
     handleClosePaymentModal,
-    handleDeleteCardPayment
+    handleDeleteCardPayment,
+    applyItf,
+    setApplyItf,
+    itfAmountInput,
+    setItfAmountInput
   } = useCardPayments({ paymentMethods, currentYear, currentMonth });
 
   // Cuentas por cobrar: préstamos que hice, agrupados por deudor, con cobros
@@ -758,6 +762,8 @@ function useFinanceController() {
           allPayments.forEach(cp => {
             const local = byKey.get(keyOf(cp));
             byKey.set(keyOf(cp), {
+              ...local,
+              ...cp,
               id: cp.id || local?.id,
               paymentMethodId: cp.paymentMethodId,
               amountPaid: cp.amountPaid,
@@ -896,6 +902,8 @@ function useFinanceController() {
               allPayments.forEach(cp => {
                 const local = byKey.get(keyOf(cp));
                 byKey.set(keyOf(cp), {
+                  ...local,
+                  ...cp,
                   id: cp.id || local?.id,
                   paymentMethodId: cp.paymentMethodId,
                   amountPaid: cp.amountPaid,
@@ -1024,8 +1032,15 @@ function useFinanceController() {
   const debitStats = useMemo(() => {
     const debitMethodIds = paymentMethods.filter(p => p.type === 'debit' || p.type === 'cash').map(p => p.id);
     const cardPaymentsThisMonthTotal = cardPayments
-      .filter(p => p.paymentDate.startsWith(monthKey) && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT')
-      .reduce((acc, curr) => acc + curr.amountPaid, 0);
+      .filter(p => p.paymentDate.startsWith(monthKey) && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT' && p.sourceType !== 'USD_SAVINGS_ACCOUNT')
+      .reduce((acc, curr) => {
+        const nominalAmt = curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid;
+        const penAmt = curr.amountPen !== undefined 
+          ? curr.amountPen 
+          : (curr.currency === 'USD' && curr.exchangeRate ? Math.round(nominalAmt * curr.exchangeRate * 100) / 100 : curr.amountPaid);
+        const itf = curr.itfAmount || 0;
+        return acc + penAmt + itf;
+      }, 0);
 
     const base = calculateCurrentDebitBalance(
       initialDebitForMonth,
@@ -1232,16 +1247,23 @@ function useFinanceController() {
 
       let nextDueDate: string | null = null;
       let nextDueAmount = 0;
+      let nextDuePen = 0;
+      let nextDueUsd = 0;
       let isOverdue = false;
 
       if (nextCycle) {
         nextDueDate = nextCycle.dueDate;
-        nextDueAmount = Math.round((nextCycle.unpaidPen + (nextCycle.unpaidUsd * usdRate)) * 100) / 100;
+        nextDuePen = nextCycle.unpaidPen;
+        nextDueUsd = nextCycle.unpaidUsd;
+        const cycleUsdPen = nextCycle.unpaidUsdInPen !== undefined ? nextCycle.unpaidUsdInPen : (nextCycle.unpaidUsd * usdRate);
+        nextDueAmount = Math.round((nextCycle.unpaidPen + cycleUsdPen) * 100) / 100;
         isOverdue = nextDueDate < todayStr;
       } else if (totalUnpaid > 0.005) {
         // Deuda inicial sin transacciones de ciclo asociadas
         nextDueDate = todayStr;
         nextDueAmount = Math.round(totalUnpaid * 100) / 100;
+        nextDuePen = summary?.totalAccumulatedDebtPen ?? totalUnpaid;
+        nextDueUsd = summary?.totalAccumulatedDebtUsd ?? 0;
         isOverdue = false;
       }
 
@@ -1282,6 +1304,8 @@ function useFinanceController() {
         utilizationPct: limit > 0 ? Math.min(100, (totalUnpaid / limit) * 100) : 0,
         nextDueDate,
         nextDueAmount,
+        nextDuePen,
+        nextDueUsd,
         isOverdue,
         nextCloseDate,
         scorePayByDate
@@ -1585,7 +1609,8 @@ function useFinanceController() {
         const pen = p.amountPen !== undefined 
           ? p.amountPen 
           : (p.currency === 'USD' && p.exchangeRate ? Math.round(nom * p.exchangeRate * 100) / 100 : p.amountPaid);
-        outByMonth.set(k, (outByMonth.get(k) || 0) + pen);
+        const itf = p.itfAmount || 0;
+        outByMonth.set(k, (outByMonth.get(k) || 0) + pen + itf);
         candidateMonths.add(k);
       }
     });
@@ -2403,6 +2428,10 @@ function useFinanceController() {
     handleMakeCardPayment,
     handleClosePaymentModal,
     handleDeleteCardPayment,
+    applyItf,
+    setApplyItf,
+    itfAmountInput,
+    setItfAmountInput,
 
     // Cuentas por cobrar
     receivables,

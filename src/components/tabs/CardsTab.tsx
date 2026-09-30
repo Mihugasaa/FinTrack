@@ -41,10 +41,18 @@ export const CardsTab: React.FC = () => {
     (acc, c) => acc + (c.hasPositiveBalance ? 0 : c.totalAccumulatedDebt),
     0
   );
+  const totalCreditDebtPen = cardDebtSummary.reduce(
+    (acc, c) => acc + (c.hasPositiveBalance ? 0 : (c.totalAccumulatedDebtPen ?? c.totalAccumulatedDebt)),
+    0
+  );
+  const totalCreditDebtUsd = cardDebtSummary.reduce(
+    (acc, c) => acc + (c.hasPositiveBalance ? 0 : (c.totalAccumulatedDebtUsd || 0)),
+    0
+  );
 
   // Total pagado a tarjetas en el mes seleccionado
   const totalPaidToCardsThisMonth = currentMonthCardPayments.reduce(
-    (acc, p) => acc + p.amountPaid,
+    (acc, p) => acc + (p.amountPen !== undefined ? p.amountPen : p.amountPaid),
     0
   );
 
@@ -67,10 +75,10 @@ export const CardsTab: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h2 className="panel-header-title">
-            Mis Cuentas de Débito y Tarjetas de Crédito
+            Cuentas y Tarjetas
           </h2>
           <p className="panel-header-subtitle">
-            Gestiona tus fondos líquidos y líneas de crédito con balance simétrico
+            Saldos disponibles, líneas de crédito y próximos vencimientos
           </p>
         </div>
         <div className="action-group">
@@ -81,7 +89,7 @@ export const CardsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* 1. Hero Débito (Liquidez en Cuenta y Fondos Disponibles) */}
+      {/* Hero Débito (Liquidez en Cuenta) */}
       <div className="debit-hero-card" style={{ borderLeft: '4px solid var(--accent-success)' }}>
         <div className="debit-hero-main">
           <div className="debit-icon-box">
@@ -90,10 +98,10 @@ export const CardsTab: React.FC = () => {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                Cuenta Débito / Efectivo
+                Cuenta Débito
               </span>
               <span className="badge badge-collected" style={{ fontSize: '0.65rem' }}>
-                Dinero Disponible
+                Disponible
               </span>
             </div>
             <div
@@ -105,21 +113,21 @@ export const CardsTab: React.FC = () => {
               {formatSoles(debitStats.currentDebitBalanceToday)}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Saldo real tras descontar gastos pagados y amortizaciones a tarjetas
+              Saldo disponible en cuenta bancaria
             </div>
           </div>
         </div>
 
         <div className="debit-hero-stats">
           <div className="debit-stat-item">
-            <span className="debit-stat-label">Gastado en Débito</span>
+            <span className="debit-stat-label">Gastos del mes</span>
             <span className="debit-stat-val tabular-nums">
               {formatSoles(debitStats.debitExpenses)}
             </span>
           </div>
 
           <div className="debit-stat-item">
-            <span className="debit-stat-label">Pagos a Tarjetas</span>
+            <span className="debit-stat-label">Pagos de tarjeta</span>
             <span className="debit-stat-val tabular-nums" style={{ color: 'var(--accent-brand)' }}>
               {formatSoles(totalPaidToCardsThisMonth)}
             </span>
@@ -138,17 +146,22 @@ export const CardsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Grid Simétrico 2x2 de Tarjetas de Crédito (Cero tarjetas huérfanas) */}
+      {/* Grid de Tarjetas de Crédito */}
       <div style={{ margin: '24px 0 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <CreditCard size={17} style={{ color: 'var(--accent-brand)' }} />
-          <span>Mis Líneas de Crédito Activas ({cardDebtSummary.length})</span>
+          <span>Tarjetas de Crédito ({cardDebtSummary.length})</span>
         </h3>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          Deuda acumulada total:{' '}
+          Deuda total:{' '}
           <strong className="tabular-nums" style={{ color: totalCreditDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', fontSize: '0.875rem' }}>
             {formatSoles(totalCreditDebt)}
           </strong>
+          {totalCreditDebtUsd > 0.009 && (
+            <span className="tabular-nums" style={{ color: 'var(--text-secondary)', marginLeft: '6px', fontSize: '0.76rem', fontWeight: 500 }}>
+              (incl. ${totalCreditDebtUsd.toFixed(2)} USD)
+            </span>
+          )}
         </span>
       </div>
 
@@ -186,37 +199,30 @@ export const CardsTab: React.FC = () => {
 
                 <div className="card-zen-debt-row" style={{ alignItems: 'flex-start', minHeight: '44px', marginBottom: '8px' }}>
                   <span className="card-zen-debt-label">
-                    {card.hasPositiveBalance ? 'Saldo a Favor' : 'Deuda a la Fecha'}
+                    {card.hasPositiveBalance ? 'Saldo a favor' : 'Deuda actual'}
                   </span>
-                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                    <div
-                      className="card-zen-debt-val tabular-nums"
-                      style={{
-                        color: card.hasPositiveBalance
-                          ? 'var(--accent-success)'
-                          : card.totalAccumulatedDebt > 0
-                          ? 'var(--accent-warning)'
-                          : 'var(--accent-success)',
-                        lineHeight: 1.1
-                      }}
-                    >
-                      {card.hasPositiveBalance ? `+${formatSoles(card.creditBalanceAmount || 0)}` : formatSoles(card.totalAccumulatedDebt)}
-                    </div>
-                    {card.hasUsdDebt && (card.totalAccumulatedDebtUsd || 0) > 0.009 ? (
-                      <div
-                        className="tabular-nums"
-                        style={{
-                          fontSize: '0.73rem',
-                          color: 'var(--accent-info)',
-                          fontWeight: 600,
-                          marginTop: '3px'
-                        }}
-                      >
-                        incluye ${(card.totalAccumulatedDebtUsd || 0).toFixed(2)} USD
+                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                    {card.hasPositiveBalance ? (
+                      <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-success)', lineHeight: 1.1 }}>
+                        +{formatSoles(card.creditBalanceAmount || 0)}
                       </div>
+                    ) : card.hasUsdDebt && (card.totalAccumulatedDebtUsd || 0) > 0.009 ? (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                          <span className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-warning)', lineHeight: 1.1 }}>
+                            {formatSoles(card.totalAccumulatedDebtPen ?? card.totalAccumulatedDebt)}
+                          </span>
+                          <span className="tabular-nums" style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent-info)' }}>
+                            ${(card.totalAccumulatedDebtUsd || 0).toFixed(2)} <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>USD</span>
+                          </span>
+                        </div>
+                        <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          Total estimado: {formatSoles(card.totalAccumulatedDebt)}
+                        </div>
+                      </>
                     ) : (
-                      <div style={{ fontSize: '0.73rem', visibility: 'hidden', userSelect: 'none', marginTop: '3px' }}>
-                        &nbsp;
+                      <div className="card-zen-debt-val tabular-nums" style={{ color: card.totalAccumulatedDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', lineHeight: 1.1 }}>
+                        {formatSoles(card.totalAccumulatedDebt)}
                       </div>
                     )}
                   </div>
@@ -233,15 +239,15 @@ export const CardsTab: React.FC = () => {
               <div className="card-zen-meta-grid">
                 <div>
                   <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
-                    Ciclo facturación:
+                    Facturación:
                   </span>
                   <strong style={{ color: 'var(--text-primary)' }}>
-                    Corte {card.billingCloseDay} / Pago {card.paymentDueDay}
+                    Cierre d. {card.billingCloseDay} • Pago d. {card.paymentDueDay}
                   </strong>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
-                    {card.paidThisMonth > 0 ? 'Abonado este mes:' : (card.paidInAdvanceForSelectedMonth || 0) > 0 ? 'Pagado por adelantado:' : 'Abonado este mes:'}
+                    {card.paidThisMonth > 0 ? 'Abonos del mes:' : (card.paidInAdvanceForSelectedMonth || 0) > 0 ? 'Abono anticipado:' : 'Abonos del mes:'}
                   </span>
                   <strong
                     className="tabular-nums"
@@ -271,14 +277,14 @@ export const CardsTab: React.FC = () => {
               className={`tab-pill ${activeSubTab === 'payments' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('payments')}
             >
-              💳 Pagos a Tarjetas ({currentMonthCardPayments.length})
+              💳 Historial de Pagos ({currentMonthCardPayments.length})
             </button>
             <button
               type="button"
               className={`tab-pill ${activeSubTab === 'schedule' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('schedule')}
             >
-              📅 Planificador de Pagos
+              📅 Próximos Vencimientos
             </button>
           </div>
 
@@ -301,7 +307,7 @@ export const CardsTab: React.FC = () => {
               onClick={() => handleOpenCreateCardPayment()}
             >
               <Plus size={14} />
-              <span>Registrar Pago de Tarjeta</span>
+              <span>Registrar Pago</span>
             </button>
           </div>
         </div>
@@ -398,11 +404,15 @@ export const CardsTab: React.FC = () => {
                               ? `-$${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD`
                               : `-${formatSoles(pay.amountPaid)}`}
                           </span>
-                          {pay.currency === 'USD' && (
+                          {pay.itfAmount ? (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>
+                              Débito: {formatSoles((pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid) + pay.itfAmount)} (ITF +{formatSoles(pay.itfAmount)})
+                            </span>
+                          ) : (pay.currency === 'USD' && (
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>
                               ≈ {formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}
                             </span>
-                          )}
+                          ))}
                         </div>
                         <span
                           className={`badge ${pay.sourceType === 'USD_SAVINGS_ACCOUNT' || pay.sourceType === 'MERCHANT_REFUND' || pay.sourceType === 'BANK_CREDIT' ? 'badge-warning' : 'badge-collected'}`}
@@ -446,10 +456,10 @@ export const CardsTab: React.FC = () => {
           <div>
             <div style={{ marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
-                Cuánto y cuándo pagar cada tarjeta. El próximo pago aparece aunque estés viendo otro mes.
+                Fechas de pago y montos según el ciclo de facturación de cada tarjeta.
               </p>
               <span className="badge badge-warning" style={{ fontSize: '0.8rem', padding: '5px 10px' }}>
-                Total a pagar pronto:{' '}
+                Total por vencer:{' '}
                 <strong className="tabular-nums" style={{ whiteSpace: 'nowrap' }}>
                   {formatSoles(cardPaymentPlan.reduce((acc, c) => acc + c.nextDueAmount, 0))}
                 </strong>
@@ -549,15 +559,20 @@ export const CardsTab: React.FC = () => {
                           <span className="tabular-nums" style={{ fontWeight: 800, fontSize: '1.15rem', color: overdue ? 'var(--accent-danger)' : 'var(--accent-warning)' }}>
                             {formatSoles(plan.nextDueAmount)}
                           </span>
+                          {plan.nextDueUsd && plan.nextDueUsd > 0.009 ? (
+                            <span className="tabular-nums" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                              ({formatSoles(plan.nextDuePen || 0)} • ${plan.nextDueUsd.toFixed(2)} USD)
+                            </span>
+                          ) : null}
                           <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                             vence <strong style={{ color: 'var(--text-primary)' }}>{r.weekday} {formatDisplayDate(plan.nextDueDate!)}</strong>
                           </span>
-                          <span aria-hidden style={{ color: 'var(--border-medium)', fontWeight: 400, fontSize: '0.82rem' }}>|</span>
-                          <span className="tabular-nums" style={{ color: countdownColor, fontWeight: 700, fontSize: '0.82rem' }}>{countdownLabel}</span>
+                          <span aria-hidden style={{ color: 'var(--border-medium)', fontWeight: 400, fontSize: '0.82rem' }}>•</span>
+                          <span className="tabular-nums" style={{ color: countdownColor, fontWeight: 600, fontSize: '0.82rem' }}>{countdownLabel}</span>
                         </div>
                       ) : (
                         <div style={{ fontSize: '0.85rem', color: 'var(--accent-success)', fontWeight: 600 }}>
-                          Sin pagos pendientes · estás al día.
+                          Sin pagos pendientes · Al día
                         </div>
                       )}
 

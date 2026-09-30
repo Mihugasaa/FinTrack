@@ -6,6 +6,7 @@ import { CustomSelect } from '@/components/CustomSelect';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { useFinance } from '@/contexts/FinanceContext';
 import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
+import { calculateItf } from '@/lib/calculations';
 
 type PaymentSourceType = 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' | 'USD_SAVINGS_ACCOUNT';
 
@@ -36,16 +37,27 @@ export const PaymentModal: React.FC = () => {
     setPaymentTargetMonth,
     formatSoles,
     handleBackdropMouseDown,
-    handleBackdropClick
+    handleBackdropClick,
+    applyItf,
+    setApplyItf,
+    itfAmountInput,
+    setItfAmountInput
   } = useFinance();
   const onClose = handleClosePaymentModal;
   const onSubmit = handleMakeCardPayment;
   const isEditing = editingCardPaymentIndex !== null;
+  const [isEditingItf, setIsEditingItf] = React.useState(false);
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
 
   const parsedAmt = parseFloat(paymentAmount) || 0;
   const parsedRate = parseFloat(paymentExchangeRate) || 1;
   const calculatedPen = paymentCurrency === 'USD' ? Math.round(parsedAmt * parsedRate * 100) / 100 : parsedAmt;
+
+  const autoItf = calculateItf(calculatedPen);
+  const effectiveItf = (paymentSourceType === 'DEBIT_ACCOUNT' && applyItf)
+    ? (itfAmountInput.trim() !== '' ? (parseFloat(itfAmountInput) || 0) : autoItf)
+    : 0;
+  const totalDebitFromAccount = calculatedPen + effectiveItf;
 
   const pendingCycles = cardAmortization?.pendingCyclesByCard?.get(paymentCardId) || [];
   const matchedCycle = pendingCycles.find(c => c.monthKey === paymentTargetMonth) || (paymentTargetMonth === '' ? pendingCycles[0] : null);
@@ -64,7 +76,7 @@ export const PaymentModal: React.FC = () => {
       return {
         value: c.monthKey,
         label: c.label,
-        subtitle: `Saldo pendiente: ${parts.join(' + ') || formatSoles(0)}`,
+        subtitle: `Saldo pendiente: ${parts.join(' • ') || formatSoles(0)}`,
         icon: <Calendar size={15} style={{ color: 'var(--accent-warning)' }} />
       };
     }),
@@ -345,6 +357,125 @@ export const PaymentModal: React.FC = () => {
             />
           </div>
 
+          {/* Bloque de Configuración ITF Bancario */}
+          {paymentSourceType === 'DEBIT_ACCOUNT' && (
+            <div style={{
+              background: 'var(--bg-glass)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              marginBottom: '16px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      ITF (0.005%)
+                    </span>
+                    {autoItf > 0 && (
+                      <span
+                        className="badge"
+                        style={{
+                          fontSize: '0.68rem',
+                          background: 'rgba(99, 102, 241, 0.15)',
+                          color: 'var(--accent-brand)',
+                          border: '1px solid rgba(99, 102, 241, 0.3)'
+                        }}
+                      >
+                        +{formatSoles(autoItf)}
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.3' }}>
+                    {calculatedPen >= 1000
+                      ? 'Aplica para transferencias desde S/ 1,000 en cuenta bancaria.'
+                      : 'Operación menor a S/ 1,000 (sin retención).'}
+                  </p>
+                </div>
+
+                <label
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: applyItf ? 'var(--accent-brand)' : 'var(--text-muted)'
+                  }}
+                  title="Desactiva si pagas desde tu cuenta sueldo"
+                >
+                  <input
+                    id="toggle-apply-itf"
+                    type="checkbox"
+                    checked={applyItf}
+                    onChange={e => setApplyItf(e.target.checked)}
+                    style={{ width: '15px', height: '15px', accentColor: 'var(--accent-brand)', cursor: 'pointer' }}
+                  />
+                  <span>Aplicar</span>
+                </label>
+              </div>
+
+              {applyItf && autoItf > 0 && (
+                <div style={{
+                  marginTop: '8px',
+                  paddingTop: '8px',
+                  borderTop: '1px dashed var(--border-subtle)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '0.75rem'
+                }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Monto de retención:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {isEditingItf ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>S/</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-input tabular-nums"
+                          style={{ width: '70px', padding: '2px 6px', fontSize: '0.75rem', height: '26px' }}
+                          value={itfAmountInput !== '' ? itfAmountInput : autoItf.toFixed(2)}
+                          onChange={e => setItfAmountInput(e.target.value)}
+                          placeholder={autoItf.toFixed(2)}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{ fontSize: '0.68rem', padding: '2px 6px', height: '26px' }}
+                          onClick={() => {
+                            setItfAmountInput('');
+                            setIsEditingItf(false);
+                          }}
+                        >
+                          Auto
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                          +{formatSoles(effectiveItf)}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px' }}
+                          onClick={() => setIsEditingItf(true)}
+                          title="Ajustar centavos si el banco debitó un redondeo particular"
+                        >
+                          {itfAmountInput.trim() !== '' ? 'Modificado' : 'Editar'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Resumen de la Operación (Key-Value Ledger Estándar) */}
           <div style={{
             padding: '12px 14px',
@@ -361,22 +492,39 @@ export const PaymentModal: React.FC = () => {
               color: 'var(--text-muted)',
               marginBottom: '8px'
             }}>
-              Resumen de la Operación
+              Detalle del Pago
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.81rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Amortización en tarjeta:</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Monto a la tarjeta:</span>
                 <span className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
                   {paymentCurrency === 'USD' ? `$${parsedAmt.toFixed(2)} USD` : formatSoles(parsedAmt)}
                 </span>
               </div>
 
               {paymentCurrency === 'USD' && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Tipo de cambio:</span>
+                    <span className="tabular-nums" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      {parsedRate.toFixed(4)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Equivalente en Soles:</span>
+                    <span className="tabular-nums" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      {formatSoles(calculatedPen)}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {paymentSourceType === 'DEBIT_ACCOUNT' && effectiveItf > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Tipo de cambio aplicado:</span>
-                  <span className="tabular-nums" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    {parsedRate.toFixed(4)}
+                  <span style={{ color: 'var(--text-secondary)' }}>ITF retenido (0.005%):</span>
+                  <span className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-brand)' }}>
+                    +{formatSoles(effectiveItf)}
                   </span>
                 </div>
               )}
@@ -391,16 +539,16 @@ export const PaymentModal: React.FC = () => {
                 fontWeight: 700
               }}>
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  {paymentSourceType === 'DEBIT_ACCOUNT' ? 'Débito en cuenta (Soles):' : 'Débito en cuenta:'}
+                  {paymentSourceType === 'DEBIT_ACCOUNT' ? 'Cargo a tu cuenta:' : 'Cargo en cuenta:'}
                 </span>
                 <span className="tabular-nums" style={{
                   color: paymentSourceType === 'DEBIT_ACCOUNT'
-                    ? (calculatedPen > 0 ? 'var(--accent-warning)' : 'var(--text-primary)')
+                    ? (totalDebitFromAccount > 0 ? 'var(--accent-warning)' : 'var(--text-primary)')
                     : 'var(--accent-success)',
                   fontSize: '0.9rem'
                 }}>
                   {paymentSourceType === 'DEBIT_ACCOUNT'
-                    ? (paymentCurrency === 'USD' ? formatSoles(calculatedPen) : formatSoles(parsedAmt))
+                    ? formatSoles(totalDebitFromAccount)
                     : 'S/ 0.00 (Sin débito)'}
                 </span>
               </div>
@@ -416,7 +564,11 @@ export const PaymentModal: React.FC = () => {
               Cancelar
             </button>
             <button type="submit" className="btn-primary">
-              {isEditing ? 'Guardar Cambios' : (paymentCurrency === 'USD' ? `Abonar $${parsedAmt.toFixed(2)} USD` : 'Registrar Abono')}
+              {isEditing
+                ? 'Guardar Cambios'
+                : paymentCurrency === 'USD'
+                ? `Pagar $${parsedAmt.toFixed(2)} USD`
+                : 'Confirmar Pago'}
             </button>
           </div>
         </form>

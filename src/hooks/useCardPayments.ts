@@ -5,6 +5,7 @@ import { SupabaseDataService } from '@/services/supabaseData.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { initialPaymentMethods } from '@/lib/defaults';
+import { calculateItf } from '@/lib/calculations';
 import { CardPayment, PaymentMethod, CurrencyCode } from '@/types';
 
 interface UseCardPaymentsDeps {
@@ -30,6 +31,10 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
   const [paymentTcInfo, setPaymentTcInfo] = useState<ExchangeRateResult | null>(null);
   const [hasUserManuallyEditedPaymentTc, setHasUserManuallyEditedPaymentTc] = useState(false);
   const [isFetchingPaymentTc, setIsFetchingPaymentTc] = useState(false);
+
+  // ITF bancario (0.005% con regla de redondeo oficial SBS/SUNAT a múltiplos de 5 céntimos)
+  const [applyItf, setApplyItf] = useState(true);
+  const [itfAmountInput, setItfAmountInput] = useState('');
 
   const [paymentDate, setPaymentDate] = useState(() => {
     const d = new Date();
@@ -88,6 +93,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setHasUserManuallyEditedPaymentTc(false);
     setPaymentSourceType('DEBIT_ACCOUNT');
     setPaymentTargetMonth(typeof preselectedTargetMonth === 'string' ? preselectedTargetMonth : '');
+    setApplyItf(true);
+    setItfAmountInput('');
     const now = new Date();
     const day = (currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1))
       ? now.getDate().toString().padStart(2, '0')
@@ -108,6 +115,13 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setPaymentDate(pay.paymentDate);
     setPaymentTargetMonth(pay.targetMonth || '');
     setPaymentSourceType(pay.sourceType || 'DEBIT_ACCOUNT');
+    if (pay.itfAmount !== undefined) {
+      setApplyItf(pay.itfAmount > 0);
+      setItfAmountInput(pay.itfAmount > 0 ? pay.itfAmount.toFixed(2) : '');
+    } else {
+      setApplyItf(true);
+      setItfAmountInput('');
+    }
     setIsPaymentModalOpen(true);
   };
 
@@ -123,6 +137,16 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     const rate = isUsd ? (parseFloat(paymentExchangeRate) || FALLBACK_USD_PEN_RATE) : 1;
     const amountPen = isUsd ? Math.round(num * rate * 100) / 100 : num;
 
+    let effectiveItf = 0;
+    if (paymentSourceType === 'DEBIT_ACCOUNT' && applyItf) {
+      if (itfAmountInput.trim() !== '') {
+        const parsedItf = parseFloat(itfAmountInput);
+        effectiveItf = isNaN(parsedItf) ? 0 : Math.max(0, parsedItf);
+      } else {
+        effectiveItf = calculateItf(amountPen);
+      }
+    }
+
     if (editingCardPaymentIndex !== null || editingCardPaymentId !== null) {
       // Modificar pago existente
       setCardPayments(prev => prev.map((p, idx) => {
@@ -137,6 +161,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
             originalAmount: num,
             exchangeRate: rate,
             amountPen,
+            itfAmount: effectiveItf > 0 ? effectiveItf : 0,
             paymentDate: targetDate,
             sourceType: paymentSourceType,
             targetMonth: paymentTargetMonth || undefined
@@ -149,6 +174,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       setEditingCardPaymentIndex(null);
       setPaymentAmount('');
       setPaymentTargetMonth('');
+      setApplyItf(true);
+      setItfAmountInput('');
       return;
     }
 
@@ -160,6 +187,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       originalAmount: num,
       exchangeRate: rate,
       amountPen,
+      itfAmount: effectiveItf > 0 ? effectiveItf : 0,
       paymentDate: targetDate,
       sourceType: paymentSourceType,
       targetMonth: paymentTargetMonth || undefined
@@ -171,6 +199,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setIsPaymentModalOpen(false);
     setPaymentAmount('');
     setPaymentTargetMonth('');
+    setApplyItf(true);
+    setItfAmountInput('');
   };
 
   // Cierra el modal de abono y limpia el estado de edición del formulario
@@ -180,6 +210,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setEditingCardPaymentIndex(null);
     setPaymentAmount('');
     setPaymentTargetMonth('');
+    setApplyItf(true);
+    setItfAmountInput('');
   };
 
   const handleDeleteCardPayment = (targetId?: string, targetIndex?: number) => {
@@ -227,6 +259,10 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     handleOpenEditCardPayment,
     handleMakeCardPayment,
     handleClosePaymentModal,
-    handleDeleteCardPayment
+    handleDeleteCardPayment,
+    applyItf,
+    setApplyItf,
+    itfAmountInput,
+    setItfAmountInput
   };
 }

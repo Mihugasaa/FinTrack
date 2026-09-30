@@ -638,6 +638,11 @@ export const TransactionsTab: React.FC = () => {
                                 ? `+${formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}`
                                 : `-${formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}`}
                             </div>
+                            {pay.itfAmount ? (
+                              <div style={{ fontSize: '0.70rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                Débito: -{formatSoles((pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid) + pay.itfAmount)} (ITF +{formatSoles(pay.itfAmount)})
+                              </div>
+                            ) : null}
                             {pay.currency === 'USD' && (
                               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
                                 ${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD
@@ -1085,6 +1090,11 @@ export const TransactionsTab: React.FC = () => {
                               ? `+${formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}`
                               : `-${formatSoles(pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid)}`}
                           </span>
+                          {pay.itfAmount ? (
+                            <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>
+                              Débito: -{formatSoles((pay.amountPen !== undefined ? pay.amountPen : pay.amountPaid) + pay.itfAmount)} (ITF +{formatSoles(pay.itfAmount)})
+                            </span>
+                          ) : null}
                           {pay.currency === 'USD' && (
                             <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>
                               ${(pay.originalAmount !== undefined ? pay.originalAmount : pay.amountPaid).toFixed(2)} USD

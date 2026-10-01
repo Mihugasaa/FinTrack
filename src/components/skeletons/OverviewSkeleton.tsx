@@ -49,30 +49,26 @@ export const OverviewSkeleton: React.FC = () => {
       </section>
 
       {/* 2. PRÓXIMOS VENCIMIENTOS DE TARJETAS */}
-      <section className="clean-card skeleton-card" style={{ marginBottom: '16px', padding: '14px 18px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+      <section className="clean-card skeleton-card card-dues-section" style={{ marginBottom: '16px' }}>
+        <div className="card-dues-header">
           <span className="skeleton-shimmer sk-box" style={{ width: '170px', height: '18px', borderRadius: '6px' }} />
-          <span className="skeleton-shimmer sk-pill" style={{ width: '95px', height: '24px' }} />
+          <span className="skeleton-shimmer sk-pill" style={{ width: '95px', height: '28px', borderRadius: '8px' }} />
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+        <div className="card-dues-container" data-count="3">
           {[1, 2, 3].map(i => (
             <div
               key={i}
+              className="card-due-item"
               style={{
-                flex: '1 1 180px',
-                minWidth: '160px',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '10px',
-                padding: '10px 12px',
-                background: 'var(--bg-subtle)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '6px'
+                gap: '8px'
               }}
             >
               <span className="skeleton-shimmer sk-box" style={{ width: '90px', height: '14px' }} />
               <span className="skeleton-shimmer sk-box" style={{ width: '120px', height: '11px' }} />
               <span className="skeleton-shimmer sk-box" style={{ width: '75px', height: '18px', marginTop: '2px' }} />
+              <span className="skeleton-shimmer sk-box" style={{ width: '100px', height: '16px', marginTop: '4px', borderRadius: '4px' }} />
             </div>
           ))}
         </div>

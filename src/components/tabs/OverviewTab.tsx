@@ -18,6 +18,168 @@ import {
 import { useFinance } from '@/contexts/FinanceContext';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 
+interface DueCardItem {
+  p: {
+    cardId: string;
+    cardName: string;
+    cardColor: string;
+    nextDueAmount: number;
+    nextDueDate: string | null;
+    liquidityCoverage?: {
+      status: string;
+      message?: string;
+      shortfallAmount?: number;
+    } | null;
+  };
+  days: number;
+  weekday: string;
+}
+
+interface CardDuesSectionProps {
+  dues: DueCardItem[];
+  onNavigateToSchedule: () => void;
+  formatDisplayDate: (d: string) => string;
+  formatSoles: (amount: number) => string;
+}
+
+const CardDuesSection: React.FC<CardDuesSectionProps> = ({
+  dues,
+  onNavigateToSchedule,
+  formatDisplayDate,
+  formatSoles
+}) => {
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (!el.firstElementChild) return;
+    const itemWidth = (el.firstElementChild as HTMLElement).offsetWidth + 12;
+    const newIdx = Math.min(dues.length - 1, Math.max(0, Math.round(el.scrollLeft / itemWidth)));
+    if (newIdx !== activeIndex) {
+      setActiveIndex(newIdx);
+    }
+  };
+
+  const scrollToCard = (idx: number) => {
+    if (!containerRef.current || !containerRef.current.firstElementChild) return;
+    const itemWidth = (containerRef.current.firstElementChild as HTMLElement).offsetWidth + 12;
+    containerRef.current.scrollTo({ left: idx * itemWidth, behavior: 'smooth' });
+    setActiveIndex(idx);
+  };
+
+  return (
+    <section className="clean-card card-dues-section">
+      <div className="card-dues-header">
+        <span className="card-dues-title">
+          <span>💳</span> Próximos Vencimientos<span className="hide-on-compact">&nbsp;de Tarjetas</span>
+          {dues.length > 0 && (
+            <span className="card-dues-count-badge">{dues.length}</span>
+          )}
+        </span>
+        <button
+          type="button"
+          className="btn-secondary card-dues-btn"
+          onClick={onNavigateToSchedule}
+        >
+          Ver planificador
+        </button>
+      </div>
+
+      <div
+        ref={containerRef}
+        className="card-dues-container"
+        data-count={Math.min(dues.length, 4)}
+        onScroll={handleScroll}
+      >
+        {dues.map((d) => {
+          const color = d.days < 0 ? 'var(--accent-danger)' : d.days <= 3 ? 'var(--accent-warning)' : 'var(--accent-info)';
+          const label = d.days < 0 ? `venció hace ${Math.abs(d.days)} d` : d.days === 0 ? 'vence hoy' : `en ${d.days} d`;
+          const coverage = d.p.liquidityCoverage;
+          const isMismatch = coverage?.status === 'SALARY_MISMATCH';
+          const isDeficit = coverage?.status === 'DEFICIT';
+          const isCovered = coverage?.status === 'COVERED';
+
+          return (
+            <div
+              key={d.p.cardId}
+              className="card-due-item"
+              style={{ borderLeft: `4px solid ${d.p.cardColor}` }}
+              onClick={onNavigateToSchedule}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToSchedule(); }}
+              title={`Ver planificación de ${d.p.cardName}`}
+            >
+              <div>
+                <div className="card-due-name">{d.p.cardName}</div>
+                <div className="card-due-meta">
+                  {d.weekday} {formatDisplayDate(d.p.nextDueDate!)}{' '}
+                  <span style={{ color: 'var(--border-medium)', fontWeight: 400 }}>|</span>{' '}
+                  <span style={{ color, fontWeight: 700 }}>{label}</span>
+                </div>
+                <div className="card-due-amount tabular-nums">
+                  {formatSoles(d.p.nextDueAmount)}
+                </div>
+              </div>
+
+              {coverage && coverage.status !== 'PAID' && (
+                <div className="card-due-badge-wrap">
+                  {isMismatch && (
+                    <span
+                      className="badge badge-warning"
+                      style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                      title={coverage.message}
+                    >
+                      <span>Pre-sueldo</span>
+                      <span style={{ opacity: 0.6 }}>•</span>
+                      <span className="tabular-nums">Faltan {formatSoles(coverage.shortfallAmount || 0)}</span>
+                    </span>
+                  )}
+                  {isCovered && (
+                    <span
+                      className="badge badge-success"
+                      style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}
+                      title={coverage.message}
+                    >
+                      Cubierto con saldo
+                    </span>
+                  )}
+                  {isDeficit && (
+                    <span
+                      className="badge badge-danger"
+                      style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                      title={coverage.message}
+                    >
+                      <span>Déficit de ciclo</span>
+                      <span style={{ opacity: 0.6 }}>•</span>
+                      <span className="tabular-nums">-{formatSoles(coverage.shortfallAmount || 0)}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {dues.length > 1 && (
+        <div className="card-dues-dots" aria-hidden="true">
+          {dues.map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              className={`card-dues-dot ${idx === activeIndex ? 'active' : ''}`}
+              onClick={() => scrollToCard(idx)}
+              aria-label={`Ver tarjeta ${idx + 1} de ${dues.length}`}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
 export const OverviewTab: React.FC = () => {
   const {
     isCurrentActiveMonth,
@@ -275,81 +437,15 @@ export const OverviewTab: React.FC = () => {
           .sort((a, b) => a.days - b.days);
         if (dues.length === 0) return null;
         return (
-          <section className="clean-card" style={{ padding: '14px 18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
-              <span style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>💳</span> Próximos Vencimientos de Tarjetas
-              </span>
-              <button
-                className="btn-secondary"
-                style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                onClick={() => { setCardsSubTab('schedule'); setActiveTab('cards'); }}
-              >
-                Ver planificador
-              </button>
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: dues.length === 1 ? '1fr' : dues.length === 2 ? 'repeat(2, minmax(0, 1fr))' : dues.length === 3 ? 'repeat(3, minmax(0, 1fr))' : 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '10px'
-              }}
-            >
-              {dues.slice(0, 4).map(d => {
-                const color = d.days < 0 ? 'var(--accent-danger)' : d.days <= 3 ? 'var(--accent-warning)' : 'var(--accent-info)';
-                const label = d.days < 0 ? `venció hace ${Math.abs(d.days)} d` : d.days === 0 ? 'vence hoy' : `en ${d.days} d`;
-                const coverage = d.p.liquidityCoverage;
-                const isMismatch = coverage?.status === 'SALARY_MISMATCH';
-                const isDeficit = coverage?.status === 'DEFICIT';
-                const isCovered = coverage?.status === 'COVERED';
-
-                return (
-                  <div key={d.p.cardId} style={{ minWidth: 0, border: '1px solid var(--border-subtle)', borderLeft: `4px solid ${d.p.cardColor}`, borderRadius: '10px', padding: '10px 14px', background: 'var(--bg-subtle)' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>{d.p.cardName}</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      {d.weekday} {formatDisplayDate(d.p.nextDueDate!)} <span style={{ color: 'var(--border-medium)', fontWeight: 400 }}>|</span> <span style={{ color, fontWeight: 700 }}>{label}</span>
-                    </div>
-                    <div className="tabular-nums" style={{ fontWeight: 800, color: 'var(--accent-danger)', marginTop: '2px' }}>{formatSoles(d.p.nextDueAmount)}</div>
-                    {coverage && coverage.status !== 'PAID' && (
-                      <div style={{ marginTop: '6px' }}>
-                        {isMismatch && (
-                          <span
-                            className="badge badge-warning"
-                            style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                            title={coverage.message}
-                          >
-                            <span>Pre-sueldo</span>
-                            <span style={{ opacity: 0.6 }}>•</span>
-                            <span className="tabular-nums">Faltan {formatSoles(coverage.shortfallAmount)}</span>
-                          </span>
-                        )}
-                        {isCovered && (
-                          <span
-                            className="badge badge-success"
-                            style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center' }}
-                            title={coverage.message}
-                          >
-                            Cubierto con saldo
-                          </span>
-                        )}
-                        {isDeficit && (
-                          <span
-                            className="badge badge-danger"
-                            style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                            title={coverage.message}
-                          >
-                            <span>Déficit de ciclo</span>
-                            <span style={{ opacity: 0.6 }}>•</span>
-                            <span className="tabular-nums">-{formatSoles(coverage.shortfallAmount)}</span>
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+          <CardDuesSection
+            dues={dues}
+            onNavigateToSchedule={() => {
+              setCardsSubTab('schedule');
+              setActiveTab('cards');
+            }}
+            formatDisplayDate={formatDisplayDate}
+            formatSoles={formatSoles}
+          />
         );
       })()}
 

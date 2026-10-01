@@ -1059,6 +1059,242 @@ html.is-resizing *::after {
   color: var(--text-muted);
 }
 
+/* ==============================================================================
+   PRÓXIMOS VENCIMIENTOS DE TARJETAS (Patrón Híbrido: Fintech Carousel & Adaptive Grid)
+   ============================================================================== */
+.card-dues-section {
+  padding: 14px 18px;
+  margin-bottom: var(--space-md, 16px);
+  position: relative;
+}
+
+.card-dues-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.card-dues-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+
+.card-dues-count-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.card-dues-btn {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.15s ease;
+}
+
+/* En Móvil (< 640px): Carrusel Horizontal con Scroll-Snap y Peek Affordance */
+.card-dues-container {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 4px 6px 4px;
+  margin: 0 -4px;
+  scrollbar-width: none; /* Firefox */
+  list-style: none;
+}
+
+.card-dues-container::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+.card-due-item {
+  flex: 0 0 78%;
+  max-width: 290px;
+  min-width: 220px;
+  scroll-snap-align: start;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--bg-subtle);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  box-sizing: border-box;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.card-due-item:hover {
+  border-color: var(--border-medium);
+  background: var(--bg-surface);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.card-due-item:active {
+  transform: scale(0.99);
+}
+
+/* Si solo hay 1 tarjeta, en móvil ocupa el 100% */
+.card-dues-container[data-count="1"] .card-due-item {
+  flex: 1 1 100%;
+  max-width: 100%;
+}
+
+.card-due-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-due-meta {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-due-amount {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--accent-danger);
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.card-due-badge-wrap {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+/* Dots indicadores de carrusel (solo en móvil) */
+.card-dues-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.card-dues-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-medium);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.card-dues-dot.active {
+  width: 18px;
+  border-radius: 4px;
+  background: var(--accent-brand);
+}
+
+/* En Desktop y Tablets (>= 640px): Grilla adaptable */
+@media (min-width: 640px) {
+  .card-dues-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    overflow-x: visible;
+    padding: 0;
+    margin: 0;
+    gap: 12px;
+  }
+
+  .card-dues-container[data-count="1"] {
+    grid-template-columns: 1fr;
+  }
+
+  .card-dues-container[data-count="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .card-dues-container[data-count="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .card-dues-container[data-count="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .card-due-item {
+    flex: none;
+    max-width: none;
+    min-width: 0;
+  }
+
+  /* Los dots se ocultan en desktop porque todo entra en la cuadrícula */
+  .card-dues-dots {
+    display: none;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 900px) {
+  /* En tablets intermedias con 4 tarjetas, distribución limpia 2x2 */
+  .card-dues-container[data-count="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 500px) {
+  .card-dues-header {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .card-dues-title {
+    font-size: 0.85rem;
+    min-width: 0;
+  }
+
+  .card-dues-btn {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 0.73rem;
+    min-height: 28px;
+  }
+}
+
+@media (max-width: 420px) {
+  .hide-on-compact {
+    display: none;
+  }
+}
+
 /* Grids Simétricos 50/50 con Altura Nivelada */
 .overview-grid-balanced {
   display: grid;

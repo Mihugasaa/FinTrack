@@ -182,6 +182,8 @@ export interface CardAmortizationSchedule {
   byCardAndMonth: Map<string, CardMonthCoverage>;
   unpaidPenByMonth: Map<string, number>;
   unpaidUsdByMonth: Map<string, number>;
+  unpaidTotalPenByMonth: Map<string, number>;
+  unpaidUsdInPenByMonth: Map<string, number>;
   billedPenByMonth: Map<string, number>;
   billedUsdByMonth: Map<string, number>;
   paidInAdvanceByMonth: Map<string, number>;

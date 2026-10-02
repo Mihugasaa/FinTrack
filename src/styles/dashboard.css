@@ -1074,10 +1074,6 @@ html.is-resizing *::after {
 }
 
 .zen-flow-card {
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1109,18 +1105,21 @@ html.is-resizing *::after {
 }
 
 .zen-flow-sub {
-  font-size: 0.71rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 170px;
+  line-height: 1.4;
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal;
+  overflow: visible;
+  word-break: break-word;
 }
 
-@media (max-width: 960px) {
-  .zen-flow-sub {
-    max-width: none;
-  }
+.zen-flow-usd-note {
+  color: var(--accent-warning);
+  font-weight: 500;
 }
 
 .zen-meta-stack {
@@ -6934,7 +6933,7 @@ body.modal-open {
 .credit-cards-grid-2x2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--space-md);
+  gap: 12px;
   margin-bottom: 0;
 }
 
@@ -6965,48 +6964,38 @@ body.modal-open {
   .credit-cards-grid,
   .credit-cards-grid-2x2 {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 10px;
   }
 }
 
-.credit-card-zen {
+/* Tarjeta de Crédito Zen Balanceada (3 Niveles ~125px) */
+.credit-card-zen-balanced {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
-  padding: 18px 20px;
-  position: relative;
-  overflow: hidden;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  gap: 10px;
+  min-height: 125px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   transition: all 0.15s ease;
 }
 
-.credit-card-zen:hover {
+.credit-card-zen-balanced:hover {
   border-color: var(--border-medium);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
-.card-color-stripe {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4.5px;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.card-zen-top {
+.card-zen-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
+  align-items: center;
 }
 
 .card-zen-title {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.95rem;
   color: var(--text-primary);
   white-space: nowrap;
@@ -7014,42 +7003,95 @@ body.modal-open {
   text-overflow: ellipsis;
 }
 
-.card-zen-limit {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 1px;
-  white-space: nowrap;
-}
-
-.card-zen-debt-row {
+.card-zen-body {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 12px;
 }
 
-.card-zen-debt-label {
-  font-size: 0.725rem;
-  font-weight: 700;
+.card-zen-body-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.card-zen-stage-label {
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.card-zen-stage-sub {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.card-zen-body-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.card-zen-amount-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.card-zen-amount {
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.card-zen-total-est {
+  font-size: 0.72rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
 
-.card-zen-debt-val {
-  font-size: 1.4rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent-warning);
-  white-space: nowrap !important;
+.card-zen-status-row {
+  margin-top: 1px;
 }
 
+.card-zen-status-pill {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.card-zen-status-pill.success {
+  color: var(--accent-success);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.card-zen-status-pill.warning {
+  color: var(--accent-warning);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.card-zen-status-pill.neutral {
+  color: var(--text-muted);
+}
+
+/* Barra de progreso de consumo de la línea de crédito */
 .card-zen-bar {
-  height: 6px;
+  height: 5px;
   border-radius: 999px;
   background: var(--border-subtle);
   overflow: hidden;
-  margin-bottom: 11px;
+  margin: 2px 0 2px 0;
 }
 
 .card-zen-bar-fill {
@@ -7058,13 +7100,38 @@ body.modal-open {
   transition: width 0.3s ease;
 }
 
-.card-zen-meta-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border-subtle);
-  font-size: 0.775rem;
+.card-zen-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 2px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.card-zen-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.card-zen-footer-right {
+  font-weight: 500;
+}
+
+.card-zen-dot {
+  color: var(--border-medium);
+}
+
+.card-usd-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-info);
+  background: rgba(14, 165, 233, 0.09);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  line-height: 1.2;
 }
 
 /* Botón Icono Sutil y Ergonómico */
@@ -7073,8 +7140,8 @@ body.modal-open {
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 5px;
-  border-radius: 8px;
+  padding: 4px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7095,7 +7162,7 @@ body.modal-open {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px 12px;
 }
 
 .cards-section-title {
@@ -7108,49 +7175,66 @@ body.modal-open {
   margin: 0;
 }
 
-.cards-debt-summary-badge {
-  display: inline-flex;
+.cards-debt-summary-clean {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.debt-summary-row {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 5px 8px;
+  color: var(--text-secondary);
 }
 
-.debt-summary-pill {
+.debt-summary-chunk {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  font-size: 0.775rem;
+  gap: 4px;
+  white-space: nowrap;
 }
 
-.debt-summary-usd-badge {
-  font-size: 0.74rem;
+.debt-summary-total-chunk {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.debt-summary-sep {
+  color: var(--border-medium);
+  margin: 0 1px;
+}
+
+.debt-summary-pipe {
+  color: var(--border-medium);
+  font-weight: 300;
+  margin: 0 1px;
+  user-select: none;
+}
+
+.debt-summary-usd-tag {
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--accent-info);
   background: rgba(14, 165, 233, 0.09);
+  border: 1px solid rgba(14, 165, 233, 0.22);
   padding: 1px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  white-space: nowrap;
+  line-height: 1.3;
 }
 
 @media (max-width: 640px) {
   .cards-section-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
   }
-  .cards-debt-summary-badge {
+  .cards-debt-summary-clean {
     width: 100%;
-  }
-  .debt-summary-pill {
-    width: 100%;
-    justify-content: space-between;
-    box-sizing: border-box;
-    font-size: 0.75rem;
-    padding: 6px 10px;
   }
 }
 

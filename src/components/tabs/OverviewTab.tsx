@@ -16,7 +16,8 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
@@ -255,7 +256,10 @@ export const OverviewTab: React.FC = () => {
     promptDeleteTransaction,
     cardAdvisor,
     formatDisplayDate,
-    formatSoles
+    formatSoles,
+    transactions,
+    payables,
+    cardAmortization
   } = useFinance();
 
   // Distribución por categoría: mostramos 6 por defecto y el resto tras "Ver más"
@@ -415,7 +419,7 @@ export const OverviewTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Flujo del mes: sin cajas grises, tipografía y cifras puras */}
+        {/* Flujo del mes: estilo Zen minimalista con salto de línea natural y tipografía limpia */}
         <div className="zen-hero-right">
           <div className="zen-flow-card">
             <span className="zen-flow-title flex items-center gap-xs">
@@ -425,15 +429,30 @@ export const OverviewTab: React.FC = () => {
             <span className="zen-flow-amount tabular-nums text-success">
               +{formatSoles(isCurrentActiveMonth ? realizedInflow : expectedInflow)}
             </span>
-            <span className="zen-flow-sub">
-              {isCurrentActiveMonth
-                ? (debitStats.isSalaryCreditedToday
-                    ? 'Sueldo acreditado'
-                    : currentOtherIncomes.length > 0
-                    ? `${currentOtherIncomes[0].description} S/ ${debitStats.otherIncomesReceivedToday.toFixed(2)}`
-                    : 'Sin ingresos adicionales aún')
-                : `Sueldo ${formatSoles(totalSalaryAmount)}${debitStats.otherIncomesTotalMonth > 0 ? ` • Extras ${formatSoles(debitStats.otherIncomesTotalMonth)}` : ''}${debitStats.collectedFromDebtors > 0 ? ` • Cobros ${formatSoles(debitStats.collectedFromDebtors)}` : ''}`}
-            </span>
+            <div className="zen-flow-sub">
+              {isCurrentActiveMonth ? (
+                debitStats.isSalaryCreditedToday ? (
+                  <span>Sueldo acreditado ({formatSoles(totalSalaryAmount)})</span>
+                ) : currentOtherIncomes.length > 0 ? (
+                  <>
+                    <span>Cobrado: {formatSoles(debitStats.otherIncomesReceivedToday)}</span>
+                    <span>Por cobrar: {formatSoles(totalSalaryAmount)}</span>
+                  </>
+                ) : (
+                  <span>Sueldo previsto: {formatSoles(totalSalaryAmount)}</span>
+                )
+              ) : (
+                <>
+                  <span>Sueldo: {formatSoles(totalSalaryAmount)}</span>
+                  {debitStats.otherIncomesTotalMonth > 0 && (
+                    <span>Extras: +{formatSoles(debitStats.otherIncomesTotalMonth)}</span>
+                  )}
+                  {debitStats.collectedFromDebtors > 0 && (
+                    <span>Cobros: +{formatSoles(debitStats.collectedFromDebtors)}</span>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           <div className="zen-flow-divider" aria-hidden="true" />
@@ -446,15 +465,58 @@ export const OverviewTab: React.FC = () => {
             <span className="zen-flow-amount tabular-nums text-danger">
               -{formatSoles(isCurrentActiveMonth ? realizedOutflow : isFutureMonth ? scheduledOutflow : pastOutflow)}
             </span>
-            <span className="zen-flow-sub">
-              {isCurrentActiveMonth
-                ? (realizedOutflow === 0 && pendingThisMonth === 0
-                    ? 'Al día de hoy'
-                    : `Débito ${formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidToday > 0 ? ` • Deudas ${formatSoles(debtPaidToday)}` : ''}${pendingThisMonth > 0 ? ` • Por pagar ${formatSoles(pendingThisMonth)}` : ''}`)
-                : isFutureMonth
-                ? `Tarjetas ${formatSoles(debitStats.unpaidCardBillsDueThisMonth)}${debitStats.cardPaidInAdvanceThisMonth > 0 && debitStats.unpaidCardBillsDueThisMonth <= 0 ? ' (al día)' : ''} • Deudas ${formatSoles(debitStats.scheduledDebtDueThisMonth)}${debitStats.debitExpensesTotalMonth > 0 ? ` • Débito ${formatSoles(debitStats.debitExpensesTotalMonth)}` : ''}`
-                : `Débito ${formatSoles(debitStats.debitExpensesTotalMonth)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidMonth > 0 ? ` • Deudas ${formatSoles(debtPaidMonth)}` : ''}`}
-            </span>
+            <div className="zen-flow-sub">
+              {isCurrentActiveMonth ? (
+                realizedOutflow === 0 && pendingThisMonth === 0 ? (
+                  <span>Al día de hoy</span>
+                ) : (
+                  <>
+                    <span>
+                      Débito: {formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas: {formatSoles(debitStats.cardPaymentsPaidMonth)}
+                    </span>
+                    {debtPaidToday > 0 && <span>Deudas: {formatSoles(debtPaidToday)}</span>}
+                    {pendingThisMonth > 0 && (
+                      <span className="text-danger" style={{ fontWeight: 600 }}>
+                        Por pagar: {formatSoles(pendingThisMonth)}
+                        {debitStats.unpaidCardBillsUsdOnly > 0 && (
+                          <span className="zen-flow-usd-note tabular-nums"> (${debitStats.unpaidCardBillsUsdOnly.toFixed(2)} USD)</span>
+                        )}
+                      </span>
+                    )}
+                  </>
+                )
+              ) : isFutureMonth ? (
+                <>
+                  {debitStats.unpaidCardBillsDueThisMonth > 0 && (
+                    <span>
+                      Tarjetas: {formatSoles(debitStats.unpaidCardBillsDueThisMonth)}
+                      {debitStats.unpaidCardBillsUsdOnly > 0 && (
+                        <span className="zen-flow-usd-note tabular-nums"> (${debitStats.unpaidCardBillsUsdOnly.toFixed(2)} USD)</span>
+                      )}
+                    </span>
+                  )}
+                  {debitStats.cardPaidInAdvanceThisMonth > 0 && debitStats.unpaidCardBillsDueThisMonth <= 0 && (
+                    <span className="text-success">Tarjetas: al día</span>
+                  )}
+                  {debitStats.debitExpensesTotalMonth > 0 && (
+                    <span>Débito: {formatSoles(debitStats.debitExpensesTotalMonth)}</span>
+                  )}
+                  {debitStats.scheduledDebtDueThisMonth > 0 && (
+                    <span>Deudas: {formatSoles(debitStats.scheduledDebtDueThisMonth)}</span>
+                  )}
+                  {debitStats.unpaidCardBillsDueThisMonth <= 0 && debitStats.scheduledDebtDueThisMonth <= 0 && debitStats.debitExpensesTotalMonth <= 0 && (
+                    <span>Sin salidas programadas</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span>
+                    Débito: {formatSoles(debitStats.debitExpensesTotalMonth)} • Tarjetas: {formatSoles(debitStats.cardPaymentsPaidMonth)}
+                  </span>
+                  {debtPaidMonth > 0 && <span>Deudas: {formatSoles(debtPaidMonth)}</span>}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </section>

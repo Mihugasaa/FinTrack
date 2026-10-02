@@ -181,22 +181,22 @@ export const CardsTab: React.FC = () => {
             <CreditCard size={17} style={{ color: 'var(--accent-brand)' }} />
             <span>Tarjetas de Crédito ({cardDebtSummary.length})</span>
           </h3>
-        <div className="cards-debt-summary-badge">
+        <div className="cards-debt-summary-clean">
           {isCurrentActiveMonth ? (
             totalCreditDebtUsd > 0.009 ? (
-              <div className="debt-summary-pill">
-                <span>
+              <div className="debt-summary-row">
+                <span className="debt-summary-chunk">
                   Deuda:{' '}
                   <strong className="tabular-nums" style={{ color: totalCreditDebtPen > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
                     {formatSoles(totalCreditDebtPen)}
                   </strong>
-                  <span style={{ margin: '0 4px', color: 'var(--border-medium)' }}>•</span>
-                  <span className="debt-summary-usd-badge tabular-nums">
+                  <span className="debt-summary-sep">•</span>
+                  <span className="debt-summary-usd-tag tabular-nums">
                     ${totalCreditDebtUsd.toFixed(2)} USD
                   </span>
                 </span>
-                <span style={{ color: 'var(--border-medium)', margin: '0 2px' }}>|</span>
-                <span>
+                <span className="debt-summary-pipe">|</span>
+                <span className="debt-summary-total-chunk">
                   <span style={{ color: 'var(--text-muted)' }}>Total est.:</span>{' '}
                   <strong className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
                     {formatSoles(totalCreditDebt)}
@@ -204,8 +204,8 @@ export const CardsTab: React.FC = () => {
                 </span>
               </div>
             ) : (
-              <div className="debt-summary-pill">
-                <span>
+              <div className="debt-summary-row">
+                <span className="debt-summary-chunk">
                   Deuda total:{' '}
                   <strong className="tabular-nums" style={{ color: totalCreditDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
                     {formatSoles(totalCreditDebt)}
@@ -215,19 +215,19 @@ export const CardsTab: React.FC = () => {
             )
           ) : isFutureMonth ? (
             totalMonthDueUsd > 0.009 ? (
-              <div className="debt-summary-pill">
-                <span>
+              <div className="debt-summary-row">
+                <span className="debt-summary-chunk">
                   A pagar en {monthNames[currentMonth]}:{' '}
                   <strong className="tabular-nums" style={{ color: totalMonthDuePen > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
                     {formatSoles(totalMonthDuePen)}
                   </strong>
-                  <span style={{ margin: '0 4px', color: 'var(--border-medium)' }}>•</span>
-                  <span className="debt-summary-usd-badge tabular-nums">
+                  <span className="debt-summary-sep">•</span>
+                  <span className="debt-summary-usd-tag tabular-nums">
                     ${totalMonthDueUsd.toFixed(2)} USD
                   </span>
                 </span>
-                <span style={{ color: 'var(--border-medium)', margin: '0 2px' }}>|</span>
-                <span>
+                <span className="debt-summary-pipe">|</span>
+                <span className="debt-summary-total-chunk">
                   <span style={{ color: 'var(--text-muted)' }}>Total est.:</span>{' '}
                   <strong className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
                     {formatSoles(totalMonthDue)}
@@ -235,8 +235,8 @@ export const CardsTab: React.FC = () => {
                 </span>
               </div>
             ) : (
-              <div className="debt-summary-pill">
-                <span>
+              <div className="debt-summary-row">
+                <span className="debt-summary-chunk">
                   A pagar en {monthNames[currentMonth]}:{' '}
                   <strong className="tabular-nums" style={{ color: totalMonthDue > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
                     {formatSoles(totalMonthDue)}
@@ -245,8 +245,8 @@ export const CardsTab: React.FC = () => {
               </div>
             )
           ) : (
-            <div className="debt-summary-pill">
-              <span>
+            <div className="debt-summary-row">
+              <span className="debt-summary-chunk">
                 Facturado en {monthNames[currentMonth]}:{' '}
                 <strong className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
                   {formatSoles(totalMonthDue)}
@@ -276,213 +276,174 @@ export const CardsTab: React.FC = () => {
             : 0;
 
           return (
-            <div key={card.paymentMethodId} className="credit-card-zen" style={{ borderLeft: `4px solid ${card.cardColor}` }}>
-              <div>
-                <div className="card-zen-top">
-                  <div>
-                    <div className="card-zen-title" title={card.cardName}>
-                      {card.cardName}
-                    </div>
-                    <div className="card-zen-limit">
-                      {isCurrentActiveMonth ? (
-                        <>Límite: {formatSoles(limit)} • Uso: {card.hasPositiveBalance ? '0%' : `${usedPercent.toFixed(0)}%`}</>
-                      ) : isFutureMonth ? (
-                        <>Límite: {formatSoles(limit)} • Vence: día {card.paymentDueDay}</>
-                      ) : (
-                        <>Límite: {formatSoles(limit)}</>
-                      )}
-                    </div>
-                  </div>
-                  {pm && (
-                    <button
-                      type="button"
-                      className="btn-icon-subtle"
-                      style={{ padding: '4px 6px' }}
-                      onClick={() => handleOpenEditCard(pm)}
-                      title={`Editar ${card.cardName} y límites`}
-                      aria-label={`Editar ${card.cardName}`}
-                    >
-                      <Pencil size={12} />
-                    </button>
-                  )}
-                </div>
+            <div key={card.paymentMethodId} className="credit-card-zen-balanced" style={{ borderLeft: `4px solid ${card.cardColor}` }}>
+              {/* Nivel 1: Cabecera con Nombre y Edición */}
+              <div className="card-zen-header">
+                <span className="card-zen-title" title={card.cardName}>
+                  {card.cardName}
+                </span>
+                {pm && (
+                  <button
+                    type="button"
+                    className="btn-icon-subtle"
+                    style={{ padding: '3px 6px' }}
+                    onClick={() => handleOpenEditCard(pm)}
+                    title={`Editar ${card.cardName} y límites`}
+                    aria-label={`Editar ${card.cardName}`}
+                  >
+                    <Pencil size={11} />
+                  </button>
+                )}
+              </div>
 
-                <div className="card-zen-debt-row" style={{ alignItems: 'flex-start', minHeight: '48px', marginBottom: '8px' }}>
-                  <span className="card-zen-debt-label" style={{ marginTop: '3px' }}>
+              {/* Nivel 2: Bloque Central - Monto y Vencimiento */}
+              <div className="card-zen-body">
+                <div className="card-zen-body-left">
+                  <span className="card-zen-stage-label">
                     {isCurrentActiveMonth
                       ? (card.hasPositiveBalance ? 'Saldo a favor' : 'Deuda a la fecha')
                       : isFutureMonth
                       ? `A pagar en ${monthNames[currentMonth]}`
                       : `Facturado en ${monthNames[currentMonth]}`}
                   </span>
-                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                  <div className="card-zen-stage-sub">
                     {isCurrentActiveMonth ? (
                       card.hasPositiveBalance ? (
-                        <>
-                          <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-success)', lineHeight: 1.1 }}>
-                            +{formatSoles(card.creditBalanceAmount || 0)}
-                          </div>
-                          <div style={{ fontSize: '0.72rem', visibility: 'hidden', userSelect: 'none' }}>
-                            &nbsp;
-                          </div>
-                        </>
-                      ) : card.hasUsdDebt && (card.totalAccumulatedDebtUsd || 0) > 0.009 ? (
-                        <>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            <span className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-warning)', lineHeight: 1.1 }}>
-                              {formatSoles(card.totalAccumulatedDebtPen ?? card.totalAccumulatedDebt)}
-                            </span>
-                            <span className="tabular-nums" style={{
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                              color: 'var(--accent-info)',
-                              background: 'rgba(14, 165, 233, 0.09)',
-                              padding: '2px 6px',
-                              borderRadius: '5px',
-                              border: '1px solid rgba(14, 165, 233, 0.22)',
-                              lineHeight: 1.2
-                            }}>
-                              ${(card.totalAccumulatedDebtUsd || 0).toFixed(2)} USD
-                            </span>
-                          </div>
-                          <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                            Total estimado: {formatSoles(card.totalAccumulatedDebt)}
-                          </div>
-                        </>
+                        <span className="text-success">A favor en cuenta</span>
+                      ) : card.totalAccumulatedDebt > 0 ? (
+                        <span className="text-muted">{usedPercent.toFixed(0)}% de línea utilizada</span>
                       ) : (
-                        <>
-                          <div className="card-zen-debt-val tabular-nums" style={{ color: card.totalAccumulatedDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)', lineHeight: 1.1 }}>
-                            {formatSoles(card.totalAccumulatedDebt)}
-                          </div>
-                          <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', visibility: 'hidden', userSelect: 'none' }}>
-                            &nbsp;
-                          </div>
-                        </>
+                        <span className="text-muted">Sin deuda acumulada</span>
+                      )
+                    ) : isFutureMonth ? (
+                      cardDueInMonth > 0.009 ? (
+                        <span className="text-muted">Vence el {card.paymentDueDay} de {monthNames[currentMonth]}</span>
+                      ) : (
+                        <span className="text-muted">Sin pagos pendientes</span>
                       )
                     ) : (
-                      /* Modo Mes Futuro o Pasado */
-                      cardDueInMonth > 0.009 ? (
-                        hasUsdDueInMonth ? (
-                          <>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                              <span className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-warning)', lineHeight: 1.1 }}>
-                                {formatSoles(cardDuePenInMonth)}
-                              </span>
-                              <span className="tabular-nums" style={{
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                color: 'var(--accent-info)',
-                                background: 'rgba(14, 165, 233, 0.09)',
-                                padding: '2px 6px',
-                                borderRadius: '5px',
-                                border: '1px solid rgba(14, 165, 233, 0.22)',
-                                lineHeight: 1.2
-                              }}>
-                                ${cardDueUsdInMonth.toFixed(2)} USD
-                              </span>
-                            </div>
-                            <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                              Total estimado: {formatSoles(cardDueInMonth)}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-warning)', lineHeight: 1.1 }}>
-                              {formatSoles(cardDueInMonth)}
-                            </div>
-                            <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                              Vence el {card.paymentDueDay} de {monthNames[currentMonth]}
-                            </div>
-                          </>
-                        )
-                      ) : card.isPaidThisMonth ? (
-                        <>
-                          <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-success)', lineHeight: 1.1 }}>
-                            {formatSoles(0)}
-                          </div>
-                          <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--accent-success)' }}>
-                            Ciclo cubierto
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="card-zen-debt-val tabular-nums" style={{ color: 'var(--accent-success)', lineHeight: 1.1 }}>
-                            {formatSoles(0)}
-                          </div>
-                          <div className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                            Sin vencimientos
-                          </div>
-                        </>
-                      )
+                      <span className="text-muted">{card.paidThisMonth > 0 ? `Abonado: +${formatSoles(card.paidThisMonth)}` : 'Periodo cerrado'}</span>
                     )}
                   </div>
                 </div>
 
-                <div className="card-zen-bar">
-                  <div
-                    className="card-zen-bar-fill"
-                    style={{ width: `${cardBarPercent}%`, background: card.cardColor }}
-                  />
+                <div className="card-zen-body-right">
+                  {isCurrentActiveMonth ? (
+                    card.hasPositiveBalance ? (
+                      <>
+                        <div className="card-zen-amount text-success">+{formatSoles(card.creditBalanceAmount || 0)}</div>
+                        <span className="card-zen-status-pill success">● A favor</span>
+                      </>
+                    ) : card.hasUsdDebt && (card.totalAccumulatedDebtUsd || 0) > 0.009 ? (
+                      <>
+                        <div className="card-zen-amount-row">
+                          <span className="card-zen-amount text-warning">
+                            {formatSoles(card.totalAccumulatedDebtPen ?? card.totalAccumulatedDebt)}
+                          </span>
+                          <span className="card-usd-pill tabular-nums">
+                            ${(card.totalAccumulatedDebtUsd || 0).toFixed(2)} USD
+                          </span>
+                        </div>
+                        <div className="card-zen-total-est tabular-nums">
+                          Total est.: {formatSoles(card.totalAccumulatedDebt)}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="card-zen-amount" style={{ color: card.totalAccumulatedDebt > 0 ? 'var(--accent-warning)' : 'var(--accent-success)' }}>
+                          {formatSoles(card.totalAccumulatedDebt)}
+                        </div>
+                        <div className="card-zen-status-row">
+                          {card.totalAccumulatedDebt > 0 ? (
+                            <span className="card-zen-status-pill warning">Por pagar</span>
+                          ) : (
+                            <span className="card-zen-status-pill success">● Al día</span>
+                          )}
+                        </div>
+                      </>
+                    )
+                  ) : isFutureMonth ? (
+                    cardDueInMonth > 0.009 ? (
+                      hasUsdDueInMonth ? (
+                        <>
+                          <div className="card-zen-amount-row">
+                            <span className="card-zen-amount text-warning">
+                              {formatSoles(cardDuePenInMonth)}
+                            </span>
+                            <span className="card-usd-pill tabular-nums">
+                              ${cardDueUsdInMonth.toFixed(2)} USD
+                            </span>
+                          </div>
+                          <div className="card-zen-total-est tabular-nums">
+                            Total est.: {formatSoles(cardDueInMonth)}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="card-zen-amount text-warning">
+                            {formatSoles(cardDueInMonth)}
+                          </div>
+                          <div className="card-zen-status-row">
+                            <span className="card-zen-status-pill warning">Por vencer</span>
+                          </div>
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <div className="card-zen-amount text-success">
+                          {formatSoles(0)}
+                        </div>
+                        <div className="card-zen-status-row">
+                          <span className="card-zen-status-pill neutral">
+                            {card.isPaidThisMonth ? 'Ciclo cubierto' : '● Sin vencimientos'}
+                          </span>
+                        </div>
+                      </>
+                    )
+                  ) : (
+                    cardDueInMonth > 0.009 ? (
+                      <>
+                        <div className="card-zen-amount text-primary">
+                          {formatSoles(cardDueInMonth)}
+                        </div>
+                        <div className="card-zen-total-est">
+                          {card.paidThisMonth > 0 ? `Pagado: +${formatSoles(card.paidThisMonth)}` : 'Facturado'}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="card-zen-amount text-muted">
+                          {formatSoles(0)}
+                        </div>
+                        <div className="card-zen-status-row">
+                          <span className="card-zen-status-pill neutral">Sin movimientos</span>
+                        </div>
+                      </>
+                    )
+                  )}
                 </div>
               </div>
 
-              <div className="card-zen-meta-grid">
-                <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
-                    Facturación:
-                  </span>
-                  <strong style={{ color: 'var(--text-primary)' }}>
-                    Corte: {card.billingCloseDay} <span style={{ color: 'var(--border-medium)', margin: '0 4px' }}>•</span> Pago: {card.paymentDueDay}
-                  </strong>
+              {/* Barra visual de progreso de consumo de la línea de crédito */}
+              <div className="card-zen-bar" title={`${cardBarPercent.toFixed(0)}% utilizado de la línea`}>
+                <div
+                  className="card-zen-bar-fill"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, cardBarPercent))}%`,
+                    background: card.cardColor || 'var(--accent-brand)',
+                  }}
+                />
+              </div>
+
+              {/* Nivel 3: Pie Informativo */}
+              <div className="card-zen-footer">
+                <div className="card-zen-footer-left">
+                  <span>Corte: día {card.billingCloseDay}</span>
+                  <span className="card-zen-dot">•</span>
+                  <span>Pago: día {card.paymentDueDay}</span>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  {isCurrentActiveMonth ? (
-                    <>
-                      <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
-                        Abonos del mes:
-                      </span>
-                      <strong
-                        className="tabular-nums"
-                        style={{
-                          color: card.paidThisMonth > 0 ? 'var(--accent-success)' : 'var(--text-muted)'
-                        }}
-                      >
-                        {card.paidThisMonth > 0 ? `+${formatSoles(card.paidThisMonth)}` : formatSoles(0)}
-                      </strong>
-                    </>
-                  ) : isFutureMonth ? (
-                    <>
-                      <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
-                        {card.consumedThisMonth > 0 ? 'Consumos del mes:' : 'Abonos del mes:'}
-                      </span>
-                      <strong
-                        className="tabular-nums"
-                        style={{
-                          color: card.consumedThisMonth > 0 ? 'var(--text-primary)' : card.paidThisMonth > 0 ? 'var(--accent-success)' : 'var(--text-muted)'
-                        }}
-                      >
-                        {card.consumedThisMonth > 0
-                          ? formatSoles(card.consumedThisMonth)
-                          : card.paidThisMonth > 0
-                          ? `+${formatSoles(card.paidThisMonth)}`
-                          : formatSoles(0)}
-                      </strong>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.725rem' }}>
-                        Abonos del mes:
-                      </span>
-                      <strong
-                        className="tabular-nums"
-                        style={{
-                          color: card.paidThisMonth > 0 ? 'var(--accent-success)' : 'var(--text-muted)'
-                        }}
-                      >
-                        {card.paidThisMonth > 0 ? `+${formatSoles(card.paidThisMonth)}` : formatSoles(0)}
-                      </strong>
-                    </>
-                  )}
+                <div className="card-zen-footer-right tabular-nums">
+                  {limit > 0 && <span>Límite: {formatSoles(limit)}</span>}
                 </div>
               </div>
             </div>

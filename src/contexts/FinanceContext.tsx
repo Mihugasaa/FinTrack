@@ -1118,7 +1118,10 @@ function useFinanceController() {
       .reduce((acc, t) => acc + (t.isRefund ? -Math.abs(t.amountPen) : t.amountPen), 0);
     const unpaidCardBillsDueThisMonth = isPastMonth
       ? 0
-      : (cardAmortization.unpaidPenByMonth.get(monthKey) || 0);
+      : (cardAmortization.unpaidTotalPenByMonth?.get(monthKey) ?? cardAmortization.unpaidPenByMonth.get(monthKey) ?? 0);
+    const unpaidCardBillsPenOnly = isPastMonth ? 0 : (cardAmortization.unpaidPenByMonth.get(monthKey) || 0);
+    const unpaidCardBillsUsdOnly = isPastMonth ? 0 : (cardAmortization.unpaidUsdByMonth.get(monthKey) || 0);
+    const unpaidCardBillsUsdInPen = isPastMonth ? 0 : (cardAmortization.unpaidUsdInPenByMonth?.get(monthKey) || 0);
     const cardPaidInAdvanceThisMonth = cardAmortization.paidInAdvanceByMonth.get(monthKey) || 0;
 
     // El saldo PROYECTADO a fin de mes se toma del CIERRE de la cadena de arrastre
@@ -1138,6 +1141,9 @@ function useFinanceController() {
       scheduledDebtDueThisMonth: Math.round(scheduledDebtDueThisMonth * 100) / 100,
       cardBillsDueThisMonth: Math.round(Math.max(0, cardBillsDueThisMonth) * 100) / 100,
       unpaidCardBillsDueThisMonth: Math.round(unpaidCardBillsDueThisMonth * 100) / 100,
+      unpaidCardBillsPenOnly: Math.round(unpaidCardBillsPenOnly * 100) / 100,
+      unpaidCardBillsUsdOnly: Math.round(unpaidCardBillsUsdOnly * 100) / 100,
+      unpaidCardBillsUsdInPen: Math.round(unpaidCardBillsUsdInPen * 100) / 100,
       cardPaidInAdvanceThisMonth: Math.round(cardPaidInAdvanceThisMonth * 100) / 100
     };
   }, [initialDebitForMonth, salaries, currentOtherIncomes, monthReceivables, currentMonthTransactions, transactions, paymentMethods, cardPayments, monthKey, currentDateStr, payables, isPastMonth, debitChain, cardAmortization]);
@@ -1472,7 +1478,7 @@ function useFinanceController() {
       initialDebitBalances,
       payables,
       receivables,
-      cardAmortization.unpaidPenByMonth
+      cardAmortization.unpaidTotalPenByMonth || cardAmortization.unpaidPenByMonth
     );
   }, [currentYear, currentMonth, debitStats.projectedDebitBalanceMonthEnd, salaries, transactions, currentMonthTransactions, monthKey, forecastHorizon, paymentMethods, extraIncomes, initialDebitBalances, payables, receivables, cardAmortization]);
 
@@ -1653,10 +1659,10 @@ function useFinanceController() {
       }
     });
 
-    // Para meses futuros (> realCurrentKey): salidas proyectadas según saldo insoluto real de cuotas no cubiertas
-    cardAmortization.unpaidPenByMonth.forEach((unpaidPen, k) => {
-      if (k.startsWith(yearPrefix) && k > realCurrentKey && unpaidPen > 0.005) {
-        outByMonth.set(k, (outByMonth.get(k) || 0) + unpaidPen);
+    // Para meses futuros (> realCurrentKey): salidas proyectadas según saldo insoluto real de cuotas no cubiertas (PEN + USD)
+    (cardAmortization.unpaidTotalPenByMonth || cardAmortization.unpaidPenByMonth).forEach((unpaidTotal, k) => {
+      if (k.startsWith(yearPrefix) && k > realCurrentKey && unpaidTotal > 0.005) {
+        outByMonth.set(k, (outByMonth.get(k) || 0) + unpaidTotal);
         candidateMonths.add(k);
       }
     });

@@ -762,6 +762,8 @@ export function computeCardBillingAmortization(params: {
   const byCardAndMonth = new Map<string, CardMonthCoverage>();
   const unpaidPenByMonth = new Map<string, number>();
   const unpaidUsdByMonth = new Map<string, number>();
+  const unpaidTotalPenByMonth = new Map<string, number>();
+  const unpaidUsdInPenByMonth = new Map<string, number>();
   const billedPenByMonth = new Map<string, number>();
   const billedUsdByMonth = new Map<string, number>();
   const paidInAdvanceByMonth = new Map<string, number>();
@@ -945,11 +947,17 @@ export function computeCardBillingAmortization(params: {
 
       byCardAndMonth.set(`${card.id}_${b.monthKey}`, cov);
 
+      const cycleUsdRate = b.billedUsd > 0.005 ? (b.billedUsdInPen / b.billedUsd) : 1;
+      const unpaidUsdInPen = unpaidUsd > 0.005 ? round2(unpaidUsd * cycleUsdRate) : 0;
+      const unpaidTotalPen = round2(unpaidPen + unpaidUsdInPen);
+
       // Acumuladores por mes calendario de vencimiento
       billedPenByMonth.set(b.monthKey, round2((billedPenByMonth.get(b.monthKey) || 0) + b.billedPen));
       billedUsdByMonth.set(b.monthKey, round2((billedUsdByMonth.get(b.monthKey) || 0) + b.billedUsd));
       unpaidPenByMonth.set(b.monthKey, round2((unpaidPenByMonth.get(b.monthKey) || 0) + unpaidPen));
       unpaidUsdByMonth.set(b.monthKey, round2((unpaidUsdByMonth.get(b.monthKey) || 0) + unpaidUsd));
+      unpaidUsdInPenByMonth.set(b.monthKey, round2((unpaidUsdInPenByMonth.get(b.monthKey) || 0) + unpaidUsdInPen));
+      unpaidTotalPenByMonth.set(b.monthKey, round2((unpaidTotalPenByMonth.get(b.monthKey) || 0) + unpaidTotalPen));
       paidInAdvanceByMonth.set(b.monthKey, round2((paidInAdvanceByMonth.get(b.monthKey) || 0) + b.paidInAdvancePen));
 
       if (!isCovered) {
@@ -958,8 +966,6 @@ export function computeCardBillingAmortization(params: {
         const monthName = MONTH_NAMES_LOCAL[mIdx] || b.monthKey;
         const dayStr = b.dueDate.split('-')[2] || '';
         const label = `${monthName} ${yStr} (Vence el ${dayStr}/${mStr})`;
-        const cycleUsdRate = b.billedUsd > 0.005 ? (b.billedUsdInPen / b.billedUsd) : 1;
-        const unpaidUsdInPen = unpaidUsd > 0.005 ? round2(unpaidUsd * cycleUsdRate) : 0;
         cardPendingCycles.push({
           monthKey: b.monthKey,
           dueDate: b.dueDate,
@@ -978,6 +984,8 @@ export function computeCardBillingAmortization(params: {
     byCardAndMonth,
     unpaidPenByMonth,
     unpaidUsdByMonth,
+    unpaidTotalPenByMonth,
+    unpaidUsdInPenByMonth,
     billedPenByMonth,
     billedUsdByMonth,
     paidInAdvanceByMonth,
@@ -1194,7 +1202,7 @@ export function computeMonthlyDebitChain(params: {
     const pendingPenCard = cardAmortization.unpaidPenByMonth.get(key) || 0;
     const pendingUsdCard = cardAmortization.unpaidUsdByMonth.get(key) || 0;
     const usdRate = cardBillRateByMonth.get(key) || FALLBACK_USD_PEN_RATE;
-    const pendingCardTotal = round2(pendingPenCard + (pendingUsdCard * usdRate));
+    const pendingCardTotal = cardAmortization.unpaidTotalPenByMonth?.get(key) ?? round2(pendingPenCard + (pendingUsdCard * usdRate));
 
     const commitments = key >= realTodayKey
       ? (scheduledDueByMonth.get(key) || 0) + pendingCardTotal
@@ -1361,7 +1369,9 @@ export function calculateMonthlyDiagnostic(
 
     const usdTx = allTransactions.find(t => creditCardIds.includes(t.paymentMethodId) && (t.paymentDueDate || '').startsWith(targetYearMonth) && t.currency === 'USD' && t.exchangeRate && t.exchangeRate > 0);
     const usdPendingRate = usdTx?.exchangeRate || FALLBACK_USD_PEN_RATE;
-    const pendingCardTotalDue = pendingCardPenDue + (pendingCardUsdDue * usdPendingRate);
+    const pendingCardTotalDue = isPastMonth
+      ? 0
+      : (amort?.unpaidTotalPenByMonth?.get(targetYearMonth) ?? (pendingCardPenDue + (pendingCardUsdDue * usdPendingRate)));
 
     // En mes cerrado manda lo efectivamente abonado. En mes en curso/futuro es lo abonado más lo pendiente neto que falta pagar
     cardOutflowThisMonth = isPastMonth

@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinTrack — Propuestas de Reordenamiento Hero & Flujo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root, :root[data-theme="light"] {
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --bg-app: #f4f6fb;
+      --bg-surface: #ffffff;
+      --bg-surface-elevated: #ffffff;
+      --bg-subtle: #f8fafc;
+      --bg-input: #ffffff;
+      
+      --border-subtle: #e2e8f0;
+      --border-medium: #cbd5e1;
+      --border-focus: #4f46e5;
+      
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      
+      --accent-brand: #4f46e5;
+      --accent-brand-subtle: rgba(79, 70, 229, 0.08);
+      
+      --accent-success: #059669;
+      --accent-success-subtle: rgba(5, 150, 105, 0.1);
+      
+      --accent-danger: #dc2626;
+      --accent-danger-subtle: rgba(220, 38, 38, 0.1);
+      
+      --accent-warning: #d97706;
+      --accent-warning-subtle: rgba(217, 119, 6, 0.1);
+
+      --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 6px 18px -3px rgba(15, 23, 42, 0.06);
+    }
+
+    :root[data-theme="dark"] {
+      --bg-app: #090a0f;
+      --bg-surface: #10121a;
+      --bg-surface-elevated: #161924;
+      --bg-subtle: rgba(255, 255, 255, 0.04);
+      --bg-input: #0c0d14;
+      
+      --border-subtle: rgba(255, 255, 255, 0.07);
+      --border-medium: rgba(255, 255, 255, 0.14);
+      --border-focus: #6366f1;
+      
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      
+      --accent-brand: #6366f1;
+      --accent-brand-subtle: rgba(99, 102, 241, 0.12);
+      
+      --accent-success: #10b981;
+      --accent-success-subtle: rgba(16, 185, 129, 0.12);
+      
+      --accent-danger: #ef4444;
+      --accent-danger-subtle: rgba(239, 68, 68, 0.12);
+      
+      --accent-warning: #f59e0b;
+      --accent-warning-subtle: rgba(245, 158, 11, 0.12);
+
+      --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-app);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 60px;
+    }
+
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* BARRA SUPERIOR DE CONTROL DE LA PREVISUALIZACIÓN */
+    .preview-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    }
+
+    .preview-toolbar-title {
+      font-size: 0.92rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .preview-pill-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: var(--accent-brand-subtle);
+      color: var(--accent-brand);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .preview-options-group {
+      display: flex;
+      align-items: center;
+      background: var(--bg-subtle);
+      padding: 3px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .preview-btn-option {
+      background: transparent;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .preview-btn-option:hover {
+      color: var(--text-primary);
+    }
+
+    .preview-btn-option.active {
+      background: var(--bg-surface);
+      color: var(--accent-brand);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      font-weight: 700;
+    }
+
+    .preview-controls-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .theme-toggle-btn {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* CONTENEDOR PRINCIPAL SIMULADO */
+    .viewport-wrapper {
+      max-width: 1360px;
+      margin: 24px auto;
+      padding: 0 24px;
+      transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .viewport-wrapper.mobile-mode {
+      max-width: 420px;
+      padding: 0 12px;
+    }
+
+    /* COMPONENTES BASE DE FINTRACK */
+    .clean-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      box-shadow: var(--shadow-card);
+      padding: 22px 24px;
+      margin-bottom: 20px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 999px;
+      line-height: 1;
+    }
+
+    .badge-success {
+      background: var(--accent-success-subtle);
+      color: var(--accent-success);
+    }
+
+    .badge-danger {
+      background: var(--accent-danger-subtle);
+      color: var(--accent-danger);
+    }
+
+    .badge-neutral {
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .badge-brand {
+      background: var(--accent-brand-subtle);
+      color: var(--accent-brand);
+    }
+
+    /* EXPLICACIÓN DINÁMICA */
+    .comparison-banner {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-left: 4px solid var(--accent-brand);
+      padding: 14px 18px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    /* HEADER SIMULADO */
+    .app-header-sim {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: var(--accent-brand);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .month-selector-sim {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      padding: 5px 12px;
+      border-radius: 9px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* TABS */
+    .tabs-bar-sim {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    .tab-item-sim {
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .tab-item-sim.active {
+      background: var(--accent-brand-subtle);
+      color: var(--accent-brand);
+    }
+
+    /* BOTÓN AJUSTAR SALDO */
+    .btn-adjust-sim {
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-adjust-sim:hover {
+      background: var(--bg-subtle);
+      color: var(--text-primary);
+    }
+
+    /* =========================================================================
+       SECCIÓN DE PRÓXIMOS VENCIMIENTOS (100% VISUAL, NO BOTONES)
+       ========================================================================= */
+    .due-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .viewport-wrapper.mobile-mode .due-cards-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .due-card-visual {
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-subtle);
+      display: flex;
+      flex-direction: column;
+      cursor: default; /* Solo visual, no cursor pointer */
+      user-select: text;
+    }
+
+    .due-card-title {
+      font-weight: 700;
+      font-size: 0.86rem;
+      color: var(--text-primary);
+    }
+
+    .due-card-meta {
+      font-size: 0.73rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .due-card-amount {
+      font-weight: 800;
+      font-size: 1.05rem;
+      color: var(--accent-danger);
+      margin-top: 4px;
+    }
+
+    /* =========================================================================
+       OPCIÓN 1: CÁPSULA DE FLUJO INTEGRADA (FLOW CAPSULE)
+       ========================================================================= */
+    .hero-opt1 {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 28px;
+      align-items: center;
+      padding: 22px 26px;
+    }
+
+    .viewport-wrapper.mobile-mode .hero-opt1 {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .opt1-left {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .opt1-amount {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--text-primary);
+      line-height: 1.1;
+    }
+
+    .opt1-context-row {
+      display: flex;
+      align-items: center;
+      gap: 8px 12px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      flex-wrap: wrap;
+    }
+
+    .opt1-projection-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+    }
+
+    /* Cápsula de Flujo Compacta Derecha */
+    .opt1-flow-capsule {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 14px 20px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 18px;
+      min-width: 320px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+
+    .viewport-wrapper.mobile-mode .opt1-flow-capsule {
+      min-width: 100%;
+      padding: 12px 14px;
+      gap: 12px;
+    }
+
+    .opt1-capsule-divider {
+      width: 1px;
+      height: 38px;
+      background: var(--border-subtle);
+      border-radius: 999px;
+    }
+
+    .opt1-flow-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .opt1-flow-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .opt1-flow-val {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .opt1-flow-sub {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* =========================================================================
+       OPCIÓN 2: ZÓCALO HORIZONTAL COMPLETO (FULL-WIDTH METRIC STRIP)
+       ========================================================================= */
+    .hero-opt2 {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .opt2-top-tier {
+      padding: 22px 26px 18px 26px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .viewport-wrapper.mobile-mode .opt2-top-tier {
+      padding: 16px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .opt2-balance-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .opt2-projection-group {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .viewport-wrapper.mobile-mode .opt2-projection-group {
+      align-items: flex-start;
+      width: 100%;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 10px;
+    }
+
+    /* Franja / Zócalo Inferior de Borde a Borde */
+    .opt2-bottom-strip {
+      background: var(--bg-subtle);
+      border-top: 1px solid var(--border-subtle);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 12px 24px;
+      gap: 16px;
+    }
+
+    .viewport-wrapper.mobile-mode .opt2-bottom-strip {
+      grid-template-columns: 1fr 1fr;
+      padding: 12px 14px;
+      gap: 10px;
+    }
+
+    .opt2-strip-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .opt2-strip-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .opt2-strip-val {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .opt2-strip-sub {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* =========================================================================
+       OPCIÓN 3: BALANCE NETO EJECUTIVO (EXECUTIVE CASHFLOW MODULE)
+       ========================================================================= */
+    .hero-opt3 {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) 300px;
+      gap: 28px;
+      padding: 22px 26px;
+      align-items: stretch;
+    }
+
+    .viewport-wrapper.mobile-mode .hero-opt3 {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .opt3-flow-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .opt3-flow-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+
+    .opt3-flow-divider {
+      height: 1px;
+      background: var(--border-subtle);
+      margin: 2px 0;
+    }
+
+    /* ANTES (ACTUAL DEFECTUOSO) */
+    .hero-actual-mock {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+      padding: 22px 26px;
+      position: relative;
+    }
+    .viewport-wrapper.mobile-mode .hero-actual-mock {
+      grid-template-columns: 1fr;
+      padding: 16px;
+      gap: 20px;
+    }
+
+    .actual-floating-right {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .viewport-wrapper.mobile-mode .actual-floating-right {
+      grid-template-columns: 1fr; /* Apilado vertical que rompía el móvil */
+      gap: 18px;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 16px;
+    }
+
+    .arrow-indicator-note {
+      background: #fef2f2;
+      border: 1px dashed #ef4444;
+      color: #b91c1c;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      margin-top: 12px;
+    }
+    :root[data-theme="dark"] .arrow-indicator-note {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BARRA DE CONTROL DE PREVISUALIZACIÓN -->
+  <div class="preview-toolbar">
+    <div class="preview-toolbar-title">
+      <span>FinTrack UX Studio</span>
+      <span class="preview-pill-tag">Reordenamiento de Flujo</span>
+    </div>
+
+    <!-- SWITCHER DE OPCIONES -->
+    <div class="preview-options-group">
+      <button class="preview-btn-option active" onclick="switchOption('1', this)">
+        <span>✨ Opción 1: Cápsula de Flujo Integrada</span>
+      </button>
+      <button class="preview-btn-option" onclick="switchOption('2', this)">
+        <span>🏛️ Opción 2: Zócalo de Métricas Completo</span>
+      </button>
+      <button class="preview-btn-option" onclick="switchOption('3', this)">
+        <span>📊 Opción 3: Balance Neto Ejecutivo</span>
+      </button>
+      <button class="preview-btn-option" onclick="switchOption('ACTUAL', this)">
+        <span>⚠️ Actual (Problema de Espacios)</span>
+      </button>
+    </div>
+
+    <!-- CONTROLES EXTRA (RESPONSIVE & THEME) -->
+    <div class="preview-controls-right">
+      <button class="theme-toggle-btn" id="btn-device-toggle" onclick="toggleDevice()">
+        <span>📱 Probar en Móvil</span>
+      </button>
+      <button class="theme-toggle-btn" onclick="toggleTheme()">
+        <span id="theme-icon">🌙</span> Modo Oscuro
+      </button>
+    </div>
+  </div>
+
+  <div class="viewport-wrapper" id="viewport">
+
+    <!-- EXPLICACIÓN DINÁMICA -->
+    <div class="comparison-banner" id="option-banner">
+      <strong>✨ Opción 1: Cápsula de Flujo Integrada (Recomendada):</strong>
+      Agrupa <em>Ingresos</em> y <em>Gastos</em> dentro de una cápsula visual armónica con fondo sutil y micro-separador central.
+      <strong>En Web:</strong> Elimina por completo el vacío que marcaba la flecha roja al crear un contenedor con propósito delimitado.
+      <strong>En Móvil:</strong> Se mantiene en 2 columnas compactas horizontales de solo 52px de alto (ahorrando más de 120px de scroll innecesario).
+    </div>
+
+    <!-- HEADER SIMULADO DE FINTRACK -->
+    <header class="app-header-sim">
+      <div class="brand-logo">
+        <div class="brand-mark">F</div>
+        <span>FinTrack</span>
+      </div>
+
+      <div class="month-selector-sim">
+        <span>‹</span>
+        <span>Octubre 2026</span>
+        <span>›</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="badge badge-success" style="font-size:0.75rem; padding: 4px 10px;">Saldo Líquido</span>
+      </div>
+    </header>
+
+    <!-- PESTAÑAS -->
+    <nav class="tabs-bar-sim">
+      <span class="tab-item-sim active">Visión General</span>
+      <span class="tab-item-sim">Movimientos • 10</span>
+      <span class="tab-item-sim">Ingresos • 1</span>
+      <span class="tab-item-sim">Tarjetas & Cuentas • 4</span>
+      <span class="tab-item-sim">Préstamos & Deudas • 5</span>
+      <span class="tab-item-sim">Análisis</span>
+    </nav>
+
+    <!-- SUB-BARRA DE EVALUACIÓN DE POSICIÓN DEL BOTÓN AJUSTAR SALDO -->
+    <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:12px; padding:12px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:0.85rem; font-weight:700;">📍 Ubicación del botón "Ajustar Saldo":</span>
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="preview-btn-option active" id="btn-pos-top" onclick="setAdjustPos('top', this)">
+          <span>⬆️ Arriba (Tu recuadro rojo)</span>
+        </button>
+        <button class="preview-btn-option" id="btn-pos-context" onclick="setAdjustPos('context', this)">
+          <span>🎯 Contextual (Junto a Saldo inicial)</span>
+        </button>
+        <button class="preview-btn-option" id="btn-pos-none" onclick="setAdjustPos('none', this)">
+          <span>✨ Sin botón en el Hero (Zen Puro)</span>
+        </button>
+        <button class="preview-btn-option" id="btn-pos-bottom" onclick="setAdjustPos('bottom', this)">
+          <span>⬇️ Abajo (Como estaba hoy)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ===================================================================
+         VISTA 1: CÁPSULA DE FLUJO INTEGRADA (OPCIÓN 1)
+         =================================================================== -->
+    <div id="view-opt-1">
+      <section class="clean-card hero-opt1">
+        <div class="opt1-left">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:0.725rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.04em;">Dinero Disponible</span>
+              <span class="badge badge-success">● Líquido al 01/10</span>
+            </div>
+            <!-- Posición ARRIBA (Recuadro rojo) -->
+            <button class="btn-adjust-sim" id="adjust-btn-top">
+              <span>✏️</span> Ajustar Saldo
+            </button>
+          </div>
+
+          <div class="opt1-amount tabular-nums">
+            S/ 1,386.28
+          </div>
+
+          <div class="opt1-context-row">
+            <span>
+              Saldo inicial: <strong>S/ 1,386.28</strong> <span class="badge badge-neutral" style="font-size:0.68rem; padding:1px 6px;">Del mes anterior</span>
+              <!-- Posición CONTEXTUAL junto a saldo inicial -->
+              <button class="btn-adjust-sim" id="adjust-btn-context" style="display:none; padding:1px 7px; font-size:0.7rem; margin-left:6px;" title="Ajustar saldo inicial">
+                <span>✏️</span> Ajustar
+              </button>
+            </span>
+            <span style="opacity:0.4;">•</span>
+            <span>Próximo sueldo: <strong>S/ 2,126.50</strong> (30/10)</span>
+          </div>
+
+          <div class="opt1-projection-row">
+            <div style="display:flex; align-items:center; gap:10px; font-size:0.825rem; color:var(--text-secondary); flex-wrap:wrap;">
+              <span class="badge badge-success">Saldo a favor</span>
+              <span>Cierre estimado del mes: <strong class="tabular-nums" style="color:var(--text-primary);">S/ 3,419.78</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(después de cobrar tu sueldo)</span></span>
+            </div>
+            <!-- Posición ABAJO (donde estaba) -->
+            <button class="btn-adjust-sim" id="adjust-btn-bottom" style="display:none;">
+              <span>✏️</span> Ajustar Saldo
+            </button>
+          </div>
+        </div>
+
+        <!-- CÁPSULA DE FLUJO DE CAJA (DERECHA EN WEB / 2 COLS COMPACTAS EN MÓVIL) -->
+        <div class="opt1-flow-capsule">
+          <div class="opt1-flow-item">
+            <span class="opt1-flow-label">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-success)" stroke-width="2.5"><path d="m19 12-7 7-7-7"/><path d="M12 19V5"/></svg>
+              Ingresos del mes
+            </span>
+            <span class="opt1-flow-val tabular-nums" style="color:var(--accent-success)">+S/ 0.00</span>
+            <span class="opt1-flow-sub">Sin ingresos extras aún</span>
+          </div>
+
+          <div class="opt1-capsule-divider"></div>
+
+          <div class="opt1-flow-item">
+            <span class="opt1-flow-label">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-danger)" stroke-width="2.5"><path d="m5 12 7-7 7 7"/><path d="M12 5v14"/></svg>
+              Gastos y pagos
+            </span>
+            <span class="opt1-flow-val tabular-nums" style="color:var(--accent-danger)">-S/ 0.00</span>
+            <span class="opt1-flow-sub">Al día de hoy</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===================================================================
+         VISTA 2: ZÓCALO COMPLETO (OPCIÓN 2)
+         =================================================================== -->
+    <div id="view-opt-2" style="display:none;">
+      <section class="clean-card hero-opt2">
+        <div class="opt2-top-tier">
+          <div class="opt2-balance-group">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:0.725rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.04em;">Dinero Disponible</span>
+              <span class="badge badge-success">● Líquido al 01/10</span>
+            </div>
+            <div class="opt1-amount tabular-nums">
+              S/ 1,386.28
+            </div>
+          </div>
+
+          <div class="opt2-projection-group">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="badge badge-success">Saldo a favor</span>
+              <span style="font-size:0.83rem;">Cierre estimado: <strong class="tabular-nums">S/ 3,419.78</strong></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+              <span style="font-size:0.75rem; color:var(--text-muted);">(después de cobrar tu sueldo)</span>
+              <button class="btn-adjust-sim">✏️ Ajustar Saldo</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ZÓCALO DE 4 COLUMNAS (100% ANCHO HORIZONTAL EN WEB / 2X2 EN MÓVIL) -->
+        <div class="opt2-bottom-strip">
+          <div class="opt2-strip-item">
+            <span class="opt2-strip-label">Saldo Inicial</span>
+            <span class="opt2-strip-val tabular-nums">S/ 1,386.28</span>
+            <span class="opt2-strip-sub">Del mes anterior</span>
+          </div>
+
+          <div class="opt2-strip-item">
+            <span class="opt2-strip-label" style="color:var(--accent-success)">↙ Ingresos del Mes</span>
+            <span class="opt2-strip-val tabular-nums" style="color:var(--accent-success)">+S/ 0.00</span>
+            <span class="opt2-strip-sub">Sin adicionales</span>
+          </div>
+
+          <div class="opt2-strip-item">
+            <span class="opt2-strip-label" style="color:var(--accent-danger)">↗ Gastos y Pagos</span>
+            <span class="opt2-strip-val tabular-nums" style="color:var(--accent-danger)">-S/ 0.00</span>
+            <span class="opt2-strip-sub">Al día de hoy</span>
+          </div>
+
+          <div class="opt2-strip-item">
+            <span class="opt2-strip-label">Próximo Sueldo</span>
+            <span class="opt2-strip-val tabular-nums">S/ 2,126.50</span>
+            <span class="opt2-strip-sub">Vence el 30/10</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===================================================================
+         VISTA 3: BALANCE NETO EJECUTIVO (OPCIÓN 3)
+         =================================================================== -->
+    <div id="view-opt-3" style="display:none;">
+      <section class="clean-card hero-opt3">
+        <div class="opt1-left">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:0.725rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.04em;">Dinero Disponible</span>
+            <span class="badge badge-success">● Líquido al 01/10</span>
+          </div>
+
+          <div class="opt1-amount tabular-nums">
+            S/ 1,386.28
+          </div>
+
+          <div class="opt1-context-row">
+            <span>Saldo inicial: <strong>S/ 1,386.28</strong> <span class="badge badge-neutral" style="font-size:0.68rem; padding:1px 6px;">Del mes anterior</span></span>
+            <span style="opacity:0.4;">•</span>
+            <span>Próximo sueldo: <strong>S/ 2,126.50</strong> (30/10)</span>
+          </div>
+
+          <div class="opt1-projection-row">
+            <div style="display:flex; align-items:center; gap:10px; font-size:0.825rem; color:var(--text-secondary); flex-wrap:wrap;">
+              <span class="badge badge-success">Saldo a favor</span>
+              <span>Cierre estimado: <strong class="tabular-nums">S/ 3,419.78</strong></span>
+            </div>
+            <button class="btn-adjust-sim">✏️ Ajustar Saldo</button>
+          </div>
+        </div>
+
+        <!-- TARJETA EJECUTIVA DE RESUMEN DE FLUJO -->
+        <div class="opt3-flow-card">
+          <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.04em;">
+            Resumen de Flujo
+          </div>
+          <div class="opt3-flow-row">
+            <span style="color:var(--text-secondary); display:flex; align-items:center; gap:4px;">
+              <span style="color:var(--accent-success)">↙</span> Entradas
+            </span>
+            <span class="tabular-nums" style="font-weight:700; color:var(--accent-success);">+S/ 0.00</span>
+          </div>
+          <div class="opt3-flow-row">
+            <span style="color:var(--text-secondary); display:flex; align-items:center; gap:4px;">
+              <span style="color:var(--accent-danger)">↗</span> Salidas
+            </span>
+            <span class="tabular-nums" style="font-weight:700; color:var(--accent-danger);">-S/ 0.00</span>
+          </div>
+          <div class="opt3-flow-divider"></div>
+          <div class="opt3-flow-row" style="font-weight:700;">
+            <span style="color:var(--text-primary);">Balance neto</span>
+            <span class="tabular-nums" style="color:var(--text-primary);">S/ 0.00</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===================================================================
+         VISTA ACTUAL (PROBLEMA DE ESPACIOS PARA COMPARAR)
+         =================================================================== -->
+    <div id="view-opt-ACTUAL" style="display:none;">
+      <section class="clean-card hero-actual-mock">
+        <div class="opt1-left">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:0.725rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Dinero Disponible</span>
+            <span class="badge badge-success">● Líquido al 01/10</span>
+          </div>
+          <div class="opt1-amount tabular-nums">S/ 1,386.28</div>
+          <div class="opt1-context-row">
+            <span>Saldo inicial: <strong>S/ 1,386.28</strong> <span class="badge badge-neutral" style="font-size:0.68rem; padding:1px 6px;">Del mes anterior</span></span>
+            <span style="opacity:0.4;">•</span>
+            <span>Próximo sueldo: <strong>S/ 2,126.50</strong> (30/10)</span>
+          </div>
+          <div class="opt1-projection-row">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="badge badge-success">Saldo a favor</span>
+              <span style="font-size:0.83rem;">Cierre estimado del mes: <strong class="tabular-nums">S/ 3,419.78</strong> (después de cobrar tu sueldo)</span>
+            </div>
+            <button class="btn-adjust-sim">✏️ Ajustar Saldo</button>
+          </div>
+        </div>
+
+        <div class="actual-floating-right">
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">↙ Ingresos del mes</div>
+            <div class="tabular-nums" style="font-size:1.45rem; font-weight:800; color:var(--accent-success); margin-top:2px;">+S/ 0.00</div>
+            <div style="font-size:0.74rem; color:var(--text-muted); margin-top:2px;">Sin ingresos adicionales aún</div>
+          </div>
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">↗ Gastos y pagos</div>
+            <div class="tabular-nums" style="font-size:1.45rem; font-weight:800; color:var(--accent-danger); margin-top:2px;">-S/ 0.00</div>
+            <div style="font-size:0.74rem; color:var(--text-muted); margin-top:2px;">Al día de hoy</div>
+          </div>
+        </div>
+      </section>
+      <div class="arrow-indicator-note">
+        <strong>⚠️ Problemas evidentes del estado actual:</strong><br>
+        1. <strong>En Web:</strong> Los números de la derecha flotan aislados en la parte superior y dejan todo el espacio inferior vacío (señalado por tu flecha roja).<br>
+        2. <strong>En Móvil:</strong> Se apilan uno debajo del otro, ocupando media pantalla del celular y empujando las tarjetas de vencimientos hacia abajo.
+      </div>
+    </div>
+
+    <!-- SECCIÓN DE PRÓXIMOS VENCIMIENTOS (SOLO VISUALES, NO BOTONES) -->
+    <section class="clean-card" style="margin-top:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1rem; line-height:1;">💳</span>
+          <span style="font-size:0.95rem; font-weight:700;">Próximos Vencimientos</span>
+          <span class="badge badge-neutral">3</span>
+        </div>
+        <button class="btn-adjust-sim" style="font-weight:600;">Ver planificador</button>
+      </div>
+
+      <div class="due-cards-grid">
+        <div class="due-card-visual" style="border-left: 4px solid #10b981;">
+          <div class="due-card-title">Visa BCP</div>
+          <div class="due-card-meta">
+            <span>Lun 09/11/2026</span>
+            <span style="opacity:0.4;">•</span>
+            <span style="color:var(--accent-info); font-weight:700;">en 39 d</span>
+          </div>
+          <div class="due-card-amount tabular-nums">S/ 619.29</div>
+          <div style="margin-top:6px;"><span class="badge badge-success" style="font-size:0.67rem; padding:2px 6px;">Cubierto</span></div>
+        </div>
+
+        <div class="due-card-visual" style="border-left: 4px solid #06b6d4;">
+          <div class="due-card-title">Amex Interbank</div>
+          <div class="due-card-meta">
+            <span>Vie 20/11/2026</span>
+            <span style="opacity:0.4;">•</span>
+            <span style="color:var(--accent-info); font-weight:700;">en 50 d</span>
+          </div>
+          <div class="due-card-amount tabular-nums">S/ 1,594.15</div>
+          <div style="margin-top:6px;"><span class="badge badge-success" style="font-size:0.67rem; padding:2px 6px;">Cubierto</span></div>
+        </div>
+
+        <div class="due-card-visual" style="border-left: 4px solid #6366f1;">
+          <div class="due-card-title">Visa Sip</div>
+          <div class="due-card-meta">
+            <span>Mié 25/11/2026</span>
+            <span style="opacity:0.4;">•</span>
+            <span style="color:var(--accent-info); font-weight:700;">en 55 d</span>
+          </div>
+          <div class="due-card-amount tabular-nums">S/ 88.10</div>
+          <div style="margin-top:6px;"><span class="badge badge-success" style="font-size:0.67rem; padding:2px 6px;">Cubierto</span></div>
+        </div>
+      </div>
+      <div style="font-size:0.72rem; color:var(--text-muted); margin-top:8px; display:flex; align-items:center; gap:6px;">
+        <span>ℹ️</span> <em>Las tarjetas ahora son 100% visuales e informativas (sin eventos de clic ni apariencia de botón). La navegación se realiza únicamente a través de "Ver planificador".</em>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    function switchOption(opt, btn) {
+      document.querySelectorAll('.preview-btn-option').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      document.getElementById('view-opt-1').style.display = opt === '1' ? 'block' : 'none';
+      document.getElementById('view-opt-2').style.display = opt === '2' ? 'block' : 'none';
+      document.getElementById('view-opt-3').style.display = opt === '3' ? 'block' : 'none';
+      document.getElementById('view-opt-ACTUAL').style.display = opt === 'ACTUAL' ? 'block' : 'none';
+
+      const banner = document.getElementById('option-banner');
+      if (opt === '1') {
+        banner.innerHTML = `<strong>✨ Opción 1: Cápsula de Flujo Integrada (Recomendada):</strong> Agrupa <em>Ingresos</em> y <em>Gastos</em> dentro de una cápsula visual armónica con fondo sutil y micro-separador central. <strong>En Web:</strong> Elimina por completo el vacío que marcaba la flecha roja al crear un contenedor con propósito delimitado. <strong>En Móvil:</strong> Se mantiene en 2 columnas compactas horizontales de solo 52px de alto (ahorrando más de 120px de scroll innecesario).`;
+        banner.style.borderLeftColor = 'var(--accent-brand)';
+      } else if (opt === '2') {
+        banner.innerHTML = `<strong>🏛️ Opción 2: Zócalo de Métricas Completo:</strong> Reorganiza la tarjeta en dos pisos horizontales. El piso superior muestra el Dinero Disponible y la Proyección; el piso inferior es una barra con 4 columnas simétricas (Saldo Inicial, Ingresos, Gastos, Próximo Sueldo). <strong>En Web:</strong> Aprovecha el 100% del ancho horizontal sin ningún hueco. <strong>En Móvil:</strong> Se transforma en una grilla limpia de 2x2.`;
+        banner.style.borderLeftColor = '#06b6d4';
+      } else if (opt === '3') {
+        banner.innerHTML = `<strong>📊 Opción 3: Balance Neto Ejecutivo:</strong> A la derecha muestra una tarjeta ejecutiva estructurada con Entradas, Salidas y el Flujo Neto resultante. <strong>En Web:</strong> Llena verticalmente la altura para empatar con la izquierda de forma impecable. <strong>En Móvil:</strong> Se compacta limpiamente debajo.`;
+        banner.style.borderLeftColor = '#8b5cf6';
+      } else {
+        banner.innerHTML = `<strong>⚠️ Estado Actual (Con Problemas de Espacio):</strong> Observa cómo a la derecha los dos números flotan dejando un gran desierto blanco debajo (flecha roja), y cómo en móvil al apilarse en vertical duplican la altura de la tarjeta.`;
+        banner.style.borderLeftColor = 'var(--accent-danger)';
+      }
+    }
+
+    function setAdjustPos(pos, btn) {
+      ['btn-pos-top', 'btn-pos-context', 'btn-pos-none', 'btn-pos-bottom'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+      });
+      if (btn) btn.classList.add('active');
+
+      const btnTop = document.getElementById('adjust-btn-top');
+      const btnContext = document.getElementById('adjust-btn-context');
+      const btnBottom = document.getElementById('adjust-btn-bottom');
+
+      if (btnTop) btnTop.style.display = pos === 'top' ? 'inline-flex' : 'none';
+      if (btnContext) btnContext.style.display = pos === 'context' ? 'inline-flex' : 'none';
+      if (btnBottom) btnBottom.style.display = pos === 'bottom' ? 'inline-flex' : 'none';
+    }
+
+    function toggleDevice() {
+      const vp = document.getElementById('viewport');
+      const btn = document.getElementById('btn-device-toggle');
+      const isMobile = vp.classList.toggle('mobile-mode');
+      btn.innerHTML = isMobile ? '💻 Probar en Escritorio' : '📱 Probar en Móvil';
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme') || 'light';
+      const next = current === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', next);
+      document.getElementById('theme-icon').textContent = next === 'light' ? '🌙' : '☀️';
+    }
+  </script>
+</body>
+</html>

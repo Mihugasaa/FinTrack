@@ -539,15 +539,13 @@ export function getBestCardRecommendation(
     ? getEffectiveBillingCloseDate(curM === 12 ? curY + 1 : curY, curM === 12 ? 1 : curM + 1, best.card.billingCloseDay || 1)
     : nextCloseInfo;
 
-  const closeLabel = targetCloseInfo.wasAdjusted
-    ? `Corte el día ${best.card.billingCloseDay} (adelantado a día hábil ${formatDisplayDate(targetCloseInfo.effectiveDate)})`
-    : `Corte el día ${best.card.billingCloseDay}`;
-
-  let reason = `Financiamiento: ${best.creditDays} días sin intereses • ${closeLabel} (${best.daysUntilClose} d restantes) • Vencimiento: ${formatDisplayDate(calculatePaymentDueDate(todayStr, best.card))}.`;
+  const dueDateFormatted = formatDisplayDate(calculatePaymentDueDate(todayStr, best.card));
+  const remainingDaysLabel = best.daysUntilClose === 1 ? 'queda 1 día' : `quedan ${best.daysUntilClose} días`;
+  let reason = `Tu próximo corte es el día ${best.card.billingCloseDay}${targetCloseInfo.wasAdjusted ? ` (adelantado al ${formatDisplayDate(targetCloseInfo.effectiveDate)})` : ''} (${remainingDaysLabel}). Tus consumos de hoy vencerán el ${dueDateFormatted}.`;
   if (best.utilization >= 80) {
-    reason += ` Utilización crítica (${Math.round(best.utilization)}%). Priorizar amortización antes de registrar nuevos consumos.`;
+    reason += ` Atención: tu línea está al ${Math.round(best.utilization)}% de uso. Te sugerimos amortizar consumos previos antes de registrar nuevos gastos.`;
   } else if (best.utilization > 30) {
-    reason += ` Ratio de uso al ${Math.round(best.utilization)}% de la línea (objetivo prudencial: ≤ 30%).`;
+    reason += ` Nivel de uso al ${Math.round(best.utilization)}% de la línea (recomendado: hasta 30%).`;
   }
 
   return {
@@ -2104,7 +2102,7 @@ export function evaluateCardsLiquidityCoverage(params: {
           status = 'SALARY_MISMATCH';
           hasAnySalaryMismatch = true;
           headline = 'Desfase pre-sueldo';
-          message = `Vence el ${formatDisplayDate(dueDate)} antes de cobrar tu sueldo (día ${effectiveSalaryDay}, faltan ${daysDiffSalaryVsDue} días). Tu cierre de mes se proyecta solvente.`;
+          message = `Vence el ${formatDisplayDate(dueDate)} antes de cobrar tu sueldo (día ${effectiveSalaryDay}, faltan ${daysDiffSalaryVsDue} días). Cerrarás el mes con saldo a favor.`;
 
           if (estimatedDebitAtDueDate > 0) {
             actionTip = `Te sugerimos abonar ${formatSoles(estimatedDebitAtDueDate)} con tu saldo disponible para no generar intereses.`;

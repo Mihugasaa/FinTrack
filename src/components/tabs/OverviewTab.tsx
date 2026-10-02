@@ -13,7 +13,10 @@ import {
   ExternalLink,
   CreditCard,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
@@ -53,30 +56,42 @@ const CardDuesSection: React.FC<CardDuesSectionProps> = ({
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    if (!el.firstElementChild) return;
-    const itemWidth = (el.firstElementChild as HTMLElement).offsetWidth + 12;
-    const newIdx = Math.min(dues.length - 1, Math.max(0, Math.round(el.scrollLeft / itemWidth)));
-    if (newIdx !== activeIndex) {
-      setActiveIndex(newIdx);
+    if (!el.children.length) return;
+    const scrollLeft = el.scrollLeft;
+    let closestIdx = 0;
+    let minDiff = Infinity;
+    for (let i = 0; i < el.children.length; i++) {
+      const child = el.children[i] as HTMLElement;
+      const diff = Math.abs(child.offsetLeft - el.offsetLeft - scrollLeft);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = i;
+      }
+    }
+    if (closestIdx !== activeIndex) {
+      setActiveIndex(closestIdx);
     }
   };
 
   const scrollToCard = (idx: number) => {
-    if (!containerRef.current || !containerRef.current.firstElementChild) return;
-    const itemWidth = (containerRef.current.firstElementChild as HTMLElement).offsetWidth + 12;
-    containerRef.current.scrollTo({ left: idx * itemWidth, behavior: 'smooth' });
+    if (!containerRef.current) return;
+    const child = containerRef.current.children[idx] as HTMLElement | undefined;
+    if (child) {
+      child.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+    }
     setActiveIndex(idx);
   };
 
   return (
     <section className="clean-card card-dues-section">
       <div className="card-dues-header">
-        <span className="card-dues-title">
-          <span>💳</span> Próximos Vencimientos<span className="hide-on-compact">&nbsp;de Tarjetas</span>
+        <div className="card-dues-title">
+          <span className="card-dues-icon">💳</span>
+          <span className="card-dues-title-text">Próximos Vencimientos</span>
           {dues.length > 0 && (
             <span className="card-dues-count-badge">{dues.length}</span>
           )}
-        </span>
+        </div>
         <button
           type="button"
           className="btn-secondary card-dues-btn"
@@ -105,22 +120,15 @@ const CardDuesSection: React.FC<CardDuesSectionProps> = ({
               key={d.p.cardId}
               className="card-due-item"
               style={{ borderLeft: `4px solid ${d.p.cardColor}` }}
-              onClick={onNavigateToSchedule}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToSchedule(); }}
-              title={`Ver planificación de ${d.p.cardName}`}
             >
-              <div>
-                <div className="card-due-name">{d.p.cardName}</div>
-                <div className="card-due-meta">
-                  {d.weekday} {formatDisplayDate(d.p.nextDueDate!)}{' '}
-                  <span style={{ color: 'var(--border-medium)', fontWeight: 400 }}>|</span>{' '}
-                  <span style={{ color, fontWeight: 700 }}>{label}</span>
-                </div>
-                <div className="card-due-amount tabular-nums">
-                  {formatSoles(d.p.nextDueAmount)}
-                </div>
+              <div className="card-due-name">{d.p.cardName}</div>
+              <div className="card-due-meta">
+                <span>{d.weekday} {formatDisplayDate(d.p.nextDueDate!)}</span>
+                <span className="card-due-separator">•</span>
+                <span style={{ color, fontWeight: 700 }}>{label}</span>
+              </div>
+              <div className="card-due-amount tabular-nums">
+                {formatSoles(d.p.nextDueAmount)}
               </div>
 
               {coverage && coverage.status !== 'PAID' && (
@@ -142,7 +150,7 @@ const CardDuesSection: React.FC<CardDuesSectionProps> = ({
                       style={{ fontSize: '0.67rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}
                       title={coverage.message}
                     >
-                      Cubierto con saldo
+                      Cubierto
                     </span>
                   )}
                   {isDeficit && (
@@ -164,16 +172,42 @@ const CardDuesSection: React.FC<CardDuesSectionProps> = ({
       </div>
 
       {dues.length > 1 && (
-        <div className="card-dues-dots" aria-hidden="true">
-          {dues.map((_, idx) => (
-            <button
-              key={idx}
-              type="button"
-              className={`card-dues-dot ${idx === activeIndex ? 'active' : ''}`}
-              onClick={() => scrollToCard(idx)}
-              aria-label={`Ver tarjeta ${idx + 1} de ${dues.length}`}
-            />
-          ))}
+        <div className="card-dues-footer-mobile">
+          <button
+            type="button"
+            className="card-dues-nav-btn"
+            onClick={() => scrollToCard(Math.max(0, activeIndex - 1))}
+            disabled={activeIndex === 0}
+            aria-label="Tarjeta anterior"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          <div className="card-dues-dots" aria-hidden="true">
+            {dues.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                className={`card-dues-dot ${idx === activeIndex ? 'active' : ''}`}
+                onClick={() => scrollToCard(idx)}
+                aria-label={`Ver tarjeta ${idx + 1} de ${dues.length}`}
+              />
+            ))}
+          </div>
+
+          <span className="card-dues-counter-label">
+            {activeIndex + 1} de {dues.length}
+          </span>
+
+          <button
+            type="button"
+            className="card-dues-nav-btn"
+            onClick={() => scrollToCard(Math.min(dues.length - 1, activeIndex + 1))}
+            disabled={activeIndex === dues.length - 1}
+            aria-label="Siguiente tarjeta"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
       )}
     </section>
@@ -263,20 +297,32 @@ export const OverviewTab: React.FC = () => {
       <section className="zen-hero clean-card">
         <div className="zen-hero-left">
           <div className="zen-tag-row">
-            <span className="zen-tag-pill">
-              {isCurrentActiveMonth
-                ? 'Dinero Disponible'
-                : isPastMonth
-                ? `Cierre Cuenta Débito (${monthNames[currentMonth]} ${currentYear})`
-                : `Proyección Cuenta Débito (${monthNames[currentMonth]} ${currentYear})`}
-            </span>
-            <span className={`zen-status-badge ${isCurrentActiveMonth ? '' : 'zen-badge-neutral'}`}>
-              {isCurrentActiveMonth
-                ? `● Líquido al ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}`
-                : isPastMonth
-                ? '● Saldo al Cierre'
-                : '● Proyección Fin de Mes'}
-            </span>
+            <div className="zen-tag-group">
+              <span className="zen-tag-pill">
+                {isCurrentActiveMonth
+                  ? 'Dinero Disponible'
+                  : isPastMonth
+                  ? `Cierre Cuenta Débito (${monthNames[currentMonth]} ${currentYear})`
+                  : `Proyección Cuenta Débito (${monthNames[currentMonth]} ${currentYear})`}
+              </span>
+              <span className={`zen-status-badge ${isCurrentActiveMonth ? '' : 'zen-badge-neutral'}`}>
+                {isCurrentActiveMonth
+                  ? `● Líquido al ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}`
+                  : isPastMonth
+                  ? '● Saldo al Cierre'
+                  : '● Proyección Fin de Mes'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="btn-secondary zen-btn-adjust"
+              onClick={() => setIsAdjustDebitModalOpen(true)}
+              title="Ajustar o fijar manualmente el saldo inicial de este mes"
+            >
+              <Pencil size={12} />
+              <span>Ajustar Saldo</span>
+            </button>
           </div>
 
           <div className="zen-amount tabular-nums">
@@ -285,79 +331,96 @@ export const OverviewTab: React.FC = () => {
             </span>
           </div>
 
-          <div className="zen-context-row">
-            <span className="zen-context-item">
-              Saldo base: <strong>{formatSoles(initialDebitForMonth)}</strong>
-              {isInitialDebitAuto && (
-                <span
-                  style={{ marginLeft: '5px', fontSize: '0.72rem', color: 'var(--accent-info)', fontWeight: 600 }}
-                  title="Arrastrado automáticamente del cierre del mes anterior"
-                >
-                  ↳ arrastrado
-                </span>
+          <div className="zen-meta-stack">
+            <div className="zen-context-row">
+              <span className="zen-context-item">
+                Saldo inicial: <strong>{formatSoles(initialDebitForMonth)}</strong>
+                {isInitialDebitAuto && (
+                  <span
+                    className="badge badge-neutral"
+                    style={{ marginLeft: '6px', fontSize: '0.68rem', padding: '1px 6px' }}
+                    title="Arrastrado automáticamente del cierre del mes anterior"
+                  >
+                    Del mes anterior
+                  </span>
+                )}
+              </span>
+              {isCurrentActiveMonth && !debitStats.isSalaryCreditedToday && (
+                <>
+                  <span className="zen-separator">•</span>
+                  <span className="zen-context-item">
+                    Próximo sueldo: <strong>{formatSoles(debitStats.salariesPending)}</strong> ({debitStats.salaryPayDay}/{currentMonth.toString().padStart(2, '0')})
+                  </span>
+                </>
               )}
-            </span>
-            <span>•</span>
-            {isCurrentActiveMonth && !debitStats.isSalaryCreditedToday && (
-              <>
-                <span className="zen-context-item">
-                  ⏳ Sueldo por cobrar: <strong>{formatSoles(debitStats.salariesPending)}</strong> ({debitStats.salaryPayDay}/{currentMonth.toString().padStart(2, '0')})
+              {isPastMonth && (
+                <>
+                  <span className="zen-separator">•</span>
+                  <span className="zen-context-item">
+                    Ingresos del mes: <strong>{formatSoles(monthIncome)}</strong>
+                  </span>
+                </>
+              )}
+              {isFutureMonth && (
+                <>
+                  <span className="zen-separator">•</span>
+                  <span className="zen-context-item">
+                    Ingresos previstos: <strong>{formatSoles(monthIncome)}</strong>
+                    {debitStats.otherIncomesTotalMonth > 0 && (
+                      <span style={{ marginLeft: '5px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        (sueldo {formatSoles(totalSalaryAmount)} + extras {formatSoles(debitStats.otherIncomesTotalMonth)})
+                      </span>
+                    )}
+                  </span>
+                </>
+              )}
+            </div>
+
+            <div className="zen-projection-row">
+              <div className="zen-projection-info">
+                <span className={`badge ${diagnostic.isPositive ? 'badge-success' : 'badge-danger'}`}>
+                  {diagnostic.isPositive ? 'Saldo a favor' : 'Faltante'}
                 </span>
-                <span>•</span>
-              </>
-            )}
-            {isPastMonth && (
-              <>
-                <span className="zen-context-item">
-                  Ingresos del mes: <strong>{formatSoles(monthIncome)}</strong>
-                </span>
-                <span>•</span>
-              </>
-            )}
-            {isFutureMonth && (
-              <>
-                <span className="zen-context-item">
-                  Ingresos previstos: <strong>{formatSoles(monthIncome)}</strong>
-                  {debitStats.otherIncomesTotalMonth > 0 && (
-                    <span style={{ marginLeft: '5px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      (sueldo {formatSoles(totalSalaryAmount)} + extras {formatSoles(debitStats.otherIncomesTotalMonth)})
-                    </span>
+                <span className="zen-projection-text">
+                  {diagnostic.isPositive ? (
+                    <>
+                      Cierre estimado del mes:{' '}
+                      <strong className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                        {formatSoles(diagnostic.liquidityMargin)}
+                      </strong>{' '}
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        {isCurrentActiveMonth
+                          ? (debitStats.isSalaryCreditedToday
+                              ? '(con tu sueldo ya cobrado)'
+                              : '(después de cobrar tu sueldo)')
+                          : isFutureMonth
+                          ? '(con tus ingresos proyectados)'
+                          : '(cierre del período)'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      Cierras el mes con un faltante de:{' '}
+                      <strong className="tabular-nums text-danger">
+                        {formatSoles(Math.abs(diagnostic.liquidityMargin))}
+                      </strong>{' '}
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        (para cubrir todos tus gastos y pagos)
+                      </span>
+                    </>
                   )}
                 </span>
-                <span>•</span>
-              </>
-            )}
-            <span
-              className="zen-context-item"
-              style={{ color: diagnostic.isPositive ? 'var(--accent-success)' : 'var(--accent-danger)' }}
-              title="Margen proyectado con el que cerrarás el mes (se arrastra automáticamente como saldo inicial al mes siguiente)"
-            >
-              Margen fin de mes:{' '}
-              <strong>
-                {diagnostic.isPositive
-                  ? `Alcanza ${formatSoles(diagnostic.liquidityMargin)} ✅`
-                  : `Déficit ${formatSoles(Math.abs(diagnostic.liquidityMargin))} ⚠️`}
-              </strong>
-            </span>
-            <button
-              className="btn-secondary"
-              onClick={() => setIsAdjustDebitModalOpen(true)}
-              title="Ajustar o fijar manualmente el saldo inicial de este mes"
-              style={{ marginLeft: '4px', padding: '3px 8px', fontSize: '0.725rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-            >
-              <Pencil size={11} />
-              <span>Ajustar Saldo</span>
-            </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Flujo del mes: en curso muestra lo acreditado/efectuado; en meses
-            futuros muestra lo previsto/programado (para que no salga todo en S/0). */}
+        {/* Flujo del mes: sin cajas grises, tipografía y cifras puras */}
         <div className="zen-hero-right">
           <div className="zen-flow-card">
             <span className="zen-flow-title flex items-center gap-xs">
-              <ArrowDownLeft size={13} color="var(--accent-success)" />{' '}
-              {isCurrentActiveMonth ? 'Entradas Acreditadas' : isFutureMonth ? 'Ingresos Previstos' : 'Entradas del Mes'}
+              <ArrowDownLeft size={14} color="var(--accent-success)" />{' '}
+              {isCurrentActiveMonth ? 'Ingresos del mes' : isFutureMonth ? 'Ingresos previstos' : 'Ingresos del mes'}
             </span>
             <span className="zen-flow-amount tabular-nums text-success">
               +{formatSoles(isCurrentActiveMonth ? realizedInflow : expectedInflow)}
@@ -368,22 +431,26 @@ export const OverviewTab: React.FC = () => {
                     ? 'Sueldo acreditado'
                     : currentOtherIncomes.length > 0
                     ? `${currentOtherIncomes[0].description} S/ ${debitStats.otherIncomesReceivedToday.toFixed(2)}`
-                    : 'Sin extras aún')
+                    : 'Sin ingresos adicionales aún')
                 : `Sueldo ${formatSoles(totalSalaryAmount)}${debitStats.otherIncomesTotalMonth > 0 ? ` • Extras ${formatSoles(debitStats.otherIncomesTotalMonth)}` : ''}${debitStats.collectedFromDebtors > 0 ? ` • Cobros ${formatSoles(debitStats.collectedFromDebtors)}` : ''}`}
             </span>
           </div>
 
+          <div className="zen-flow-divider" aria-hidden="true" />
+
           <div className="zen-flow-card">
             <span className="zen-flow-title flex items-center gap-xs">
-              <ArrowUpRight size={13} color="var(--accent-danger)" />{' '}
-              {isCurrentActiveMonth ? 'Salidas Efectuadas' : isFutureMonth ? 'Salidas Programadas' : 'Salidas del Mes'}
+              <ArrowUpRight size={14} color="var(--accent-danger)" />{' '}
+              {isCurrentActiveMonth ? 'Gastos y pagos' : isFutureMonth ? 'Salidas programadas' : 'Gastos y pagos'}
             </span>
             <span className="zen-flow-amount tabular-nums text-danger">
               -{formatSoles(isCurrentActiveMonth ? realizedOutflow : isFutureMonth ? scheduledOutflow : pastOutflow)}
             </span>
             <span className="zen-flow-sub">
               {isCurrentActiveMonth
-                ? `Débito ${formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidToday > 0 ? ` • Deudas ${formatSoles(debtPaidToday)}` : ''}${pendingThisMonth > 0 ? ` • Por pagar ${formatSoles(pendingThisMonth)}` : ''}`
+                ? (realizedOutflow === 0 && pendingThisMonth === 0
+                    ? 'Al día de hoy'
+                    : `Débito ${formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidToday > 0 ? ` • Deudas ${formatSoles(debtPaidToday)}` : ''}${pendingThisMonth > 0 ? ` • Por pagar ${formatSoles(pendingThisMonth)}` : ''}`)
                 : isFutureMonth
                 ? `Tarjetas ${formatSoles(debitStats.unpaidCardBillsDueThisMonth)}${debitStats.cardPaidInAdvanceThisMonth > 0 && debitStats.unpaidCardBillsDueThisMonth <= 0 ? ' (al día)' : ''} • Deudas ${formatSoles(debitStats.scheduledDebtDueThisMonth)}${debitStats.debitExpensesTotalMonth > 0 ? ` • Débito ${formatSoles(debitStats.debitExpensesTotalMonth)}` : ''}`
                 : `Débito ${formatSoles(debitStats.debitExpensesTotalMonth)} • Tarjetas ${formatSoles(debitStats.cardPaymentsPaidMonth)}${debtPaidMonth > 0 ? ` • Deudas ${formatSoles(debtPaidMonth)}` : ''}`}
@@ -535,13 +602,13 @@ export const OverviewTab: React.FC = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', paddingTop: '4px' }}>
               <div style={{ padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                <div className="card-item-caps">Variación Gasto</div>
+                <div className="card-item-caps">Variación Mensual</div>
                 <div className={`card-amount-md tabular-nums ${monthlyComparison.isReduction ? 'text-success' : 'text-danger'}`} style={{ marginTop: '2px' }}>
                   {monthlyComparison.variationStr}
                 </div>
               </div>
               <div style={{ padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                <div className="card-item-caps">Diferencial Consumo</div>
+                <div className="card-item-caps">{monthlyComparison.isReduction ? 'Ahorro vs. Mes Anterior' : 'Diferencia en Gasto'}</div>
                 <div className={`card-amount-md tabular-nums ${monthlyComparison.isReduction ? 'text-success' : 'text-danger'}`} style={{ marginTop: '2px' }}>
                   {formatSoles(monthlyComparison.differential)}
                 </div>
@@ -1081,75 +1148,46 @@ export const OverviewTab: React.FC = () => {
           </div>
 
           {cardAdvisor.recommendedCard && (
-            <div className="card-pill-hero">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
-                <span className="card-item-title" title={cardAdvisor.recommendedCard.name} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div
+              className="card-pill-hero"
+              style={{
+                borderLeft: `4px solid ${cardAdvisor.recommendedCard.color || 'var(--accent-brand)'}`,
+                background: 'var(--bg-subtle)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                <span className="card-item-title" title={cardAdvisor.recommendedCard.name} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>
                   Usa hoy: {cardAdvisor.recommendedCard.name}
                 </span>
                 <span className="badge badge-success tabular-nums" style={{ flexShrink: 0 }}>
                   {cardAdvisor.creditDays} días libres
                 </span>
               </div>
-              <p className="card-item-subtitle" style={{ margin: 0 }}>
+              <p className="card-item-subtitle" style={{ margin: 0, fontSize: '0.835rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
                 {cardAdvisor.reason}
               </p>
-              {/* Control de Cobertura de Vencimientos */}
+              {/* Control de Cobertura de Vencimientos - Estilo Zen sin anidación */}
               {(() => {
                 if (cardsLiquidityAssessment.totalDueSoon < 0.01) return null;
                 const { hasAnySalaryMismatch, hasAnyDeficit, primarySalaryPayDay } = cardsLiquidityAssessment;
 
                 if (hasAnySalaryMismatch) {
                   return (
-                    <div
-                      style={{
-                        marginTop: '12px',
-                        padding: '12px 14px',
-                        background: 'var(--bg-subtle)',
-                        border: '1px solid rgba(234, 179, 8, 0.35)',
-                        borderLeft: '4px solid var(--accent-warning)',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                    <div className="advisor-mismatch-banner">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
                         <span style={{ fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent-warning)' }}>
-                          Control de Liquidez Pre-Abono
+                          Desfase de Ciclo Pre-Sueldo
                         </span>
                         <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                          Desfase de Ciclo
+                          Atención
                         </span>
                       </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', padding: '8px 10px', background: 'var(--bg-surface)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-                        <div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Exigible pre-sueldo:</div>
-                          <div className="tabular-nums" style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--text-primary)' }}>
-                            {formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Caja disponible hoy:</div>
-                          <div className="tabular-nums" style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--text-primary)' }}>
-                            {formatSoles(cardsLiquidityAssessment.currentAvailableToday)}
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--accent-danger)' }}>Brecha al vencimiento:</div>
-                          <div className="tabular-nums text-danger" style={{ fontWeight: 800, fontSize: '0.86rem' }}>
-                            -{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                        Abono de haberes: <strong>Día {primarySalaryPayDay}</strong> • Cierre proyectado: <strong className="text-success">{formatSoles(debitStats.projectedDebitBalanceMonthEnd)}</strong> (solvente tras abono).
-                      </div>
-
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
+                        Vencen <strong>{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> antes de tu sueldo (día {primarySalaryPayDay}). Tu saldo actual es {formatSoles(cardsLiquidityAssessment.currentAvailableToday)} (brecha: <strong className="text-danger">-{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong>). Al ingresar tu sueldo cerrarás el mes con saldo a favor de <strong className="text-success">{formatSoles(debitStats.projectedDebitBalanceMonthEnd)}</strong>.
+                      </p>
                       {cardsLiquidityAssessment.recommendedAction && (
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
-                          <strong>Acción operativa:</strong> {cardsLiquidityAssessment.recommendedAction}
+                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '8px', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
+                          <strong>Sugerencia:</strong> {cardsLiquidityAssessment.recommendedAction}
                         </div>
                       )}
                     </div>
@@ -1158,20 +1196,8 @@ export const OverviewTab: React.FC = () => {
 
                 if (hasAnyDeficit) {
                   return (
-                    <div
-                      style={{
-                        marginTop: '12px',
-                        padding: '12px 14px',
-                        background: 'var(--bg-subtle)',
-                        border: '1px solid rgba(239, 68, 68, 0.35)',
-                        borderLeft: '4px solid var(--accent-danger)',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                    <div className="advisor-deficit-banner">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
                         <span style={{ fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent-danger)' }}>
                           Déficit de Ciclo Proyectado
                         </span>
@@ -1179,25 +1205,12 @@ export const OverviewTab: React.FC = () => {
                           Déficit
                         </span>
                       </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', padding: '8px 10px', background: 'var(--bg-surface)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-                        <div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Compromisos totales:</div>
-                          <div className="tabular-nums" style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--accent-danger)' }}>
-                            {formatSoles(cardsLiquidityAssessment.totalDueSoon)}
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Cierre proyectado:</div>
-                          <div className="tabular-nums text-danger" style={{ fontWeight: 700, fontSize: '0.86rem' }}>
-                            {formatSoles(debitStats.projectedDebitBalanceMonthEnd)}
-                          </div>
-                        </div>
-                      </div>
-
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
+                        Los compromisos totales de este ciclo suman <strong>{formatSoles(cardsLiquidityAssessment.totalDueSoon)}</strong>, superando el saldo proyectado al cierre del mes ({formatSoles(debitStats.projectedDebitBalanceMonthEnd)}).
+                      </p>
                       {cardsLiquidityAssessment.recommendedAction && (
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
-                          <strong>Acción operativa:</strong> {cardsLiquidityAssessment.recommendedAction}
+                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '8px', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
+                          <strong>Recomendación:</strong> {cardsLiquidityAssessment.recommendedAction}
                         </div>
                       )}
                     </div>
@@ -1205,21 +1218,10 @@ export const OverviewTab: React.FC = () => {
                 }
 
                 return (
-                  <div
-                    style={{
-                      marginTop: '10px',
-                      paddingTop: '10px',
-                      borderTop: '1px dashed var(--border-subtle)',
-                      fontSize: '0.76rem',
-                      color: 'var(--text-secondary)',
-                      display: 'flex',
-                      gap: '8px',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <span className="badge badge-success" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>Cubierto</span>
+                  <div className="advisor-covered-callout">
+                    <CheckCircle2 size={16} color="var(--accent-success)" style={{ flexShrink: 0 }} />
                     <span>
-                      Vencimientos de ciclo ({formatSoles(cardsLiquidityAssessment.totalDueSoon)}) respaldados por saldo en cuenta.
+                      Tus próximos pagos de tarjeta (<strong>{formatSoles(cardsLiquidityAssessment.totalDueSoon)}</strong>) están cubiertos con tu saldo disponible.
                     </span>
                   </div>
                 );
@@ -1235,24 +1237,14 @@ export const OverviewTab: React.FC = () => {
               {cardAdvisor.allRanked.slice(1).map(({ card, creditDays, utilization }) => (
                 <div
                   key={card.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '8px 10px',
-                    background: 'var(--bg-subtle)',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-subtle)',
-                    minWidth: 0,
-                    gap: '8px'
-                  }}
+                  className="advisor-other-card-row"
                 >
                   <span className="card-item-title" style={{ fontSize: '0.85rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={card.name}>{card.name}</span>
                   <span className="card-item-meta tabular-nums" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
                     <span>{creditDays} días libres</span>
                     {utilization > 0 && (
                       <span style={{ color: utilization >= 80 ? 'var(--accent-danger)' : utilization > 30 ? 'var(--accent-warning)' : 'var(--text-muted)' }}>
-                        {Math.round(utilization)}% uso
+                        • {Math.round(utilization)}% uso
                       </span>
                     )}
                   </span>

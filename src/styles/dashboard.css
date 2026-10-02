@@ -923,10 +923,10 @@ html.is-resizing *::after {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
-  padding: 18px 20px;
+  padding: 22px 26px;
   display: grid;
-  grid-template-columns: 1.25fr 1fr;
-  gap: var(--space-xl);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 32px;
   align-items: center;
   box-shadow: var(--shadow-card);
   margin-bottom: 0;
@@ -935,8 +935,8 @@ html.is-resizing *::after {
 @media (max-width: 960px) {
   .zen-hero {
     grid-template-columns: 1fr;
-    gap: var(--space-md);
-    padding: 14px 14px;
+    gap: 16px;
+    padding: 18px 20px;
     margin-bottom: 0;
   }
 }
@@ -944,14 +944,36 @@ html.is-resizing *::after {
 .zen-hero-left {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .zen-tag-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.zen-tag-group {
+  display: flex;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.zen-btn-adjust {
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
 .zen-tag-pill {
@@ -997,7 +1019,7 @@ html.is-resizing *::after {
 .zen-context-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px 12px;
   font-size: 0.8rem;
   color: var(--text-secondary);
   flex-wrap: wrap;
@@ -1009,71 +1031,189 @@ html.is-resizing *::after {
   font-weight: 600;
 }
 
+/* Cápsula de Flujo del Mes (Opción 1: Módulo Integrado y Armónico) */
 .zen-hero-right {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  padding-left: 28px;
-  border-left: 1px solid var(--border-subtle);
+  grid-template-columns: minmax(130px, 1fr) auto minmax(130px, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 14px 22px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
+.zen-flow-divider {
+  width: 1px;
+  height: 38px;
+  background: var(--border-subtle);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* En móvil y tablet (< 960px): Cápsula horizontal de 2 columnas simétricas */
 @media (max-width: 960px) {
   .zen-hero-right {
-    border-left: none;
-    padding-left: 0;
-    border-top: 1px solid var(--border-subtle);
-    padding-top: 18px;
+    width: 100%;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin-top: 4px;
   }
 }
 
-@media (max-width: 440px) {
+@media (max-width: 480px) {
   .zen-hero-right {
-    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 11px 12px;
   }
 }
 
 .zen-flow-card {
-  padding: 12px 16px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  min-width: 0;
 }
 
 .zen-flow-title {
-  font-size: 0.725rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }
 
 .zen-flow-amount {
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 800;
   font-family: var(--font-sans);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+@media (max-width: 480px) {
+  .zen-flow-amount {
+    font-size: 1.15rem;
+  }
 }
 
 .zen-flow-sub {
-  font-size: 0.7rem;
+  font-size: 0.71rem;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+@media (max-width: 960px) {
+  .zen-flow-sub {
+    max-width: none;
+  }
+}
+
+.zen-meta-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.zen-separator {
+  color: var(--text-muted);
+  opacity: 0.45;
+}
+
+.zen-projection-row {
+  display: flex;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  gap: 12px;
+}
+
+.zen-projection-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.825rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.zen-projection-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Callouts y banners limpios para Asesor de Tarjetas (Opción A) */
+.advisor-covered-callout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--accent-success-subtle);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: var(--accent-success);
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+.advisor-mismatch-banner {
+  padding: 14px;
+  background: var(--accent-warning-subtle);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  border-radius: 10px;
+  margin-top: 12px;
+}
+
+.advisor-deficit-banner {
+  padding: 14px;
+  background: var(--accent-danger-subtle);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 10px;
+  margin-top: 12px;
+}
+
+.advisor-other-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: var(--bg-subtle);
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  min-width: 0;
+  gap: 8px;
 }
 
 /* ==============================================================================
-   PRÓXIMOS VENCIMIENTOS DE TARJETAS (Patrón Híbrido: Fintech Carousel & Adaptive Grid)
+   PRÓXIMOS VENCIMIENTOS DE TARJETAS (Camino 1: Fintech Carousel Móvil & Adaptive Grid)
    ============================================================================== */
 .card-dues-section {
   padding: 14px 18px;
-  margin-bottom: var(--space-md, 16px);
-  position: relative;
+  margin-bottom: 0;
 }
 
 .card-dues-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
@@ -1084,6 +1224,19 @@ html.is-resizing *::after {
   align-items: center;
   gap: 8px;
   color: var(--text-primary);
+  min-width: 0;
+}
+
+.card-dues-icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.card-dues-title-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-dues-count-badge {
@@ -1094,6 +1247,7 @@ html.is-resizing *::after {
   background: var(--bg-subtle);
   color: var(--text-muted);
   border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .card-dues-btn {
@@ -1107,65 +1261,59 @@ html.is-resizing *::after {
   border-radius: 8px;
   cursor: pointer;
   touch-action: manipulation;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
-/* En Móvil (< 640px): Carrusel Horizontal con Scroll-Snap y Peek Affordance */
+/* Base / Móvil (< 640px): Slider 100% Ancho Completo con Snap Magnético (CERO texto cortado) */
 .card-dues-container {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
-  padding: 2px 4px 6px 4px;
-  margin: 0 -4px;
-  scrollbar-width: none; /* Firefox */
-  list-style: none;
+  padding: 4px 0 8px 0;
+  margin: 0;
+  scrollbar-width: none;
 }
 
 .card-dues-container::-webkit-scrollbar {
-  display: none; /* Chrome, Safari */
+  display: none;
 }
 
 .card-due-item {
-  flex: 0 0 78%;
-  max-width: 290px;
-  min-width: 220px;
+  flex: 0 0 100%;
+  max-width: 100%;
+  min-width: 100%;
   scroll-snap-align: start;
+  scroll-snap-stop: always;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 13px 16px;
   background: var(--bg-subtle);
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   box-sizing: border-box;
   text-decoration: none;
-  cursor: pointer;
-  user-select: none;
+  cursor: default;
+  user-select: text;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
 }
 
 .card-due-item:hover {
-  border-color: var(--border-medium);
-  background: var(--bg-surface);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: var(--border-subtle);
+  background: var(--bg-subtle);
+  transform: none;
+  box-shadow: none;
 }
 
 .card-due-item:active {
-  transform: scale(0.99);
-}
-
-/* Si solo hay 1 tarjeta, en móvil ocupa el 100% */
-.card-dues-container[data-count="1"] .card-due-item {
-  flex: 1 1 100%;
-  max-width: 100%;
+  transform: none;
 }
 
 .card-due-name {
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.86rem;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -1175,17 +1323,25 @@ html.is-resizing *::after {
 .card-due-meta {
   font-size: 0.73rem;
   color: var(--text-muted);
-  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.card-due-separator {
+  color: var(--border-medium);
+  font-weight: 400;
 }
 
 .card-due-amount {
   font-weight: 800;
   font-size: 1.05rem;
   color: var(--accent-danger);
-  margin-top: 4px;
+  margin-top: 4px; /* Pegado directamente a la fecha, sin brechas vacías */
   white-space: nowrap;
 }
 
@@ -1193,17 +1349,48 @@ html.is-resizing *::after {
   margin-top: 6px;
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
-/* Dots indicadores de carrusel (solo en móvil) */
-.card-dues-dots {
+/* Paginador Móvil (Botones Nav + Dots + Contador) */
+.card-dues-footer-mobile {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   margin-top: 10px;
+}
+
+.card-dues-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.card-dues-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.card-dues-nav-btn:not(:disabled):hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-medium);
+}
+
+.card-dues-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .card-dues-dot {
@@ -1224,7 +1411,13 @@ html.is-resizing *::after {
   background: var(--accent-brand);
 }
 
-/* En Desktop y Tablets (>= 640px): Grilla adaptable */
+.card-dues-counter-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* En Desktop y Tablets (>= 640px): Grilla Cohesionada y Simétrica */
 @media (min-width: 640px) {
   .card-dues-container {
     display: grid;
@@ -1255,43 +1448,30 @@ html.is-resizing *::after {
     flex: none;
     max-width: none;
     min-width: 0;
+    padding: 12px 16px;
   }
 
-  /* Los dots se ocultan en desktop porque todo entra en la cuadrícula */
-  .card-dues-dots {
+  /* Los controles del carrusel se ocultan en desktop */
+  .card-dues-footer-mobile {
     display: none;
   }
 }
 
 @media (min-width: 640px) and (max-width: 900px) {
-  /* En tablets intermedias con 4 tarjetas, distribución limpia 2x2 */
   .card-dues-container[data-count="4"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 500px) {
-  .card-dues-header {
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-
+@media (max-width: 480px) {
   .card-dues-title {
-    font-size: 0.85rem;
-    min-width: 0;
+    font-size: 0.86rem;
   }
 
   .card-dues-btn {
-    flex-shrink: 0;
-    padding: 5px 10px;
-    font-size: 0.73rem;
+    padding: 4px 10px;
+    font-size: 0.74rem;
     min-height: 28px;
-  }
-}
-
-@media (max-width: 420px) {
-  .hide-on-compact {
-    display: none;
   }
 }
 

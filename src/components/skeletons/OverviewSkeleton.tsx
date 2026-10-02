@@ -13,10 +13,13 @@ export const OverviewSkeleton: React.FC = () => {
       {/* 1. HERO MASTER: MI DINERO EN DÉBITO */}
       <section className="zen-hero clean-card skeleton-card">
         <div className="zen-hero-left">
-          {/* Fila de etiquetas */}
-          <div className="zen-tag-row" style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-            <span className="skeleton-shimmer sk-pill" style={{ width: '135px', height: '22px' }} />
-            <span className="skeleton-shimmer sk-pill" style={{ width: '115px', height: '20px' }} />
+          {/* Fila de etiquetas y botón ajustar */}
+          <div className="zen-tag-row" style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div className="zen-tag-group" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span className="skeleton-shimmer sk-pill" style={{ width: '135px', height: '22px' }} />
+              <span className="skeleton-shimmer sk-pill" style={{ width: '115px', height: '20px' }} />
+            </div>
+            <span className="skeleton-shimmer sk-box" style={{ width: '95px', height: '24px', borderRadius: '8px' }} />
           </div>
 
           {/* Monto Principal */}
@@ -40,6 +43,8 @@ export const OverviewSkeleton: React.FC = () => {
             <span className="skeleton-shimmer sk-box" style={{ width: '140px', height: '12px' }} />
           </div>
 
+          <div className="zen-flow-divider" aria-hidden="true" />
+
           <div className="zen-flow-card" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <span className="skeleton-shimmer sk-box" style={{ width: '105px', height: '13px' }} />
             <span className="skeleton-shimmer sk-box" style={{ width: '120px', height: '24px', borderRadius: '6px' }} />
@@ -49,26 +54,18 @@ export const OverviewSkeleton: React.FC = () => {
       </section>
 
       {/* 2. PRÓXIMOS VENCIMIENTOS DE TARJETAS */}
-      <section className="clean-card skeleton-card card-dues-section" style={{ marginBottom: '16px' }}>
+      <section className="clean-card skeleton-card card-dues-section">
         <div className="card-dues-header">
           <span className="skeleton-shimmer sk-box" style={{ width: '170px', height: '18px', borderRadius: '6px' }} />
           <span className="skeleton-shimmer sk-pill" style={{ width: '95px', height: '28px', borderRadius: '8px' }} />
         </div>
         <div className="card-dues-container" data-count="3">
           {[1, 2, 3].map(i => (
-            <div
-              key={i}
-              className="card-due-item"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}
-            >
+            <div key={i} className="card-due-item">
               <span className="skeleton-shimmer sk-box" style={{ width: '90px', height: '14px' }} />
-              <span className="skeleton-shimmer sk-box" style={{ width: '120px', height: '11px' }} />
-              <span className="skeleton-shimmer sk-box" style={{ width: '75px', height: '18px', marginTop: '2px' }} />
-              <span className="skeleton-shimmer sk-box" style={{ width: '100px', height: '16px', marginTop: '4px', borderRadius: '4px' }} />
+              <span className="skeleton-shimmer sk-box" style={{ width: '120px', height: '11px', marginTop: '3px' }} />
+              <span className="skeleton-shimmer sk-box" style={{ width: '80px', height: '18px', marginTop: '4px' }} />
+              <span className="skeleton-shimmer sk-box" style={{ width: '100px', height: '16px', marginTop: '6px', borderRadius: '4px' }} />
             </div>
           ))}
         </div>

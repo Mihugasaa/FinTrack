@@ -79,6 +79,7 @@ export function useTransactions({
   const [selectedMethodId, setSelectedMethodId] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [overrideDueDate, setOverrideDueDate] = useState('');
+  const [hasUserManuallyEditedDueDate, setHasUserManuallyEditedDueDate] = useState(false);
   const [txDate, setTxDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
@@ -164,6 +165,10 @@ export function useTransactions({
     if (!paymentMethods || paymentMethods.length === 0 || transactions.length === 0) return;
     let hasChanges = false;
     const healed = transactions.map(t => {
+      // Si la fecha fue personalizada manualmente por el usuario o posteo bancario, RESPETARLA TOTALMENTE
+      const isManual = t.hasCustomDueDate || (typeof t.notes === 'string' && t.notes.includes('[manualDueDate:true]'));
+      if (isManual) return t;
+
       const pm = resolvePaymentMethod(t, paymentMethods);
       if (pm && pm.type === 'credit' && pm.billingCloseDay) {
         const correctDueDate = calculatePaymentDueDate(t.date, pm);
@@ -256,6 +261,7 @@ export function useTransactions({
     }
     setIsRecurring(false);
     setOverrideDueDate('');
+    setHasUserManuallyEditedDueDate(false);
     setIsRefundMode(false);
     setIsInstallment(false);
     setInstallmentsCount('3');
@@ -279,12 +285,23 @@ export function useTransactions({
     setTxDate(tx.date);
     setIsRecurring(!!tx.isFixedSubscription);
 
-    // Auto-alineación al ciclo bancario hábil real:
-    const properDueDate = (resolvedPm && resolvedPm.type === 'credit' && resolvedPm.billingCloseDay)
+    // Auto-alineación al ciclo bancario hábil real o respeto de fecha manual/posteo bancario:
+    const nominalDueDate = (resolvedPm && resolvedPm.type === 'credit' && resolvedPm.billingCloseDay)
       ? calculatePaymentDueDate(tx.date, resolvedPm)
       : (tx.paymentDueDate || tx.date);
 
-    setOverrideDueDate(properDueDate);
+    const isAlreadyCustom = !!tx.hasCustomDueDate ||
+      (typeof tx.notes === 'string' && tx.notes.includes('[manualDueDate:true]')) ||
+      (Boolean(tx.paymentDueDate) && tx.paymentDueDate !== nominalDueDate);
+
+    if (isAlreadyCustom) {
+      setOverrideDueDate(tx.paymentDueDate || nominalDueDate);
+      setHasUserManuallyEditedDueDate(true);
+    } else {
+      setOverrideDueDate('');
+      setHasUserManuallyEditedDueDate(false);
+    }
+
     setIsRefundMode(!!tx.isRefund);
     setIsInstallment(!!tx.isInstallment);
     setInstallmentsCount(tx.totalInstallments ? tx.totalInstallments.toString() : '3');
@@ -471,11 +488,24 @@ export function useTransactions({
       const amountPen = currency === 'USD' ? numAmount * numTc : numAmount;
 
       const method = paymentMethods.find(p => p.id === selectedMethodId);
-      const dueDate = overrideDueDate || calculatePaymentDueDate(txDate, method);
+      const calculatedDueDate = calculatePaymentDueDate(txDate, method);
+      const isCustomDueDate = Boolean(
+        hasUserManuallyEditedDueDate && overrideDueDate
+          ? overrideDueDate !== calculatedDueDate
+          : (editingTransactionId && overrideDueDate ? overrideDueDate !== calculatedDueDate : false)
+      );
+      const dueDate = overrideDueDate || calculatedDueDate;
 
       if (editingTransactionId) {
         const currentTx = transactions.find(t => t.id === editingTransactionId);
         let finalNotes = currentTx?.notes || '';
+        if (isCustomDueDate) {
+          if (!finalNotes.includes('[manualDueDate:true]')) {
+            finalNotes = finalNotes ? `${finalNotes} [manualDueDate:true]` : '[manualDueDate:true]';
+          }
+        } else {
+          finalNotes = finalNotes.replace(/\[manualDueDate:true\]/g, '').trim();
+        }
         if (isRefundMode && !finalNotes.includes('[isRefund:true]')) {
           finalNotes = finalNotes ? `${finalNotes} [isRefund:true]` : '[isRefund:true]';
         } else if (!isRefundMode && finalNotes.includes('[isRefund:true]')) {
@@ -508,6 +538,7 @@ export function useTransactions({
           exchangeRate: numTc,
           amountPen,
           paymentDueDate: dueDate,
+          hasCustomDueDate: isCustomDueDate,
           isFixedSubscription: isRecurring,
           anchorDay: resolvedAnchor,
           isRefund: isRefundMode,
@@ -560,6 +591,7 @@ export function useTransactions({
         setIsRefundMode(false);
         setIsInstallment(false);
         setOverrideDueDate('');
+        setHasUserManuallyEditedDueDate(false);
         return;
       }
 
@@ -591,13 +623,14 @@ export function useTransactions({
         setIsInstallment(false);
         setIsRefundMode(false);
         setOverrideDueDate('');
+        setHasUserManuallyEditedDueDate(false);
         return;
       }
 
       // Timestamp de creación embebido para ordenar por recencia dentro del mismo día.
       const nowIso = new Date().toISOString();
       const createdTag = `[created:${nowIso}]`;
-      let finalNotes = `${isRefundMode ? '[isRefund:true] ' : ''}${createdTag}`;
+      let finalNotes = `${isRefundMode ? '[isRefund:true] ' : ''}${isCustomDueDate ? '[manualDueDate:true] ' : ''}${createdTag}`;
 
       const targetDay = parseInt(txDate.split('-')[2], 10);
       if (isRecurring) {
@@ -615,6 +648,7 @@ export function useTransactions({
         exchangeRate: numTc,
         amountPen,
         paymentDueDate: dueDate,
+        hasCustomDueDate: isCustomDueDate,
         isFixedSubscription: isRecurring,
         anchorDay: isRecurring ? targetDay : undefined,
         isRefund: isRefundMode,
@@ -663,6 +697,7 @@ export function useTransactions({
       setAmount('');
       setIsRecurring(false);
       setOverrideDueDate('');
+      setHasUserManuallyEditedDueDate(false);
     } catch (err) {
       console.error('Error al registrar gasto:', err);
     } finally {
@@ -739,7 +774,10 @@ export function useTransactions({
     isRecurring,
     setIsRecurring,
     overrideDueDate,
-    setOverrideDueDate,
+    setOverrideDueDate: (val: string) => {
+      setOverrideDueDate(val);
+      setHasUserManuallyEditedDueDate(true);
+    },
     txDate,
     setTxDate,
     isRefundMode,

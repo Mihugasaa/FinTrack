@@ -6,6 +6,7 @@ import {
   Building2,
   Briefcase,
   Coins,
+  Pencil,
   Trash2,
   PieChart
 } from 'lucide-react';
@@ -17,6 +18,8 @@ export const IncomesTab: React.FC = () => {
     monthNames,
     currentMonth,
     currentYear,
+    handleOpenCreateIncome,
+    handleOpenEditIncome,
     setIsIncomeModalOpen,
     setIsSalaryModalOpen,
     handleOpenSalaryModal,
@@ -31,10 +34,24 @@ export const IncomesTab: React.FC = () => {
     setItemToDelete,
     fixedExpensesTotal,
     formatDisplayDate,
-    formatSoles
+    formatSoles,
+    isPastMonth,
+    isFutureMonth,
+    currentDateStr
   } = useFinance();
   const totalOtherIncomes = currentOtherIncomes.reduce((a, b) => a + b.amount, 0);
   const totalIncome = totalSalaryAmount + totalOtherIncomes;
+
+  const otherIncomesPending = debitStats.otherIncomesPending !== undefined
+    ? debitStats.otherIncomesPending
+    : Math.max(0, debitStats.otherIncomesTotalMonth - debitStats.otherIncomesReceivedToday);
+  const totalPendingIncomes = debitStats.salariesPending + otherIncomesPending;
+
+  const isIncomeReceived = (receivedDate: string) => {
+    if (isPastMonth) return true;
+    if (isFutureMonth) return false;
+    return receivedDate <= currentDateStr;
+  };
 
   // Cálculos 100% dinámicos en base a datos reales (sin valores hardcodeados)
   const fixedExpenses = fixedExpensesTotal;
@@ -65,7 +82,7 @@ export const IncomesTab: React.FC = () => {
           </p>
         </div>
         <div className="action-group">
-          <button id="btn-add-extra-income" className="btn-secondary" onClick={() => setIsIncomeModalOpen(true)}>
+          <button id="btn-add-extra-income" className="btn-secondary" onClick={handleOpenCreateIncome}>
             <Plus size={15} />
             <span>Ingreso Extra</span>
           </button>
@@ -111,16 +128,20 @@ export const IncomesTab: React.FC = () => {
           <div
             className="tabular-nums text-h1 font-bold"
             style={{
-              color: debitStats.salariesPending > 0 ? 'var(--accent-warning)' : 'var(--text-muted)',
+              color: totalPendingIncomes > 0 ? 'var(--accent-warning)' : 'var(--text-muted)',
               marginTop: '4px'
             }}
           >
-            {formatSoles(debitStats.salariesPending)}
+            {formatSoles(totalPendingIncomes)}
           </div>
           <span className="text-body-sm text-muted">
-            {debitStats.salariesPending > 0
-              ? `Abono programado: Día ${debitStats.salaryPayDay} de ${monthNames[currentMonth]}`
-              : 'Nómina completada'}
+            {totalPendingIncomes > 0
+              ? (debitStats.salariesPending > 0 && otherIncomesPending > 0
+                  ? `Nómina + Extras pendientes`
+                  : debitStats.salariesPending > 0
+                  ? `Abono programado: Día ${debitStats.salaryPayDay} de ${monthNames[currentMonth]}`
+                  : 'Ingresos extras pendientes')
+              : 'Nómina e ingresos completados'}
           </span>
         </div>
       </div>
@@ -182,44 +203,64 @@ export const IncomesTab: React.FC = () => {
                 ))}
 
                 {/* 2. Ingresos Extraordinarios */}
-                {currentOtherIncomes.map(inc => (
-                  <div key={inc.id} className="income-item-row">
-                    <div className="income-item-left">
-                      <div className="income-icon-wrap icon-extra" title="Ingreso Extraordinario">
-                        <Coins size={18} />
-                      </div>
-                      <div>
-                        <div className="income-item-name">{inc.description}</div>
-                        <div className="income-item-date">
-                          Abonado el: {formatDisplayDate(inc.receivedDate)}
+                {currentOtherIncomes.map(inc => {
+                  const isReceived = isIncomeReceived(inc.receivedDate);
+                  const parts = inc.receivedDate.split('-');
+                  const shortDate = parts.length === 3 ? `${parts[2]}/${parts[1]}` : inc.receivedDate;
+                  return (
+                    <div key={inc.id} className="income-item-row">
+                      <div className="income-item-left">
+                        <div className="income-icon-wrap icon-extra" title="Ingreso Extraordinario">
+                          <Coins size={18} />
+                        </div>
+                        <div>
+                          <div className="income-item-name">{inc.description}</div>
+                          <div className="income-item-date">
+                            {isReceived
+                              ? `Abonado el: ${formatDisplayDate(inc.receivedDate)}`
+                              : `Se abona el: ${formatDisplayDate(inc.receivedDate)}`}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="income-item-right">
-                      <span className="income-item-amount tabular-nums text-success">
-                        +{formatSoles(inc.amount)}
-                      </span>
-                      <span className="badge badge-success">Acreditado</span>
-                      <button
-                        className="btn-action-icon"
-                        onClick={() => {
-                          setItemToDelete({
-                            id: inc.id,
-                            type: 'income',
-                            description: inc.description,
-                            amount: inc.amount,
-                            date: inc.receivedDate,
-                            categoryName: 'Ingreso Extra'
-                          });
-                        }}
-                        title="Eliminar ingreso"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="income-item-right">
+                        <span className="income-item-amount tabular-nums text-success">
+                          +{formatSoles(inc.amount)}
+                        </span>
+                        {isReceived ? (
+                          <span className="badge badge-success">Acreditado</span>
+                        ) : (
+                          <span className="badge badge-warning">
+                            Se abona {shortDate}
+                          </span>
+                        )}
+                        <button
+                          className="btn-action-icon"
+                          onClick={() => handleOpenEditIncome(inc)}
+                          title="Editar ingreso"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className="btn-action-icon"
+                          onClick={() => {
+                            setItemToDelete({
+                              id: inc.id,
+                              type: 'income',
+                              description: inc.description,
+                              amount: inc.amount,
+                              date: inc.receivedDate,
+                              categoryName: 'Ingreso Extra'
+                            });
+                          }}
+                          title="Eliminar ingreso"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

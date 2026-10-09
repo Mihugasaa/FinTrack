@@ -198,6 +198,7 @@ export class SupabaseDataService {
           exchangeRate: parseFloat(row.exchange_rate || '1.0'),
           amountPen: parseFloat(row.amount_pen),
           paymentDueDate: row.payment_due_date,
+          hasCustomDueDate: !!(row as any).has_custom_due_date || (typeof row.notes === 'string' && row.notes.includes('[manualDueDate:true]')),
           isFixedSubscription: !!row.is_fixed_subscription,
           isRefund: isRefund,
           isAuditConfirmed: isAuditConfirmed,
@@ -267,6 +268,7 @@ export class SupabaseDataService {
           exchangeRate: parseFloat(row.exchange_rate || '1.0'),
           amountPen: parseFloat(row.amount_pen),
           paymentDueDate: row.payment_due_date,
+          hasCustomDueDate: !!(row as any).has_custom_due_date || (typeof row.notes === 'string' && row.notes.includes('[manualDueDate:true]')),
           isFixedSubscription: !!row.is_fixed_subscription,
           isRefund: isRefund,
           isAuditConfirmed: isAuditConfirmed,
@@ -335,6 +337,7 @@ export class SupabaseDataService {
           exchangeRate: parseFloat(row.exchange_rate || '1.0'),
           amountPen: parseFloat(row.amount_pen),
           paymentDueDate: row.payment_due_date,
+          hasCustomDueDate: !!(row as any).has_custom_due_date || (typeof row.notes === 'string' && row.notes.includes('[manualDueDate:true]')),
           isFixedSubscription: true,
           isRefund: isRefund,
           isAuditConfirmed: isAuditConfirmed,
@@ -375,6 +378,9 @@ export class SupabaseDataService {
       }
       if (tx.isFixedSubscription && tx.anchorDay && !finalNotes.includes('[anchorDay:')) {
         finalNotes = finalNotes ? `${finalNotes} [anchorDay:${tx.anchorDay}]` : `[anchorDay:${tx.anchorDay}]`;
+      }
+      if (tx.hasCustomDueDate && !finalNotes.includes('[manualDueDate:true]')) {
+        finalNotes = finalNotes ? `${finalNotes} [manualDueDate:true]` : `[manualDueDate:true]`;
       }
 
       const payload: Record<string, any> = {
@@ -465,6 +471,13 @@ export class SupabaseDataService {
 
       if (tx.isFixedSubscription && tx.anchorDay && !finalNotes.includes('[anchorDay:')) {
         finalNotes = finalNotes ? `${finalNotes} [anchorDay:${tx.anchorDay}]` : `[anchorDay:${tx.anchorDay}]`;
+      }
+      if (tx.hasCustomDueDate) {
+        if (!finalNotes.includes('[manualDueDate:true]')) {
+          finalNotes = finalNotes ? `${finalNotes} [manualDueDate:true]` : `[manualDueDate:true]`;
+        }
+      } else {
+        finalNotes = finalNotes.replace(/\[manualDueDate:true\]/g, '').trim();
       }
 
       const payload: Record<string, any> = {
@@ -1280,13 +1293,23 @@ export class SupabaseDataService {
     if (!supabase || !isSupabaseConfigured || !isUUID(inc.id)) return false;
 
     try {
+      const updateData: Record<string, any> = {
+        description: inc.description,
+        amount: inc.amount,
+        received_date: inc.receivedDate
+      };
+
+      const userId = await this.getAuthUserId();
+      if (userId && inc.receivedDate) {
+        const monthlyPeriodId = await this.getOrCreateMonthlyPeriod(userId, inc.receivedDate);
+        if (monthlyPeriodId) {
+          updateData.monthly_period_id = monthlyPeriodId;
+        }
+      }
+
       const { error } = await supabase
         .from('other_incomes')
-        .update({
-          description: inc.description,
-          amount: inc.amount,
-          received_date: inc.receivedDate
-        })
+        .update(updateData)
         .eq('id', inc.id);
 
       return !error;

@@ -564,6 +564,7 @@ export interface DebitBalanceResult {
   isSalaryCreditedToday: boolean;
   salaryPayDay: number;
   otherIncomesReceivedToday: number;
+  otherIncomesPending: number;
   otherIncomesTotalMonth: number;
   collectedFromDebtors: number;
   debitExpensesPaidToday: number;
@@ -714,6 +715,7 @@ export function calculateCurrentDebitBalance(
     isSalaryCreditedToday,
     salaryPayDay,
     otherIncomesReceivedToday,
+    otherIncomesPending: Math.max(0, otherIncomesTotalMonth - otherIncomesReceivedToday),
     otherIncomesTotalMonth,
     collectedFromDebtors,
     debitExpensesPaidToday,

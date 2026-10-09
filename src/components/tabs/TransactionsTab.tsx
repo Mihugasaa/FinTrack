@@ -65,6 +65,7 @@ export const TransactionsTab: React.FC = () => {
     handleParseNaturalExpense,
     isParsingNaturalExpense,
     handleOpenEditCollectPayment,
+    handleOpenEditIncome,
     setActiveTab
   } = useFinance();
 
@@ -413,6 +414,28 @@ export const TransactionsTab: React.FC = () => {
                               >
                                 <ExternalLink size={14} />
                               </button>
+                            ) : inc.type === 'extra' ? (
+                              <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                <button
+                                  type="button"
+                                  className="btn-action-icon"
+                                  title="Editar ingreso extra"
+                                  onClick={() => {
+                                    const found = currentOtherIncomes.find(oi => oi.id === inc.id);
+                                    if (found) handleOpenEditIncome(found);
+                                  }}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-action-icon"
+                                  title="Ver en Ingresos"
+                                  onClick={() => setActiveTab('incomes')}
+                                >
+                                  <ExternalLink size={14} />
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 type="button"
@@ -844,6 +867,20 @@ export const TransactionsTab: React.FC = () => {
                             <span className="badge badge-collected" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>✓ Cobrado</span>
                             <span className="mobile-tx-due" style={{ color: 'var(--accent-success)' }}>Acreditado el {formatDisplayDate(inc.date)}</span>
                           </>
+                        )}
+                        {inc.type === 'extra' && (
+                          <button
+                            type="button"
+                            className="btn-action-icon"
+                            style={{ marginLeft: 'auto' }}
+                            title="Editar ingreso extra"
+                            onClick={() => {
+                              const found = currentOtherIncomes.find(oi => oi.id === inc.id);
+                              if (found) handleOpenEditIncome(found);
+                            }}
+                          >
+                            <Pencil size={13} />
+                          </button>
                         )}
                       </div>
                     </div>

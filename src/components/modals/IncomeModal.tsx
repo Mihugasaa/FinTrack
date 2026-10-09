@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { useFinance } from '@/contexts/FinanceContext';
@@ -9,7 +9,12 @@ import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 export const IncomeModal: React.FC = () => {
   const {
     setIsIncomeModalOpen,
+    editingIncome,
+    setEditingIncome,
     addExtraIncome,
+    updateExtraIncome,
+    currentYear,
+    currentMonth,
     handleBackdropMouseDown,
     handleBackdropClick
   } = useFinance();
@@ -22,11 +27,36 @@ export const IncomeModal: React.FC = () => {
     return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
   });
 
-  const onClose = () => setIsIncomeModalOpen(false);
+  useEffect(() => {
+    if (editingIncome) {
+      setIncomeDesc(editingIncome.description);
+      setIncomeAmount(editingIncome.amount.toString());
+      setIncomeDate(editingIncome.receivedDate);
+    } else {
+      setIncomeDesc('');
+      setIncomeAmount('');
+      const d = new Date();
+      const defaultDate = currentYear && currentMonth
+        ? `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`
+        : `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+      setIncomeDate(defaultDate);
+    }
+  }, [editingIncome, currentYear, currentMonth]);
+
+  const onClose = () => {
+    setEditingIncome(null);
+    setIsIncomeModalOpen(false);
+  };
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addExtraIncome(incomeDesc, incomeAmount, incomeDate);
+    if (editingIncome) {
+      updateExtraIncome(editingIncome.id, incomeDesc, incomeAmount, incomeDate);
+    } else {
+      addExtraIncome(incomeDesc, incomeAmount, incomeDate);
+    }
   };
+
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
 
   return (
@@ -46,7 +76,9 @@ export const IncomeModal: React.FC = () => {
           <div className="modal-drag-handle" />
         </div>
         <div className="modal-title-row">
-          <span className="text-h2 font-bold">Registrar Ingreso Extra</span>
+          <span className="text-h2 font-bold">
+            {editingIncome ? 'Modificar Ingreso Extra' : 'Registrar Ingreso Extra'}
+          </span>
           <button id="btn-close-income-modal" className="month-nav-btn modal-close-btn" onClick={onClose}>
             <X size={16} />
           </button>
@@ -58,7 +90,7 @@ export const IncomeModal: React.FC = () => {
             <input
               id="input-income-desc"
               type="text"
-              placeholder="ej. Bono, Venta de producto, Freelance"
+              placeholder="ej. Bono, Venta de producto, Freelance, CTS"
               className="form-input"
               required
               value={incomeDesc}
@@ -67,7 +99,7 @@ export const IncomeModal: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Fecha de ingreso</label>
+            <label className="form-label">Fecha de abono / ingreso</label>
             <CustomDatePicker
               id="input-income-date"
               value={incomeDate}
@@ -98,7 +130,7 @@ export const IncomeModal: React.FC = () => {
               Cancelar
             </button>
             <button type="submit" className="btn-primary">
-              Guardar Ingreso
+              {editingIncome ? 'Guardar Cambios' : 'Guardar Ingreso'}
             </button>
           </div>
         </form>

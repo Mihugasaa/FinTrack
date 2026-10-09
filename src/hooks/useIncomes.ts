@@ -1,8 +1,7 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import { SupabaseDataService } from '@/services/supabaseData.service';
 import { SalaryIncome, OtherIncome } from '@/types';
+import { generateUUID } from '@/lib/utils';
 
 interface UseIncomesDeps {
   monthKey: string;
@@ -23,6 +22,7 @@ export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved 
   const [extraIncomes, setExtraIncomes] = useState<Record<string, OtherIncome[]>>({});
 
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  const [editingIncome, setEditingIncome] = useState<OtherIncome | null>(null);
   const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
 
   // Form Configurar Sueldo
@@ -52,6 +52,16 @@ export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved 
     setIsSalaryModalOpen(true);
   };
 
+  const handleOpenCreateIncome = () => {
+    setEditingIncome(null);
+    setIsIncomeModalOpen(true);
+  };
+
+  const handleOpenEditIncome = (inc: OtherIncome) => {
+    setEditingIncome(inc);
+    setIsIncomeModalOpen(true);
+  };
+
   // Registra un ingreso extra. El estado del formulario vive local en IncomeModal
   // (así teclear no re-renderiza el dashboard); aquí solo recibimos el payload.
   const addExtraIncome = (desc: string, amount: string, date?: string) => {
@@ -61,7 +71,7 @@ export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved 
     const targetMonthKey = finalDate.slice(0, 7);
 
     const newInc: OtherIncome = {
-      id: `oi-${Date.now()}`,
+      id: generateUUID(),
       description: desc,
       amount: parseFloat(amount),
       receivedDate: finalDate
@@ -76,6 +86,52 @@ export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved 
     SupabaseDataService.createOtherIncome(newInc, finalDate);
 
     setIsIncomeModalOpen(false);
+    setEditingIncome(null);
+  };
+
+  // Modifica un ingreso extra existente (descripción, monto, fecha de abono).
+  const updateExtraIncome = (id: string, desc: string, amount: string, date?: string) => {
+    if (!desc || !amount || !id) return;
+
+    const finalDate = date || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-15`;
+    const targetMonthKey = finalDate.slice(0, 7);
+    const numAmount = parseFloat(amount);
+
+    const updatedInc: OtherIncome = {
+      id,
+      description: desc,
+      amount: numAmount,
+      receivedDate: finalDate
+    };
+
+    setExtraIncomes(prev => {
+      let oldMonthKey = '';
+      for (const [k, list] of Object.entries(prev)) {
+        if (list.some(i => i.id === id)) {
+          oldMonthKey = k;
+          break;
+        }
+      }
+
+      if (oldMonthKey === targetMonthKey) {
+        return {
+          ...prev,
+          [targetMonthKey]: (prev[targetMonthKey] || []).map(i => i.id === id ? updatedInc : i)
+        };
+      }
+
+      const nextState: Record<string, OtherIncome[]> = {};
+      for (const [k, list] of Object.entries(prev)) {
+        nextState[k] = list.filter(i => i.id !== id);
+      }
+      nextState[targetMonthKey] = [...(nextState[targetMonthKey] || []), updatedInc];
+      return nextState;
+    });
+
+    SupabaseDataService.updateOtherIncome(updatedInc);
+
+    setIsIncomeModalOpen(false);
+    setEditingIncome(null);
   };
 
   // Acredita a débito un ingreso por un préstamo recibido: se coloca al frente
@@ -132,6 +188,10 @@ export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved 
     totalSalaryAmount,
     isIncomeModalOpen,
     setIsIncomeModalOpen,
+    editingIncome,
+    setEditingIncome,
+    handleOpenCreateIncome,
+    handleOpenEditIncome,
     isSalaryModalOpen,
     setIsSalaryModalOpen,
     salarySource,
@@ -141,6 +201,7 @@ export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved 
     salaryPayDay,
     setSalaryPayDay,
     addExtraIncome,
+    updateExtraIncome,
     creditLoanIncome,
     deleteExtraIncome,
     handleSaveSalary,

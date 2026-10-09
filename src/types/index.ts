@@ -34,6 +34,7 @@ export interface Transaction {
   exchangeRate: number;
   amountPen: number;
   paymentDueDate: string; // YYYY-MM-DD (Calculado por ciclo)
+  hasCustomDueDate?: boolean;
   isFixedSubscription?: boolean;
   isRefund?: boolean;
   isInstallment?: boolean;

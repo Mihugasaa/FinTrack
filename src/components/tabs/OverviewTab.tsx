@@ -435,8 +435,8 @@ export const OverviewTab: React.FC = () => {
                   <span>Sueldo acreditado ({formatSoles(totalSalaryAmount)})</span>
                 ) : currentOtherIncomes.length > 0 ? (
                   <>
-                    <span>Cobrado: {formatSoles(debitStats.otherIncomesReceivedToday)}</span>
-                    <span>Por cobrar: {formatSoles(totalSalaryAmount)}</span>
+                    <span>Cobrado: {formatSoles(debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday)}</span>
+                    <span>Por cobrar: {formatSoles(debitStats.salariesPending + (debitStats.otherIncomesPending ?? Math.max(0, debitStats.otherIncomesTotalMonth - debitStats.otherIncomesReceivedToday)))}</span>
                   </>
                 ) : (
                   <span>Sueldo previsto: {formatSoles(totalSalaryAmount)}</span>

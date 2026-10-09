@@ -146,7 +146,29 @@ function useFinanceController() {
   const [initialDebitBalances, setInitialDebitBalances] = useState<Record<string, number>>({});
   // Sueldo base real por mes (YYYY-MM). Se llena de una sola vez con el historial
   // de periodos; lo usan las vistas consolidadas y el simulador sin visitar el mes.
-  const [monthlySalaries, setMonthlySalaries] = useState<Record<string, number>>({});
+  const [monthlySalaries, setMonthlySalaries] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const stored = localStorage.getItem('fintrack_salary_configs');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const map: Record<string, number> = {};
+        Object.entries(parsed).forEach(([k, v]: [string, any]) => {
+          if (v && v.amount) map[k] = v.amount;
+        });
+        return map;
+      }
+    } catch {}
+    return {};
+  });
+  const [monthlySalaryConfigs, setMonthlySalaryConfigs] = useState<Record<string, { amount: number; source: string; payDay: number }>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const stored = localStorage.getItem('fintrack_salary_configs');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {};
+  });
 
   // 5. Estados de Datos Interactivos
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(initialPaymentMethods);
@@ -365,7 +387,7 @@ function useFinanceController() {
     monthKey,
     currentYear,
     currentMonth,
-    onSalarySaved: (amt) => {
+    onSalarySaved: (amt, pDay, src) => {
       setMonthlySalaries(prev => {
         const next = { ...prev };
         next[monthKey] = amt;
@@ -373,7 +395,7 @@ function useFinanceController() {
         const [yStr, mStr] = monthKey.split('-');
         let curY = parseInt(yStr, 10);
         let curM = parseInt(mStr, 10);
-        for (let i = 1; i <= 24; i++) {
+        for (let i = 1; i <= 36; i++) {
           curM += 1;
           if (curM > 12) {
             curM = 1;
@@ -381,6 +403,23 @@ function useFinanceController() {
           }
           const futureKey = `${curY}-${curM.toString().padStart(2, '0')}`;
           next[futureKey] = amt;
+        }
+        return next;
+      });
+      setMonthlySalaryConfigs(prev => {
+        const next = { ...prev };
+        next[monthKey] = { amount: amt, source: src, payDay: pDay };
+        const [yStr, mStr] = monthKey.split('-');
+        let curY = parseInt(yStr, 10);
+        let curM = parseInt(mStr, 10);
+        for (let i = 1; i <= 36; i++) {
+          curM += 1;
+          if (curM > 12) {
+            curM = 1;
+            curY += 1;
+          }
+          const futureKey = `${curY}-${curM.toString().padStart(2, '0')}`;
+          next[futureKey] = { amount: amt, source: src, payDay: pDay };
         }
         return next;
       });
@@ -692,14 +731,25 @@ function useFinanceController() {
         }));
       }
       if (period && period.baseSalary !== undefined && period.baseSalary > 0) {
-        setSalaries(prev => [
+        const cachedConfig = monthlySalaryConfigs[monthKey];
+        const effectiveSource = period.salarySource || cachedConfig?.source || 'Empleo Principal (Nómina)';
+        const effectivePayDay = period.salaryPayDay || cachedConfig?.payDay || 30;
+        setSalaries([
           {
-            id: prev[0]?.id || 'sal-1',
-            source: prev[0]?.source || 'Empleo Principal',
+            id: 'sal-1',
+            source: effectiveSource,
             amount: period.baseSalary,
-            payDay: prev[0]?.payDay || 30
+            payDay: effectivePayDay
           }
         ]);
+        setMonthlySalaryConfigs(prev => ({
+          ...prev,
+          [monthKey]: {
+            amount: period.baseSalary,
+            source: effectiveSource,
+            payDay: effectivePayDay
+          }
+        }));
       }
     });
 
@@ -824,6 +874,19 @@ function useFinanceController() {
         });
         return { ...fromCloud, ...prev };
       });
+      setMonthlySalaryConfigs(prev => {
+        const fromCloud: Record<string, { amount: number; source: string; payDay: number }> = {};
+        Object.entries(periods).forEach(([k, v]) => {
+          if (v.baseSalary > 0) {
+            fromCloud[k] = {
+              amount: v.baseSalary,
+              source: v.salarySource || 'Empleo Principal (Nómina)',
+              payDay: v.salaryPayDay || 30
+            };
+          }
+        });
+        return { ...fromCloud, ...prev };
+      });
     });
   }, [currentUser, setTransactions, setExtraIncomes, setCardPayments, reloadNonce]);
 
@@ -867,14 +930,25 @@ function useFinanceController() {
             setInitialDebitBalances(prev => ({ ...prev, [monthKey]: period.initialDebitBalance }));
           }
           if (period && period.baseSalary !== undefined && period.baseSalary > 0) {
-            setSalaries(prev => [
+            const cachedConfig = monthlySalaryConfigs[monthKey];
+            const effectiveSource = period.salarySource || cachedConfig?.source || 'Empleo Principal (Nómina)';
+            const effectivePayDay = period.salaryPayDay || cachedConfig?.payDay || 30;
+            setSalaries([
               {
-                id: prev[0]?.id || 'sal-1',
-                source: prev[0]?.source || 'Empleo Principal',
+                id: 'sal-1',
+                source: effectiveSource,
                 amount: period.baseSalary,
-                payDay: prev[0]?.payDay || 30
+                payDay: effectivePayDay
               }
             ]);
+            setMonthlySalaryConfigs(prev => ({
+              ...prev,
+              [monthKey]: {
+                amount: period.baseSalary,
+                source: effectiveSource,
+                payDay: effectivePayDay
+              }
+            }));
           }
         }),
         SupabaseDataService.getCardPayments(monthKey).then(cloudPayments => {
@@ -974,6 +1048,19 @@ function useFinanceController() {
             });
             return { ...fromCloud, ...prev };
           });
+          setMonthlySalaryConfigs(prev => {
+            const fromCloud: Record<string, { amount: number; source: string; payDay: number }> = {};
+            Object.entries(periods).forEach(([k, v]) => {
+              if (v.baseSalary > 0) {
+                fromCloud[k] = {
+                  amount: v.baseSalary,
+                  source: v.salarySource || 'Empleo Principal (Nómina)',
+                  payDay: v.salaryPayDay || 30
+                };
+              }
+            });
+            return { ...fromCloud, ...prev };
+          });
         })
       ]);
     } finally {
@@ -999,17 +1086,30 @@ function useFinanceController() {
   // Sincronizar nómina activa si existe un sueldo registrado/propagado para este mes
   useEffect(() => {
     const knownSalary = monthlySalaries[monthKey];
-    if (knownSalary && knownSalary > 0 && Math.abs((salaries[0]?.amount || 0) - knownSalary) > 0.001) {
-      setSalaries(prev => [
-        {
-          id: prev[0]?.id || 'sal-1',
-          source: prev[0]?.source || 'Empleo Principal',
-          amount: knownSalary,
-          payDay: prev[0]?.payDay || 30
-        }
-      ]);
+    const knownConfig = monthlySalaryConfigs[monthKey];
+    if (knownSalary && knownSalary > 0) {
+      const currentAmt = salaries[0]?.amount || 0;
+      const currentSrc = salaries[0]?.source || '';
+      const currentDay = salaries[0]?.payDay || 30;
+      const targetSrc = knownConfig?.source || currentSrc || 'Empleo Principal (Nómina)';
+      const targetDay = knownConfig?.payDay || currentDay;
+
+      if (
+        Math.abs(currentAmt - knownSalary) > 0.001 ||
+        (knownConfig?.source && currentSrc !== targetSrc) ||
+        (knownConfig?.payDay && currentDay !== targetDay)
+      ) {
+        setSalaries([
+          {
+            id: salaries[0]?.id || 'sal-1',
+            source: targetSrc,
+            amount: knownSalary,
+            payDay: targetDay
+          }
+        ]);
+      }
     }
-  }, [monthKey, monthlySalaries, salaries, setSalaries]);
+  }, [monthKey, monthlySalaries, monthlySalaryConfigs, salaries, setSalaries]);
 
   const primaryPayDay = salaries[0]?.payDay ?? 30;
   const debitChain = useMemo(() => computeMonthlyDebitChain({
@@ -2423,6 +2523,8 @@ function useFinanceController() {
     // Ingresos
     salaries,
     setSalaries,
+    monthlySalaryConfigs,
+    setMonthlySalaryConfigs,
     extraIncomes,
     setExtraIncomes,
     currentOtherIncomes,

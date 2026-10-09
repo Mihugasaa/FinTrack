@@ -18,7 +18,25 @@ interface UseIncomesDeps {
  * para el confirmador de eliminación compartido.
  */
 export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved }: UseIncomesDeps) {
-  const [salaries, setSalaries] = useState<SalaryIncome[]>([]);
+  const [salaries, setSalaries] = useState<SalaryIncome[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem('fintrack_salary_configs');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const cfg = parsed[monthKey];
+        if (cfg && cfg.amount > 0) {
+          return [{
+            id: 'sal-1',
+            source: cfg.source || 'Empleo Principal (Nómina)',
+            amount: cfg.amount,
+            payDay: cfg.payDay || 30
+          }];
+        }
+      }
+    } catch {}
+    return [];
+  });
   const [extraIncomes, setExtraIncomes] = useState<Record<string, OtherIncome[]>>({});
 
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
@@ -26,9 +44,42 @@ export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved 
   const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
 
   // Form Configurar Sueldo
-  const [salarySource, setSalarySource] = useState('Empleo Principal (Nómina)');
-  const [salaryAmount, setSalaryAmount] = useState('2126.49');
-  const [salaryPayDay, setSalaryPayDay] = useState('30');
+  const [salarySource, setSalarySource] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fintrack_salary_configs');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed[monthKey]?.source) return parsed[monthKey].source;
+        }
+      } catch {}
+    }
+    return 'Empleo Principal (Nómina)';
+  });
+  const [salaryAmount, setSalaryAmount] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fintrack_salary_configs');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed[monthKey]?.amount) return parsed[monthKey].amount.toString();
+        }
+      } catch {}
+    }
+    return '2126.49';
+  });
+  const [salaryPayDay, setSalaryPayDay] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fintrack_salary_configs');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed[monthKey]?.payDay) return parsed[monthKey].payDay.toString();
+        }
+      } catch {}
+    }
+    return '30';
+  });
 
   // Mantener los inputs del modal sincronizados con el sueldo activo del mes
   useEffect(() => {
@@ -169,13 +220,36 @@ export function useIncomes({ monthKey, currentYear, currentMonth, onSalarySaved 
       }
     ]);
 
-    // Notificar al contexto para actualizar monthlySalaries y debitChain
+    // Persistir de inmediato en localStorage en cascada hacia el futuro (36 meses)
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fintrack_salary_configs');
+        const configs: Record<string, { amount: number; source: string; payDay: number }> = stored ? JSON.parse(stored) : {};
+        configs[monthKey] = { amount: amt, source: src, payDay: pDay };
+
+        const [yStr, mStr] = monthKey.split('-');
+        let curY = parseInt(yStr, 10);
+        let curM = parseInt(mStr, 10);
+        for (let i = 1; i <= 36; i++) {
+          curM += 1;
+          if (curM > 12) {
+            curM = 1;
+            curY += 1;
+          }
+          const futureKey = `${curY}-${curM.toString().padStart(2, '0')}`;
+          configs[futureKey] = { amount: amt, source: src, payDay: pDay };
+        }
+        localStorage.setItem('fintrack_salary_configs', JSON.stringify(configs));
+      } catch {}
+    }
+
+    // Notificar al contexto para actualizar monthlySalaries, monthlySalaryConfigs y debitChain
     if (onSalarySaved) {
       onSalarySaved(amt, pDay, src);
     }
 
-    // Sincronizar sueldo base en Supabase propagando a meses futuros
-    SupabaseDataService.updateBaseSalary(currentYear, currentMonth, amt, true);
+    // Sincronizar sueldo base en Supabase propagando a meses futuros con nombre y día
+    SupabaseDataService.updateBaseSalary(currentYear, currentMonth, amt, true, src, pDay);
     setIsSalaryModalOpen(false);
   };
 

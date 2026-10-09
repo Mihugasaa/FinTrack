@@ -1341,8 +1341,38 @@ export class SupabaseDataService {
   // 5. PERIODOS MENSUALES, SALDOS INICIALES Y SUELDO BASE
   // ============================================================================
 
-  // GET: Obtener datos de periodo mensual (saldo débito y sueldo base)
-  public static async getMonthlyPeriod(year: number, month: number): Promise<{ initialDebitBalance: number; baseSalary: number } | null> {
+  public static encodeSalaryNotes(existingNotes?: string | null, source?: string, payDay?: number): string {
+    let clean = (existingNotes || '')
+      .replace(/\[salarySource:[^\]]*\]/g, '')
+      .replace(/\[salaryPayDay:[^\]]*\]/g, '')
+      .trim();
+
+    const parts: string[] = [];
+    if (source && source.trim()) parts.push(`[salarySource:${source.trim()}]`);
+    if (payDay && !isNaN(payDay)) parts.push(`[salaryPayDay:${payDay}]`);
+
+    if (parts.length === 0) return clean;
+    const tagStr = parts.join('');
+    return clean ? `${tagStr} ${clean}` : tagStr;
+  }
+
+  public static parseSalaryNotes(notes?: string | null): { source?: string; payDay?: number } {
+    if (!notes || typeof notes !== 'string') return {};
+    const srcMatch = notes.match(/\[salarySource:([^\]]+)\]/);
+    const dayMatch = notes.match(/\[salaryPayDay:(\d+)\]/);
+    return {
+      source: srcMatch ? srcMatch[1].trim() : undefined,
+      payDay: dayMatch ? parseInt(dayMatch[1], 10) : undefined
+    };
+  }
+
+  // GET: Obtener datos de periodo mensual (saldo débito y sueldo base con fuente y día de pago)
+  public static async getMonthlyPeriod(year: number, month: number): Promise<{
+    initialDebitBalance: number;
+    baseSalary: number;
+    salarySource?: string;
+    salaryPayDay?: number;
+  } | null> {
     if (!supabase || !isSupabaseConfigured) return null;
 
     try {
@@ -1351,7 +1381,7 @@ export class SupabaseDataService {
 
       const { data } = await supabase
         .from('monthly_periods')
-        .select('initial_debit_balance, base_salary')
+        .select('initial_debit_balance, base_salary, notes')
         .eq('user_id', userId)
         .eq('year', year)
         .eq('month', month)
@@ -1359,12 +1389,20 @@ export class SupabaseDataService {
 
       let baseSalary = data ? parseFloat(data.base_salary || '0') : 0;
       const initialDebitBalance = data ? parseFloat(data.initial_debit_balance || '0') : 0;
+      let salarySource: string | undefined;
+      let salaryPayDay: number | undefined;
+
+      if (data?.notes) {
+        const parsed = this.parseSalaryNotes(data.notes);
+        salarySource = parsed.source;
+        salaryPayDay = parsed.payDay;
+      }
 
       // Si este mes aún no tiene sueldo propio asignado, heredar el último sueldo vigente conocido (mes en adelante)
-      if (baseSalary === 0) {
+      if (baseSalary === 0 || !salarySource || !salaryPayDay) {
         const { data: periodsWithSalary } = await supabase
           .from('monthly_periods')
-          .select('year, month, base_salary')
+          .select('year, month, base_salary, notes')
           .eq('user_id', userId)
           .gt('base_salary', 0)
           .order('year', { ascending: false })
@@ -1372,8 +1410,15 @@ export class SupabaseDataService {
 
         if (periodsWithSalary && periodsWithSalary.length > 0) {
           const relevant = periodsWithSalary.find(p => p.year < year || (p.year === year && p.month <= month));
-          if (relevant && relevant.base_salary) {
-            baseSalary = parseFloat(relevant.base_salary);
+          if (relevant) {
+            if (baseSalary === 0 && relevant.base_salary) {
+              baseSalary = parseFloat(relevant.base_salary);
+            }
+            if (relevant.notes) {
+              const parsed = this.parseSalaryNotes(relevant.notes);
+              if (!salarySource && parsed.source) salarySource = parsed.source;
+              if (!salaryPayDay && parsed.payDay) salaryPayDay = parsed.payDay;
+            }
           }
         }
       }
@@ -1382,7 +1427,9 @@ export class SupabaseDataService {
 
       return {
         initialDebitBalance,
-        baseSalary
+        baseSalary,
+        salarySource,
+        salaryPayDay
       };
     } catch (e) {
       this.logSupabaseError('getMonthlyPeriod (catch)', e);
@@ -1393,7 +1440,12 @@ export class SupabaseDataService {
   // GET: Historial COMPLETO de periodos mensuales (saldo inicial y sueldo base por mes),
   // indexado por clave YYYY-MM. Permite que las vistas consolidadas y el simulador usen
   // los saldos/sueldos reales de todos los meses sin tener que visitarlos uno por uno.
-  public static async getAllMonthlyPeriods(): Promise<Record<string, { initialDebitBalance: number; baseSalary: number }> | null> {
+  public static async getAllMonthlyPeriods(): Promise<Record<string, {
+    initialDebitBalance: number;
+    baseSalary: number;
+    salarySource?: string;
+    salaryPayDay?: number;
+  }> | null> {
     if (!supabase || !isSupabaseConfigured) return null;
 
     try {
@@ -1403,7 +1455,7 @@ export class SupabaseDataService {
       const { data, error } = await this.executeWithRetry<any[]>(
         () => supabase!
           .from('monthly_periods')
-          .select('year, month, base_salary, initial_debit_balance')
+          .select('year, month, base_salary, initial_debit_balance, notes')
           .eq('user_id', userId),
         'getAllMonthlyPeriods'
       );
@@ -1413,15 +1465,18 @@ export class SupabaseDataService {
         return null;
       }
 
-      const map: Record<string, { initialDebitBalance: number; baseSalary: number }> = {};
+      const map: Record<string, { initialDebitBalance: number; baseSalary: number; salarySource?: string; salaryPayDay?: number }> = {};
       data.forEach((row: any) => {
         const y = parseInt(row.year, 10);
         const m = parseInt(row.month, 10);
         if (!y || !m) return;
         const key = `${y}-${m.toString().padStart(2, '0')}`;
+        const parsed = this.parseSalaryNotes(row.notes);
         map[key] = {
           initialDebitBalance: parseFloat(row.initial_debit_balance || '0'),
-          baseSalary: parseFloat(row.base_salary || '0')
+          baseSalary: parseFloat(row.base_salary || '0'),
+          salarySource: parsed.source,
+          salaryPayDay: parsed.payDay
         };
       });
       return map;
@@ -1459,8 +1514,15 @@ export class SupabaseDataService {
     }
   }
 
-  // PUT: Actualizar sueldo base para un mes específico
-  public static async updateBaseSalary(year: number, month: number, salary: number, propagateToFuture: boolean = true): Promise<boolean> {
+  // PUT: Actualizar sueldo base para un mes específico propagando en cascada hacia el futuro
+  public static async updateBaseSalary(
+    year: number,
+    month: number,
+    salary: number,
+    propagateToFuture: boolean = true,
+    source?: string,
+    payDay?: number
+  ): Promise<boolean> {
     if (!supabase || !isSupabaseConfigured) return false;
 
     try {
@@ -1471,9 +1533,23 @@ export class SupabaseDataService {
       const periodId = await this.getOrCreateMonthlyPeriod(userId, dateStr);
       if (!periodId) return false;
 
+      // Obtener notas actuales del periodo
+      const { data: currentPeriod } = await supabase
+        .from('monthly_periods')
+        .select('notes')
+        .eq('id', periodId)
+        .maybeSingle();
+
+      const updatedNotes = this.encodeSalaryNotes(currentPeriod?.notes, source, payDay);
+
+      const updatePayload: Record<string, any> = { base_salary: salary };
+      if (updatedNotes) {
+        updatePayload.notes = updatedNotes;
+      }
+
       const { error } = await supabase
         .from('monthly_periods')
-        .update({ base_salary: salary })
+        .update(updatePayload)
         .eq('id', periodId);
 
       if (error) {
@@ -1482,19 +1558,47 @@ export class SupabaseDataService {
       }
 
       if (propagateToFuture) {
-        // Actualizar periodos futuros existentes en Supabase para mantener vigencia de la nómina
-        await supabase
+        // En finanzas bancarias: el contrato de nómina rige en cascada hacia el futuro a partir de este mes.
+        // 1. Periodos futuros existentes en el mismo año
+        const { data: sameYearPeriods } = await supabase
           .from('monthly_periods')
-          .update({ base_salary: salary })
+          .select('id, notes')
           .eq('user_id', userId)
           .eq('year', year)
           .gt('month', month);
 
-        await supabase
+        if (sameYearPeriods && sameYearPeriods.length > 0) {
+          for (const p of sameYearPeriods) {
+            const pNotes = this.encodeSalaryNotes(p.notes, source, payDay);
+            await supabase
+              .from('monthly_periods')
+              .update({
+                base_salary: salary,
+                notes: pNotes
+              })
+              .eq('id', p.id);
+          }
+        }
+
+        // 2. Periodos futuros existentes en años posteriores
+        const { data: nextYearsPeriods } = await supabase
           .from('monthly_periods')
-          .update({ base_salary: salary })
+          .select('id, notes')
           .eq('user_id', userId)
           .gt('year', year);
+
+        if (nextYearsPeriods && nextYearsPeriods.length > 0) {
+          for (const p of nextYearsPeriods) {
+            const pNotes = this.encodeSalaryNotes(p.notes, source, payDay);
+            await supabase
+              .from('monthly_periods')
+              .update({
+                base_salary: salary,
+                notes: pNotes
+              })
+              .eq('id', p.id);
+          }
+        }
       }
 
       return true;

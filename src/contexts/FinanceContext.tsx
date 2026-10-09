@@ -1464,15 +1464,19 @@ function useFinanceController() {
 
   // Evaluación prospectiva de liquidez a la fecha exacta de vencimiento vs fecha de sueldo
   const cardsLiquidityAssessment = useMemo(() => {
+    const allOtherIncomes = Object.values(extraIncomes).flat();
     return evaluateCardsLiquidityCoverage({
       paymentPlans: rawCardPaymentPlan,
       currentDebitBalanceToday: debitStats.currentDebitBalanceToday,
       projectedDebitBalanceMonthEnd: debitStats.projectedDebitBalanceMonthEnd,
       salaries,
       otherIncomes: currentOtherIncomes,
+      allOtherIncomes,
+      paymentMethods,
       payables,
-      receivables: monthReceivables,
+      receivables,
       monthTransactions: currentMonthTransactions,
+      allTransactions: transactions,
       currentDateStr,
       currentYear,
       currentMonth
@@ -1483,9 +1487,12 @@ function useFinanceController() {
     debitStats.projectedDebitBalanceMonthEnd,
     salaries,
     currentOtherIncomes,
+    extraIncomes,
+    paymentMethods,
     payables,
-    monthReceivables,
+    receivables,
     currentMonthTransactions,
+    transactions,
     currentDateStr,
     currentYear,
     currentMonth

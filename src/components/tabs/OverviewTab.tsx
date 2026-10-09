@@ -1238,20 +1238,18 @@ export const OverviewTab: React.FC = () => {
                     <div className="advisor-mismatch-banner">
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
                         <span style={{ fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent-warning)' }}>
-                          Desfase de Ciclo Pre-Sueldo
+                          Desfase Pre-Nómina
                         </span>
                         <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
                           Atención
                         </span>
                       </div>
                       <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
-                        Vencen <strong>{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> antes de tu sueldo (día {primarySalaryPayDay}). Tu saldo actual es {formatSoles(cardsLiquidityAssessment.currentAvailableToday)} (brecha: <strong className="text-danger">-{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong>). Al ingresar tu sueldo cerrarás el mes con saldo a favor de <strong className="text-success">{formatSoles(debitStats.projectedDebitBalanceMonthEnd)}</strong>.
+                        Compromisos antes de nómina (día {primarySalaryPayDay}): <strong>{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> · Saldo disponible: {formatSoles(cardsLiquidityAssessment.currentAvailableToday)} · Brecha: <strong className="text-danger">-{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong>.
                       </p>
-                      {cardsLiquidityAssessment.recommendedAction && (
-                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '8px', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
-                          <strong>Sugerencia:</strong> {cardsLiquidityAssessment.recommendedAction}
-                        </div>
-                      )}
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        Cierre solvente tras abono de nómina ({formatSoles(debitStats.projectedDebitBalanceMonthEnd)}).
+                      </div>
                     </div>
                   );
                 }
@@ -1261,20 +1259,18 @@ export const OverviewTab: React.FC = () => {
                     <div className="advisor-deficit-banner">
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
                         <span style={{ fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent-danger)' }}>
-                          Déficit de Ciclo Proyectado
+                          Déficit Proyectado
                         </span>
                         <span className="badge badge-danger" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
                           Déficit
                         </span>
                       </div>
                       <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
-                        Los compromisos totales de este ciclo suman <strong>{formatSoles(cardsLiquidityAssessment.totalDueSoon)}</strong>, superando el saldo proyectado al cierre del mes ({formatSoles(debitStats.projectedDebitBalanceMonthEnd)}).
+                        Compromisos totales: <strong>{formatSoles(cardsLiquidityAssessment.totalDueSoon)}</strong> · Saldo al cierre: {formatSoles(debitStats.projectedDebitBalanceMonthEnd)}.
                       </p>
-                      {cardsLiquidityAssessment.recommendedAction && (
-                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '8px', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
-                          <strong>Recomendación:</strong> {cardsLiquidityAssessment.recommendedAction}
-                        </div>
-                      )}
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        Requiere provisión de fondos para cubrir obligaciones del período.
+                      </div>
                     </div>
                   );
                 }
@@ -1283,7 +1279,7 @@ export const OverviewTab: React.FC = () => {
                   <div className="advisor-covered-callout">
                     <CheckCircle2 size={16} color="var(--accent-success)" style={{ flexShrink: 0 }} />
                     <span>
-                      Tus próximos pagos de tarjeta (<strong>{formatSoles(cardsLiquidityAssessment.totalDueSoon)}</strong>) están cubiertos con tu saldo disponible.
+                      Próximos pagos de tarjeta (<strong>{formatSoles(cardsLiquidityAssessment.totalDueSoon)}</strong>) cubiertos con liquidez proyectada.
                     </span>
                   </div>
                 );

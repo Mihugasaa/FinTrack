@@ -350,6 +350,8 @@ export interface CardLiquidityCoverage {
   headline?: string;               // Título de estado formal fintech (ej. 'Desfase pre-abono')
   message: string;                 // Diagnóstico técnico y conciso
   actionTip?: string;              // Sugerencia operativa (pago parcial, cambio de ciclo)
+  remainingAfterPayment?: number;  // Saldo remanente tras este pago
+  includedExtraIncomes?: number;   // Monto de ingresos adicionales considerados en esta ventana
 }
 
 export interface CardPaymentPlanItem {

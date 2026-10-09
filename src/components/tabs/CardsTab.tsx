@@ -807,17 +807,15 @@ export const CardsTab: React.FC = () => {
                     Control de Pagos del Mes
                   </span>
                   <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>
-                    Pago antes de sueldo
+                    Desfase pre-nómina
                   </span>
                 </div>
-                <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                  Tienes pagos por <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> que vencen antes de que cobres tu sueldo (día {cardsLiquidityAssessment.primarySalaryPayDay}). Con tu saldo actual ({formatSoles(cardsLiquidityAssessment.currentAvailableToday)}), faltan <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong> para cubrirlos en su totalidad. Tras el abono de tu sueldo, tu mes se proyecta solvente.
+                <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45, fontSize: '0.82rem' }}>
+                  Compromisos antes de nómina: <strong className="tabular-nums text-danger">{formatSoles(cardsLiquidityAssessment.totalDueBeforeSalary)}</strong> · Saldo disponible hoy: <span className="tabular-nums">{formatSoles(cardsLiquidityAssessment.currentAvailableToday)}</span> · Brecha temporal: <strong className="tabular-nums text-danger">-{formatSoles(cardsLiquidityAssessment.shortfallBeforeSalary)}</strong>.
                 </div>
-                {cardsLiquidityAssessment.recommendedAction && (
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
-                    <strong>Recomendación:</strong> {cardsLiquidityAssessment.recommendedAction}
-                  </div>
-                )}
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px' }}>
+                  Liquidez cubierta al cierre del ciclo tras el abono de nómina (día {cardsLiquidityAssessment.primarySalaryPayDay}).
+                </div>
               </div>
             )}
 
@@ -948,11 +946,37 @@ export const CardsTab: React.FC = () => {
                       {/* Diagnóstico de liquidez: Cinta sutil si está cubierta, o Caja de alerta si hay desfase */}
                       {coverage && coverage.status !== 'PAID' && (
                         coverage.status === 'COVERED' ? (
-                          <div className="due-plan-reassurance-ribbon">
-                            <ShieldCheck size={15} style={{ color: 'var(--accent-success)', flexShrink: 0 }} />
-                            <span>
-                              <strong>Cobertura confirmada:</strong> {coverage.message}
-                            </span>
+                          <div
+                            className="due-plan-reassurance-ribbon"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                              gap: '6px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <ShieldCheck size={14} style={{ color: 'var(--accent-success)', flexShrink: 0 }} />
+                              <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                                <strong style={{ color: 'var(--accent-success)' }}>Cubierto</strong> · {coverage.message}
+                              </span>
+                            </div>
+                            {coverage.includedExtraIncomes && coverage.includedExtraIncomes > 0.01 ? (
+                              <span
+                                className="badge badge-subtle tabular-nums"
+                                style={{
+                                  fontSize: '0.68rem',
+                                  padding: '1px 6px',
+                                  color: 'var(--text-muted)',
+                                  backgroundColor: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid var(--border-subtle)',
+                                  borderRadius: '4px'
+                                }}
+                              >
+                                +{formatSoles(coverage.includedExtraIncomes)} programados
+                              </span>
+                            ) : null}
                           </div>
                         ) : (
                           <div className={`due-plan-alert-box ${isMismatch ? 'alert-mismatch' : 'alert-deficit'}`}>
@@ -965,16 +989,16 @@ export const CardsTab: React.FC = () => {
                               </div>
                               {isMismatch && (
                                 <span className="tabular-nums text-danger" style={{ fontWeight: 700, fontSize: '0.74rem' }}>
-                                  Faltan antes de sueldo: {formatSoles(coverage.shortfallAmount)}
+                                  Brecha: -{formatSoles(coverage.shortfallAmount)}
                                 </span>
                               )}
                             </div>
-                            <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, marginTop: '2px' }}>
+                            <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, marginTop: '2px', fontSize: '0.78rem' }}>
                               {coverage.message}
                             </div>
                             {coverage.actionTip && (
                               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '4px', marginTop: '3px' }}>
-                                <strong>Recomendación:</strong> {coverage.actionTip}
+                                {coverage.actionTip}
                               </div>
                             )}
                           </div>

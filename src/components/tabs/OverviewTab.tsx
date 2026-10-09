@@ -614,7 +614,10 @@ export const OverviewTab: React.FC = () => {
                   </span>
                 </div>
                 <span className="legend-amount tabular-nums">
-                  {item.percentage.toFixed(0)}% ({formatSoles(item.total)})
+                  {item.percentage > 0 && item.percentage < 1
+                    ? '< 1%'
+                    : `${Math.round(item.percentage)}%`}{' '}
+                  ({formatSoles(item.total)})
                 </span>
               </div>
             ))}

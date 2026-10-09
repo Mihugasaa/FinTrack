@@ -1516,8 +1516,10 @@ function useFinanceController() {
       map.set(cat.id, existing);
     });
 
-    const items = Array.from(map.values()).sort((a, b) => b.total - a.total);
-    const totalSpent = diagnostic.totalExpensesConsumed || 1;
+    const items = Array.from(map.values())
+      .filter(item => item.total > 0.005)
+      .sort((a, b) => b.total - a.total);
+    const totalSpent = Math.max(0, diagnostic.totalExpensesConsumed) || items.reduce((acc, i) => acc + i.total, 0) || 1;
 
     return items.map(item => ({
       ...item,

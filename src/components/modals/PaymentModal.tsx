@@ -33,6 +33,7 @@ export const PaymentModal: React.FC = () => {
     paymentDate,
     setPaymentDate,
     cardAmortization,
+    cardPayments,
     paymentTargetMonth,
     setPaymentTargetMonth,
     prepaymentMode,
@@ -56,8 +57,15 @@ export const PaymentModal: React.FC = () => {
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
 
   const activePlans = React.useMemo(() => {
-    return getActiveInstallmentPlansForCard(paymentCardId, transactions, paymentMethods);
-  }, [paymentCardId, transactions, paymentMethods, getActiveInstallmentPlansForCard]);
+    return getActiveInstallmentPlansForCard(
+      paymentCardId,
+      transactions,
+      paymentMethods,
+      undefined,
+      cardPayments,
+      cardAmortization
+    );
+  }, [paymentCardId, transactions, paymentMethods, cardPayments, cardAmortization, getActiveInstallmentPlansForCard]);
 
   const isPrepayment = paymentTargetMonth.startsWith('INSTALLMENT_PLAN:');
   const selectedPlan = isPrepayment ? (activePlans.find(p => `INSTALLMENT_PLAN:${p.planId}` === paymentTargetMonth) || null) : null;

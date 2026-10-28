@@ -416,6 +416,9 @@ export interface ApplyPrepaymentParams {
   prepaymentAmount: number;
   mode: PrepaymentMode;
   paymentDate?: string;
+  cardPayments?: CardPayment[];
+  paymentMethods?: PaymentMethod[];
+  cardAmortization?: CardAmortizationSchedule;
 }
 
 export interface ApplyPrepaymentResult {

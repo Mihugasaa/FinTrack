@@ -325,10 +325,19 @@ export const CardsTab: React.FC = () => {
                       card.hasPositiveBalance ? (
                         <span className="text-success">A favor en cuenta</span>
                       ) : card.totalAccumulatedDebt > 0 ? (
-                        <span className="text-muted" title={card.futureInstallmentsDebt ? `Incluye ${formatSoles(card.futureInstallmentsDebt)} en cuotas diferidas no facturadas` : undefined}>
-                          {usedPercent.toFixed(0)}% de línea utilizada
-                          {card.futureInstallmentsDebt && card.futureInstallmentsDebt > 0 ? ` (${card.totalInstallmentPlansCount || 1} plan en cuotas)` : ''}
-                        </span>
+                        <>
+                          <span className="text-muted" title={card.futureInstallmentsDebt ? `Incluye ${formatSoles(card.futureInstallmentsDebt)} en cuotas diferidas no facturadas` : undefined}>
+                            {usedPercent.toFixed(0)}% de línea utilizada
+                          </span>
+                          {card.futureInstallmentsDebt && card.futureInstallmentsDebt > 0 ? (
+                            <span
+                              className="card-zen-installments-pill"
+                              title={`Incluye ${formatSoles(card.futureInstallmentsDebt)} en cuotas diferidas no facturadas`}
+                            >
+                              {card.totalInstallmentPlansCount || 1} plan{card.totalInstallmentPlansCount !== 1 ? 'es' : ''} en cuotas
+                            </span>
+                          ) : null}
+                        </>
                       ) : (
                         <span className="text-muted">Sin deuda acumulada</span>
                       )
@@ -469,9 +478,11 @@ export const CardsTab: React.FC = () => {
                 </div>
                 <div className="card-zen-footer-right tabular-nums">
                   {limit > 0 && (
-                    <span>
-                      Límite: {formatSoles(limit)} •{' '}
+                    <>
+                      <span className="card-zen-limit-info">Límite: {formatSoles(limit)}</span>
+                      <span className="card-zen-dot card-zen-dot-desktop">•</span>
                       <span
+                        className="card-zen-disp-info"
                         style={{
                           color:
                             card.availableCredit !== undefined && card.availableCredit <= 0
@@ -481,7 +492,7 @@ export const CardsTab: React.FC = () => {
                       >
                         Disp.: {formatSoles(card.availableCredit ?? Math.max(0, limit - (card.hasPositiveBalance ? 0 : card.totalAccumulatedDebt)))}
                       </span>
-                    </span>
+                    </>
                   )}
                 </div>
               </div>

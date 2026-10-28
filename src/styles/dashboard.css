@@ -6927,44 +6927,54 @@ body.modal-open {
   gap: var(--space-md);
   margin: 0;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .credit-cards-grid,
 .credit-cards-grid-2x2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 12px;
   margin-bottom: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (min-width: 1080px) {
   .credit-cards-grid.cols-3,
   .credit-cards-grid-2x2.cols-3 {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .credit-cards-grid.cols-2,
   .credit-cards-grid-2x2.cols-2 {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .credit-cards-grid.cols-1,
   .credit-cards-grid-2x2.cols-1 {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     max-width: 520px;
   }
 }
 
 @media (max-width: 1079px) and (min-width: 769px) {
   .credit-cards-grid,
-  .credit-cards-grid-2x2 {
-    grid-template-columns: repeat(2, 1fr);
+  .credit-cards-grid-2x2,
+  .credit-cards-grid.cols-3,
+  .credit-cards-grid.cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
   .credit-cards-grid,
-  .credit-cards-grid-2x2 {
-    grid-template-columns: 1fr;
+  .credit-cards-grid-2x2,
+  .credit-cards-grid.cols-3,
+  .credit-cards-grid.cols-2,
+  .credit-cards-grid.cols-1 {
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
+    width: 100%;
   }
 }
 
@@ -6979,6 +6989,10 @@ body.modal-open {
   justify-content: space-between;
   gap: 10px;
   min-height: 125px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   transition: all 0.15s ease;
 }
@@ -6988,10 +7002,20 @@ body.modal-open {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
+@media (max-width: 480px) {
+  .credit-card-zen-balanced {
+    padding: 12px 14px;
+    gap: 8px;
+    border-radius: 12px;
+  }
+}
+
 .card-zen-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-width: 0;
+  gap: 8px;
 }
 
 .card-zen-title {
@@ -7001,13 +7025,16 @@ body.modal-open {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
 }
 
 .card-zen-body {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
 }
 
 .card-zen-body-left {
@@ -7015,6 +7042,7 @@ body.modal-open {
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+  flex: 1;
 }
 
 .card-zen-stage-label {
@@ -7023,11 +7051,38 @@ body.modal-open {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-zen-stage-sub {
   font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.card-zen-installments-pill {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--accent-brand);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  padding: 1px 6px;
+  border-radius: 4px;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.25;
+}
+
+:root[data-theme="dark"] .card-zen-installments-pill {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(99, 102, 241, 0.32);
 }
 
 .card-zen-body-right {
@@ -7036,14 +7091,17 @@ body.modal-open {
   align-items: flex-end;
   text-align: right;
   flex-shrink: 0;
+  min-width: 0;
   gap: 2px;
 }
 
 .card-zen-amount-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
+  justify-content: flex-end;
   gap: 6px;
-  white-space: nowrap;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .card-zen-amount {
@@ -7051,6 +7109,12 @@ body.modal-open {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
+}
+
+@media (max-width: 480px) {
+  .card-zen-amount {
+    font-size: 1.15rem;
+  }
 }
 
 .card-zen-total-est {
@@ -7102,21 +7166,49 @@ body.modal-open {
 
 .card-zen-footer {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 2px;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
   font-size: 0.72rem;
   color: var(--text-muted);
+  min-width: 0;
 }
 
 .card-zen-footer-left {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  color: var(--text-muted);
 }
 
 .card-zen-footer-right {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
   font-weight: 500;
+  min-width: 0;
+  white-space: nowrap;
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 4px;
+  font-size: 0.72rem;
+}
+
+.card-zen-limit-info {
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.card-zen-disp-info {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.card-zen-dot-desktop {
+  display: none;
 }
 
 .card-zen-dot {
@@ -7228,6 +7320,28 @@ body.modal-open {
 }
 
 @media (max-width: 640px) {
+  .debit-hero-card {
+    padding: 16px 14px;
+    gap: 14px;
+    border-radius: 12px;
+  }
+  .debit-hero-main {
+    gap: 12px;
+  }
+  .debit-icon-box {
+    width: 40px;
+    height: 40px;
+  }
+  .debit-balance-val {
+    font-size: 1.35rem;
+  }
+  .debit-hero-stats {
+    gap: 16px;
+    width: 100%;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-subtle);
+  }
   .cards-section-header {
     flex-direction: column;
     align-items: flex-start;
@@ -7235,6 +7349,14 @@ body.modal-open {
   }
   .cards-debt-summary-clean {
     width: 100%;
+  }
+  .debt-summary-pipe {
+    display: none;
+  }
+  .debt-summary-row {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 4px 8px;
   }
 }
 

@@ -210,7 +210,9 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
         planId,
         prepaymentAmount: num,
         mode: prepaymentMode,
-        paymentDate: targetDate
+        paymentDate: targetDate,
+        cardPayments,
+        paymentMethods
       });
 
       // Actualizar estado local inmediatamente

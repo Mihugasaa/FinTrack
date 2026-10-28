@@ -35,6 +35,12 @@ export const PaymentModal: React.FC = () => {
     cardAmortization,
     paymentTargetMonth,
     setPaymentTargetMonth,
+    prepaymentMode,
+    setPrepaymentMode,
+    getActiveInstallmentPlansForCard,
+    transactions,
+    currentYear,
+    currentMonth,
     formatSoles,
     handleBackdropMouseDown,
     handleBackdropClick,
@@ -49,6 +55,13 @@ export const PaymentModal: React.FC = () => {
   const [isEditingItf, setIsEditingItf] = React.useState(false);
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
 
+  const activePlans = React.useMemo(() => {
+    return getActiveInstallmentPlansForCard(paymentCardId, transactions, paymentMethods);
+  }, [paymentCardId, transactions, paymentMethods, getActiveInstallmentPlansForCard]);
+
+  const isPrepayment = paymentTargetMonth.startsWith('INSTALLMENT_PLAN:');
+  const selectedPlan = isPrepayment ? (activePlans.find(p => `INSTALLMENT_PLAN:${p.planId}` === paymentTargetMonth) || null) : null;
+
   const parsedAmt = parseFloat(paymentAmount) || 0;
   const parsedRate = parseFloat(paymentExchangeRate) || 1;
   const calculatedPen = paymentCurrency === 'USD' ? Math.round(parsedAmt * parsedRate * 100) / 100 : parsedAmt;
@@ -60,7 +73,24 @@ export const PaymentModal: React.FC = () => {
   const totalDebitFromAccount = calculatedPen + effectiveItf;
 
   const pendingCycles = cardAmortization?.pendingCyclesByCard?.get(paymentCardId) || [];
-  const matchedCycle = pendingCycles.find(c => c.monthKey === paymentTargetMonth) || (paymentTargetMonth === '' ? pendingCycles[0] : null);
+
+  // Filtrado de estados de cuenta reales: Meses vencidos impagos + ciclo actual + ciclo siguiente como máximo.
+  // Los meses a futuro lejano (ej. 2027 a 2030) corresponden a cuotas no facturadas y se amortizan vía planes de cuotas.
+  const maxAllowedMonthKey = React.useMemo(() => {
+    let y = currentYear;
+    let m = currentMonth + 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    return `${y}-${m.toString().padStart(2, '0')}`;
+  }, [currentYear, currentMonth]);
+
+  const filteredPendingCycles = React.useMemo(() => {
+    return pendingCycles.filter(c => c.monthKey <= maxAllowedMonthKey);
+  }, [pendingCycles, maxAllowedMonthKey]);
+
+  const matchedCycle = filteredPendingCycles.find(c => c.monthKey === paymentTargetMonth) || (paymentTargetMonth === '' ? filteredPendingCycles[0] : null);
 
   const cycleOptions = [
     {
@@ -69,7 +99,7 @@ export const PaymentModal: React.FC = () => {
       subtitle: 'Cubre el estado de cuenta más próximo a vencer',
       icon: <CalendarClock size={15} style={{ color: 'var(--accent-brand)' }} />
     },
-    ...pendingCycles.map(c => {
+    ...filteredPendingCycles.map(c => {
       const parts: string[] = [];
       if (c.unpaidPen > 0) parts.push(formatSoles(c.unpaidPen));
       if (c.unpaidUsd > 0) parts.push(`$${c.unpaidUsd.toFixed(2)} USD`);
@@ -80,6 +110,17 @@ export const PaymentModal: React.FC = () => {
         icon: <Calendar size={15} style={{ color: 'var(--accent-warning)' }} />
       };
     }),
+    ...(activePlans.length > 0 ? activePlans.map(plan => {
+      const isUsd = plan.currency === 'USD';
+      const quotaStr = isUsd ? `$${plan.monthlyAmount.toFixed(2)}` : formatSoles(plan.monthlyAmount);
+      const totalStr = isUsd ? `$${plan.remainingDebt.toFixed(2)}` : formatSoles(plan.remainingDebt);
+      return {
+        value: `INSTALLMENT_PLAN:${plan.planId}`,
+        label: plan.description,
+        subtitle: `${plan.remainingInstallments} cuotas de ${quotaStr} • Saldo: ${totalStr}`,
+        icon: <TrendingUp size={15} style={{ color: 'var(--accent-brand)' }} />
+      };
+    }) : []),
     {
       value: 'EXTRAORDINARY',
       label: 'Abono general a la tarjeta',
@@ -87,6 +128,8 @@ export const PaymentModal: React.FC = () => {
       icon: <CreditCard size={15} style={{ color: 'var(--accent-success)' }} />
     }
   ];
+
+
 
   return (
     <div
@@ -128,11 +171,26 @@ export const PaymentModal: React.FC = () => {
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '4px' }}>
               <label className="form-label" style={{ margin: 0 }}>Mes o estado de cuenta</label>
-              {matchedCycle && (
+              {selectedPlan ? (
                 <button
                   type="button"
                   className="btn-secondary"
-                  style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px' }}
+                  style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}
+                  onClick={() => {
+                    setPaymentAmount(selectedPlan.remainingDebt.toFixed(2));
+                    if (selectedPlan.currency === 'USD') {
+                      setPaymentCurrency('USD');
+                    }
+                  }}
+                  title="Pagar la deuda total de este plan"
+                >
+                  Pagar deuda total ({selectedPlan.currency === 'USD' ? `$${selectedPlan.remainingDebt.toFixed(2)}` : formatSoles(selectedPlan.remainingDebt)})
+                </button>
+              ) : matchedCycle ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}
                   onClick={() => {
                     const dueAmt = paymentCurrency === 'USD'
                       ? (matchedCycle.unpaidUsd > 0 ? matchedCycle.unpaidUsd : matchedCycle.unpaidPen)
@@ -143,15 +201,25 @@ export const PaymentModal: React.FC = () => {
                 >
                   Pagar mes completo ({paymentCurrency === 'USD' && matchedCycle.unpaidUsd > 0 ? `$${matchedCycle.unpaidUsd.toFixed(2)}` : formatSoles(matchedCycle.unpaidPen)})
                 </button>
-              )}
+              ) : null}
             </div>
             <CustomSelect
               id="select-payment-target-cycle"
               value={paymentTargetMonth}
-              onChange={val => setPaymentTargetMonth(val)}
+              onChange={val => {
+                setPaymentTargetMonth(val);
+                if (val.startsWith('INSTALLMENT_PLAN:')) {
+                  const p = activePlans.find(plan => `INSTALLMENT_PLAN:${plan.planId}` === val);
+                  if (p && p.currency === 'USD') {
+                    setPaymentCurrency('USD');
+                  }
+                }
+              }}
               options={cycleOptions}
             />
           </div>
+
+
 
           {/* Selector de Moneda: Soles o Dólares */}
           <div className="form-group">
@@ -310,8 +378,199 @@ export const PaymentModal: React.FC = () => {
             />
           </div>
 
+          {/* Modalidad de amortización anticipada (Bancaria / SBS) */}
+          {selectedPlan && (() => {
+            const isPlanUsd = selectedPlan.currency === 'USD';
+            const effectivePlanPrepay = isPlanUsd
+              ? (paymentCurrency === 'USD' ? parsedAmt : (parsedRate > 0 ? parsedAmt / parsedRate : 0))
+              : calculatedPen;
+            const quotaAmt = selectedPlan.monthlyAmount;
+            const fullQuotasCovered = quotaAmt > 0 ? Math.min(selectedPlan.remainingInstallments, Math.floor((effectivePlanPrepay + 0.009) / quotaAmt)) : 0;
+            const newBalance = Math.max(0, Math.round((selectedPlan.remainingDebt - effectivePlanPrepay) * 100) / 100);
+            const remainingInstallmentsCount = selectedPlan.remainingInstallments - fullQuotasCovered;
+            const newMonthlyQuota = selectedPlan.remainingInstallments > 0 ? Math.round((newBalance / selectedPlan.remainingInstallments) * 100) / 100 : 0;
+            const formatPlanAmt = (val: number) => isPlanUsd ? `$${val.toFixed(2)} USD` : formatSoles(val);
+
+            return (
+              <div style={{
+                marginBottom: '16px',
+                padding: '14px',
+                background: 'var(--bg-glass)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '12px'
+              }}>
+                <div style={{ marginBottom: '10px' }}>
+                  <label className="form-label" style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <TrendingUp size={15} style={{ color: 'var(--accent-brand)' }} />
+                    ¿Cómo aplicar el abono?
+                  </label>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                  {/* Opción A: Reducir plazo */}
+                  <button
+                    type="button"
+                    onClick={() => setPrepaymentMode('REDUCE_TERM')}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      background: prepaymentMode === 'REDUCE_TERM' ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-subtle)',
+                      border: prepaymentMode === 'REDUCE_TERM' ? '1.5px solid var(--accent-brand)' : '1px solid var(--border-subtle)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span style={{
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      color: prepaymentMode === 'REDUCE_TERM' ? 'var(--accent-brand)' : 'var(--text-primary)'
+                    }}>
+                      Reducir plazo
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Menos cuotas por pagar
+                    </span>
+                  </button>
+
+                  {/* Opción B: Reducir cuota */}
+                  <button
+                    type="button"
+                    onClick={() => setPrepaymentMode('REDUCE_AMOUNT')}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      background: prepaymentMode === 'REDUCE_AMOUNT' ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-subtle)',
+                      border: prepaymentMode === 'REDUCE_AMOUNT' ? '1.5px solid var(--accent-brand)' : '1px solid var(--border-subtle)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span style={{
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      color: prepaymentMode === 'REDUCE_AMOUNT' ? 'var(--accent-brand)' : 'var(--text-primary)'
+                    }}>
+                      Reducir cuota
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Cuota mensual más baja
+                    </span>
+                  </button>
+                </div>
+
+                {/* Resumen del nuevo cronograma (Key-Value) */}
+                {parsedAmt <= 0 ? (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '10px',
+                    padding: '10px 12px',
+                    background: 'var(--bg-subtle)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-subtle)'
+                  }}>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cuotas pendientes</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--text-primary)' }}>{selectedPlan.remainingInstallments} × {formatPlanAmt(selectedPlan.monthlyAmount)}</strong>
+                    </div>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Saldo actual</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--text-primary)' }}>{formatPlanAmt(selectedPlan.remainingDebt)}</strong>
+                    </div>
+                  </div>
+                ) : effectivePlanPrepay >= selectedPlan.remainingDebt - 0.009 ? (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '10px',
+                    padding: '10px 12px',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(16, 185, 129, 0.25)'
+                  }}>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--accent-success)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cuotas canceladas</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--accent-success)' }}>Todas ({selectedPlan.remainingInstallments} de {selectedPlan.remainingInstallments})</strong>
+                    </div>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--accent-success)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Saldo restante</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--accent-success)' }}>{formatPlanAmt(0)}</strong>
+                    </div>
+                  </div>
+                ) : prepaymentMode === 'REDUCE_TERM' ? (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    background: 'var(--bg-subtle)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-subtle)'
+                  }}>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Canceladas</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--accent-brand)' }}>
+                        {fullQuotasCovered > 0 ? `${fullQuotasCovered} ${fullQuotasCovered === 1 ? 'cuota' : 'cuotas'}` : '0 (parcial)'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Por pagar</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--text-primary)' }}>
+                        {remainingInstallmentsCount} × {formatPlanAmt(quotaAmt)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nuevo saldo</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--text-primary)' }}>
+                        {formatPlanAmt(newBalance)}
+                      </strong>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    background: 'var(--bg-subtle)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-subtle)'
+                  }}>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nueva cuota</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--accent-brand)' }}>
+                        {formatPlanAmt(newMonthlyQuota)}/mes
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Plazo</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--text-primary)' }}>
+                        {selectedPlan.remainingInstallments} cuotas
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nuevo saldo</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--text-primary)' }}>
+                        {formatPlanAmt(newBalance)}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+
           <div className="form-group">
-            <label className="form-label">Origen de los Fondos / Motivo del Abono</label>
+            <label className="form-label">Origen de los fondos</label>
             <CustomSelect
               id="select-card-payment-source"
               value={paymentSourceType}
@@ -529,6 +788,15 @@ export const PaymentModal: React.FC = () => {
                 </div>
               )}
 
+              {selectedPlan && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Modalidad:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--accent-brand)' }}>
+                    {prepaymentMode === 'REDUCE_TERM' ? 'Reducir plazo' : 'Reducir cuota'}
+                  </span>
+                </div>
+              )}
+
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -565,12 +833,13 @@ export const PaymentModal: React.FC = () => {
             </button>
             <button type="submit" className="btn-primary">
               {isEditing
-                ? 'Guardar Cambios'
-                : paymentCurrency === 'USD'
-                ? `Pagar $${parsedAmt.toFixed(2)} USD`
-                : 'Confirmar Pago'}
+                ? 'Guardar cambios'
+                : parsedAmt > 0
+                ? `Pagar ${paymentCurrency === 'USD' ? `$${parsedAmt.toFixed(2)} USD` : formatSoles(parsedAmt)}`
+                : 'Confirmar pago'}
             </button>
           </div>
+
         </form>
       </div>
     </div>

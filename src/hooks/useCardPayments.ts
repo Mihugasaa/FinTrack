@@ -5,14 +5,16 @@ import { SupabaseDataService } from '@/services/supabaseData.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { initialPaymentMethods } from '@/lib/defaults';
-import { calculateItf } from '@/lib/calculations';
-import { CardPayment, PaymentMethod, CurrencyCode } from '@/types';
+import { calculateItf, applyInstallmentPrepayment } from '@/lib/calculations';
+import { CardPayment, PaymentMethod, CurrencyCode, Transaction, PrepaymentMode } from '@/types';
 import { generateUUID } from '@/lib/utils';
 
 interface UseCardPaymentsDeps {
   paymentMethods: PaymentMethod[];
   currentYear: number;
   currentMonth: number;
+  transactions?: Transaction[];
+  setTransactions?: React.Dispatch<React.SetStateAction<Transaction[]>>;
 }
 
 /**
@@ -20,7 +22,7 @@ interface UseCardPaymentsDeps {
  * o editar un abono (con su origen: cuenta débito, reembolso de comercio o abono
  * de banco, y moneda PEN/USD con tipo de cambio editable).
  */
-export function useCardPayments({ paymentMethods, currentYear, currentMonth }: UseCardPaymentsDeps) {
+export function useCardPayments({ paymentMethods, currentYear, currentMonth, transactions, setTransactions }: UseCardPaymentsDeps) {
   const [cardPayments, setCardPayments] = useState<CardPayment[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentSourceType, setPaymentSourceType] = useState<'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' | 'USD_SAVINGS_ACCOUNT'>('DEBIT_ACCOUNT');
@@ -32,6 +34,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
   const [paymentTcInfo, setPaymentTcInfo] = useState<ExchangeRateResult | null>(null);
   const [hasUserManuallyEditedPaymentTc, setHasUserManuallyEditedPaymentTc] = useState(false);
   const [isFetchingPaymentTc, setIsFetchingPaymentTc] = useState(false);
+  const [prepaymentMode, setPrepaymentMode] = useState<PrepaymentMode>('REDUCE_TERM');
 
   // ITF bancario (0.005% con regla de redondeo oficial SBS/SUNAT a múltiplos de 5 céntimos)
   const [applyItf, setApplyItf] = useState(true);
@@ -94,6 +97,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setHasUserManuallyEditedPaymentTc(false);
     setPaymentSourceType('DEBIT_ACCOUNT');
     setPaymentTargetMonth(typeof preselectedTargetMonth === 'string' ? preselectedTargetMonth : '');
+    setPrepaymentMode('REDUCE_TERM');
     setApplyItf(true);
     setItfAmountInput('');
     const now = new Date();
@@ -198,10 +202,38 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
       return;
     }
 
+    // Si el pago es una amortización anticipada de un plan de compras en cuotas
+    if (paymentTargetMonth && paymentTargetMonth.startsWith('INSTALLMENT_PLAN:') && transactions && setTransactions) {
+      const planId = paymentTargetMonth.replace('INSTALLMENT_PLAN:', '');
+      const prepayResult = applyInstallmentPrepayment({
+        allTransactions: transactions,
+        planId,
+        prepaymentAmount: num,
+        mode: prepaymentMode,
+        paymentDate: targetDate
+      });
+
+      // Actualizar estado local inmediatamente
+      setTransactions(prepayResult.newTransactionsList);
+
+      // Persistir de forma atómica en Supabase
+      if (prepayResult.deletedTransactionIds.length > 0) {
+        SupabaseDataService.deleteTransactions(prepayResult.deletedTransactionIds);
+      }
+      if (prepayResult.updatedTransactions.length > 0) {
+        for (const utx of prepayResult.updatedTransactions) {
+          SupabaseDataService.updateTransaction(utx);
+        }
+      }
+    }
+
     // Creación de nuevo abono con UUID nativo
     let newNotes = '';
     if (paymentTargetMonth) {
       newNotes = `[target:${paymentTargetMonth}]`;
+      if (paymentTargetMonth.startsWith('INSTALLMENT_PLAN:')) {
+        newNotes += ` [prepago:${prepaymentMode}]`;
+      }
     }
     if (effectiveItf > 0) {
       newNotes = `${newNotes ? `${newNotes} ` : ''}[itf:${effectiveItf.toFixed(2)}]`;
@@ -276,6 +308,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setPaymentDate,
     paymentTargetMonth,
     setPaymentTargetMonth,
+    prepaymentMode,
+    setPrepaymentMode,
     editingCardPaymentId,
     editingCardPaymentIndex,
     showAllHistoricalPayments,
@@ -291,3 +325,4 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth }: U
     setItfAmountInput
   };
 }
+

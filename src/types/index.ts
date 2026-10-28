@@ -147,6 +147,12 @@ export interface CardDebtSummary {
   totalAccumulatedDebtUsd?: number; // Componente puro en Dólares (Bimonetario)
   netDueInSelectedMonthUsd?: number;
   paidInAdvanceForSelectedMonth?: number;
+  // Campos de compras en cuotas y disponibilidad bancaria
+  futureInstallmentsDebt?: number;
+  futureInstallmentsDebtPen?: number;
+  futureInstallmentsDebtUsd?: number;
+  availableCredit?: number;
+  totalInstallmentPlansCount?: number;
 }
 
 export interface CardPayment {
@@ -388,4 +394,41 @@ export interface CardsGlobalLiquidityAssessment {
   summaryMessage: string;
   recommendedAction?: string;
 }
+
+export type PrepaymentMode = 'REDUCE_TERM' | 'REDUCE_AMOUNT';
+
+export interface ActiveInstallmentPlanInfo {
+  planId: string;
+  description: string;
+  totalInstallments: number;
+  remainingInstallments: number;
+  currentInstallment: number;
+  monthlyAmount: number;
+  remainingDebt: number;
+  currency: CurrencyCode;
+  nextDueDate?: string;
+  futureTransactionIds?: string[];
+}
+
+export interface ApplyPrepaymentParams {
+  allTransactions: Transaction[];
+  planId: string;
+  prepaymentAmount: number;
+  mode: PrepaymentMode;
+  paymentDate?: string;
+}
+
+export interface ApplyPrepaymentResult {
+  updatedTransactions: Transaction[];
+  deletedTransactionIds: string[];
+  newTransactionsList: Transaction[];
+  summary: {
+    planDescription: string;
+    previousRemainingDebt: number;
+    newRemainingDebt: number;
+    eliminatedCount?: number;
+    newMonthlyAmount?: number;
+  };
+}
+
 

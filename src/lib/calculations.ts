@@ -13,7 +13,11 @@ import {
   CardPaymentPlanItem,
   CardsGlobalLiquidityAssessment,
   CardMonthCoverage,
-  CardAmortizationSchedule
+  CardAmortizationSchedule,
+  ActiveInstallmentPlanInfo,
+  ApplyPrepaymentParams,
+  ApplyPrepaymentResult,
+  PrepaymentMode
 } from '@/types';
 import { FALLBACK_USD_PEN_RATE } from './constants';
 
@@ -1598,6 +1602,31 @@ export function calculateCardsDebtSummary(
       .filter(t => matchesCard(t.paymentMethodId) && t.date <= todayStr && t.currency === 'USD')
       .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.originalAmount) : curr.originalAmount), 0);
 
+    // 1.b CUOTAS FUTURAS DE COMPRAS EN CUOTAS ACTIVAS (Compromiso de línea bancaria)
+    // En la operativa bancaria, el 100% del monto de una compra en cuotas bloquea la línea de crédito
+    // y constituye deuda viva no facturada desde el momento de la compra.
+    const isInstallmentTx = (t: Transaction) =>
+      !!t.isInstallment ||
+      (typeof t.notes === 'string' && t.notes.includes('[isInstallment:true]')) ||
+      /\(Cuota\s+\d+[\s/de]+\d+\)/i.test(t.description || '');
+
+    const futureInstallmentTxsPen = allTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && isInstallmentTx(t) && t.date > todayStr && t.currency !== 'USD');
+    const futureInstallmentsPen = futureInstallmentTxsPen
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.amountPen) : curr.amountPen), 0);
+
+    const futureInstallmentTxsUsd = allTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && isInstallmentTx(t) && t.date > todayStr && t.currency === 'USD');
+    const futureInstallmentsUsd = futureInstallmentTxsUsd
+      .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.originalAmount) : curr.originalAmount), 0);
+
+    const activeInstallmentPlans = new Set(
+      allTransactions
+        .filter(t => matchesCard(t.paymentMethodId) && isInstallmentTx(t) && (t.installmentPlanId || t.description) && t.date >= todayStr)
+        .map(t => t.installmentPlanId || t.description.replace(/\(Cuota\s+\d+[\s/de]+\d+\)/i, '').trim())
+    );
+    const totalInstallmentPlansCount = activeInstallmentPlans.size;
+
     // 2. DESGLOSE DE ABONOS POR MONEDA (Soles y Dólares)
     const paidPenThisMonth = cardPayments
       .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate.startsWith(targetYM) && p.currency !== 'USD')
@@ -1615,13 +1644,13 @@ export function calculateCardsDebtSummary(
       .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate <= todayStr && p.currency === 'USD')
       .reduce((acc, curr) => acc + (curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid), 0);
 
-    // 3. ESTADO DE DEUDA EN DÓLARES (Bimonetario)
-    const totalAccumulatedDebtUsd = Math.max(0, consumedToDateUsd - paidToDateUsd);
-    const hasUsdDebt = totalAccumulatedDebtUsd > 0.009 || consumedThisMonthUsd > 0.009;
+    // 3. ESTADO DE DEUDA EN DÓLARES (Bimonetario, incluyendo cuotas diferidas en USD)
+    const totalAccumulatedDebtUsd = Math.max(0, consumedToDateUsd + futureInstallmentsUsd - paidToDateUsd);
+    const hasUsdDebt = totalAccumulatedDebtUsd > 0.009 || consumedThisMonthUsd > 0.009 || futureInstallmentsUsd > 0.009;
 
     // Transacciones en USD ordenadas cronológicamente para amortización FIFO del contravalor en soles
     const usdTransactionsToDate = allTransactions
-      .filter(t => matchesCard(t.paymentMethodId) && t.date <= todayStr && t.currency === 'USD')
+      .filter(t => matchesCard(t.paymentMethodId) && (t.date <= todayStr || isInstallmentTx(t)) && t.currency === 'USD')
       .sort((a, b) => a.date.localeCompare(b.date));
 
     // Cálculo del contravalor en soles del saldo pendiente en USD (Opción A: estabilidad histórica FIFO)
@@ -1648,9 +1677,9 @@ export function calculateCardsDebtSummary(
       usdPendingInPen = Math.round(usdPendingInPen * 100) / 100;
     }
 
-    // 4. BALANCES TOTALES Y CONSOLIDADOS
+    // 4. BALANCES TOTALES Y CONSOLIDADOS (incluyendo cuotas futuras diferidas)
     const initialDebt = card.initialDebt || 0;
-    const netBalancePen = initialDebt + consumedPenToDate - paidPenToDate;
+    const netBalancePen = initialDebt + consumedPenToDate + futureInstallmentsPen - paidPenToDate;
     const totalAccumulatedDebtPen = Math.max(0, netBalancePen);
 
     // Balance consolidado en Soles (congelado con tipo de cambio histórico de compra):
@@ -1658,6 +1687,12 @@ export function calculateCardsDebtSummary(
     const hasPositiveBalance = netBalance < -0.009 && totalAccumulatedDebtUsd <= 0.009;
     const creditBalanceAmount = hasPositiveBalance ? Math.abs(netBalance) : 0;
     const totalAccumulatedDebt = Math.max(0, netBalance);
+
+    // Línea de crédito disponible y desglose de cuotas futuras diferidas
+    const limit = card.creditLimit || 0;
+    const availableCredit = limit > 0 ? Math.max(0, limit - (hasPositiveBalance ? 0 : totalAccumulatedDebt)) : 0;
+    const futureUsdRate = allTransactions.find(t => matchesCard(t.paymentMethodId) && t.currency === 'USD' && t.exchangeRate && t.exchangeRate > 0)?.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const futureInstallmentsDebt = Math.round((futureInstallmentsPen + (futureInstallmentsUsd * futureUsdRate)) * 100) / 100;
 
     // Métricas totales agregadas en PEN (usando el amountPen histórico individual de cada consumo):
     const consumedThisMonthPen = consumedPenThisMonth;
@@ -1812,7 +1847,13 @@ export function calculateCardsDebtSummary(
       paidToDateUsd,
       totalAccumulatedDebtUsd,
       netDueInSelectedMonthUsd,
-      paidInAdvanceForSelectedMonth: cov ? cov.paidInAdvancePen : 0
+      paidInAdvanceForSelectedMonth: cov ? cov.paidInAdvancePen : 0,
+      // Cuotas futuras y disponibilidad bancaria real
+      futureInstallmentsDebt,
+      futureInstallmentsDebtPen: futureInstallmentsPen,
+      futureInstallmentsDebtUsd: futureInstallmentsUsd,
+      availableCredit,
+      totalInstallmentPlansCount
     };
   });
 }
@@ -1882,6 +1923,272 @@ export function generateInstallmentTransactions(
   }
 
   return results;
+}
+
+/**
+ * Detecta de forma resiliente si una transacción corresponde a una cuota de compra en cuotas
+ */
+export function isInstallmentTx(t: Transaction): boolean {
+  return (
+    !!t.isInstallment ||
+    (typeof t.notes === 'string' && t.notes.includes('[isInstallment:true]')) ||
+    /\(Cuota\s+\d+[\s/de]+\d+\)/i.test(t.description || '')
+  );
+}
+
+/**
+ * Obtiene la descripción base limpia de una compra en cuotas, removiendo '(Cuota X/Y)'
+ */
+export function getInstallmentBaseDescription(description?: string): string {
+  return (description || '').replace(/\(Cuota\s+\d+[\s/de]+\d+\)/i, '').trim();
+}
+
+/**
+ * Identifica de forma unívoca y persistente el ID del plan de cuotas al que pertenece una transacción
+ */
+export function getInstallmentPlanId(t: Transaction): string {
+  if (t.installmentPlanId) return t.installmentPlanId;
+  if (typeof t.notes === 'string') {
+    const m = t.notes.match(/\[planId:([^\]]+)\]/);
+    if (m && m[1]) return m[1];
+  }
+  const clean = getInstallmentBaseDescription(t.description || 'plan');
+  return `plan_${t.paymentMethodId}_${clean.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+}
+
+/**
+ * Obtiene todos los planes de compras en cuotas activos con cuotas futuras pendientes para una tarjeta
+ */
+export function getActiveInstallmentPlansForCard(
+  cardId: string,
+  allTransactions: Transaction[],
+  cards?: PaymentMethod[],
+  referenceDateStr?: string
+): ActiveInstallmentPlanInfo[] {
+  const targetCard = cards?.find(c => c.id === cardId);
+  const matchesCard = (txMethodId?: string) =>
+    txMethodId === cardId ||
+    (!!targetCard && typeof txMethodId === 'string' && txMethodId.toLowerCase().includes(targetCard.name.toLowerCase()));
+
+  const now = new Date();
+  const sysTodayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+  const todayStr = referenceDateStr || sysTodayStr;
+
+  // Filtrar transacciones de cuotas de la tarjeta que no sean devoluciones
+  const installmentTxs = allTransactions.filter(t => matchesCard(t.paymentMethodId) && isInstallmentTx(t) && !t.isRefund);
+
+  // Agrupar por ID de plan
+  const groupsByPlan = new Map<string, Transaction[]>();
+  for (const tx of installmentTxs) {
+    const pid = getInstallmentPlanId(tx);
+    const existing = groupsByPlan.get(pid) || [];
+    existing.push(tx);
+    groupsByPlan.set(pid, existing);
+  }
+
+  const results: ActiveInstallmentPlanInfo[] = [];
+
+  groupsByPlan.forEach((groupTxs, planId) => {
+    groupTxs.sort((a, b) => a.date.localeCompare(b.date));
+
+    // Cuotas futuras (diferidas, aún no facturadas)
+    const futureTxs = groupTxs.filter(t => t.date > todayStr);
+    if (futureTxs.length === 0) return;
+
+    const firstFuture = futureTxs[0];
+    const currency = firstFuture.currency || 'PEN';
+    const description = getInstallmentBaseDescription(firstFuture.description) || 'Compra en cuotas';
+
+    const totalInstallments = Math.max(
+      ...groupTxs.map(t => t.totalInstallments || 0),
+      groupTxs.length
+    );
+
+    const remainingInstallments = futureTxs.length;
+    const currentInstallment = firstFuture.currentInstallment || (totalInstallments - remainingInstallments + 1);
+
+    const remainingDebt = Math.round(
+      futureTxs.reduce((sum, t) => sum + (currency === 'USD' ? (t.originalAmount || 0) : (t.amountPen || 0)), 0) * 100
+    ) / 100;
+
+    const monthlyAmount = currency === 'USD' ? (firstFuture.originalAmount || 0) : (firstFuture.amountPen || 0);
+    const nextDueDate = firstFuture.paymentDueDate || firstFuture.date;
+
+    results.push({
+      planId,
+      description,
+      totalInstallments,
+      remainingInstallments,
+      currentInstallment,
+      monthlyAmount,
+      remainingDebt,
+      currency,
+      nextDueDate,
+      futureTransactionIds: futureTxs.map(t => t.id)
+    });
+  });
+
+  return results.sort((a, b) => (a.nextDueDate || '').localeCompare(b.nextDueDate || ''));
+}
+
+/**
+ * Aplica amortización anticipada (prepago) a un plan de compra en cuotas bajo normativa bancaria:
+ * - REDUCE_TERM (Reducir plazo): Amortiza el capital de las últimas cuotas del cronograma,
+ *   eliminando cuotas del final y manteniendo fija la cuota mensual de los meses intermedios.
+ * - REDUCE_AMOUNT (Reducir cuota): Mantiene el plazo original de cuotas pendientes y recalcula
+ *   hacia abajo el importe de cada una de las cuotas restantes.
+ */
+export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): ApplyPrepaymentResult {
+  const { allTransactions, planId, prepaymentAmount, mode, paymentDate } = params;
+  const now = new Date();
+  const sysTodayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+  const todayStr = paymentDate || sysTodayStr;
+
+  const planTxs = allTransactions.filter(t => isInstallmentTx(t) && getInstallmentPlanId(t) === planId);
+  if (planTxs.length === 0 || prepaymentAmount <= 0) {
+    return {
+      updatedTransactions: [],
+      deletedTransactionIds: [],
+      newTransactionsList: allTransactions,
+      summary: {
+        planDescription: 'Plan no encontrado',
+        previousRemainingDebt: 0,
+        newRemainingDebt: 0
+      }
+    };
+  }
+
+  const baseDesc = getInstallmentBaseDescription(planTxs[0].description) || 'Compra en cuotas';
+  const currency = planTxs[0].currency || 'PEN';
+
+  const futureTxs = planTxs.filter(t => t.date > todayStr).sort((a, b) => a.date.localeCompare(b.date));
+  const pastOrCurrentTxs = planTxs.filter(t => t.date <= todayStr).sort((a, b) => a.date.localeCompare(b.date));
+
+  const prevRemainingDebt = Math.round(
+    futureTxs.reduce((sum, t) => sum + (currency === 'USD' ? (t.originalAmount || 0) : (t.amountPen || 0)), 0) * 100
+  ) / 100;
+
+  const deletedTransactionIds: string[] = [];
+  const updatedTransactions: Transaction[] = [];
+
+  if (mode === 'REDUCE_TERM') {
+    // Amortizar cuotas empezando desde la última hacia atrás (SBS / práctica bancaria)
+    const survivingFuture = [...futureTxs];
+    let fundsToApply = prepaymentAmount;
+
+    while (fundsToApply > 0 && survivingFuture.length > 0) {
+      const lastTx = survivingFuture[survivingFuture.length - 1];
+      const lastTxAmt = currency === 'USD' ? (lastTx.originalAmount || 0) : (lastTx.amountPen || 0);
+
+      if (fundsToApply >= lastTxAmt - 0.009) {
+        // Cuota completamente liquidada: se elimina
+        deletedTransactionIds.push(lastTx.id);
+        survivingFuture.pop();
+        fundsToApply = Math.max(0, fundsToApply - lastTxAmt);
+      } else {
+        // Cuota parcialmente amortizada: se reduce su importe
+        const newAmt = Math.round((lastTxAmt - fundsToApply) * 100) / 100;
+        fundsToApply = 0;
+        const updatedLast: Transaction = {
+          ...lastTx,
+          originalAmount: newAmt,
+          amountPen: currency === 'USD' ? Math.round(newAmt * (lastTx.exchangeRate || 1) * 100) / 100 : newAmt,
+          notes: `${lastTx.notes || ''} [prepago: cuota reducida de ${lastTxAmt} a ${newAmt}]`.trim()
+        };
+        survivingFuture[survivingFuture.length - 1] = updatedLast;
+        updatedTransactions.push(updatedLast);
+      }
+    }
+
+    // Nuevo total de cuotas del cronograma tras la reducción de plazo
+    const newTotalInstallments = pastOrCurrentTxs.length + survivingFuture.length;
+
+    // Actualizar numeración (Cuota X/Y) y totalInstallments en cuotas futuras sobrevivientes
+    for (let i = 0; i < survivingFuture.length; i++) {
+      const tx = survivingFuture[i];
+      const instNum = pastOrCurrentTxs.length + i + 1;
+      const newDesc = `${baseDesc} (Cuota ${instNum}/${newTotalInstallments})`;
+      const existingIdx = updatedTransactions.findIndex(u => u.id === tx.id);
+      const baseObj = existingIdx >= 0 ? updatedTransactions[existingIdx] : tx;
+
+      if (baseObj.description !== newDesc || baseObj.totalInstallments !== newTotalInstallments) {
+        const item: Transaction = {
+          ...baseObj,
+          currentInstallment: instNum,
+          totalInstallments: newTotalInstallments,
+          description: newDesc
+        };
+        if (existingIdx >= 0) {
+          updatedTransactions[existingIdx] = item;
+        } else {
+          updatedTransactions.push(item);
+        }
+      }
+    }
+
+    // Sincronizar también el totalInstallments en las cuotas históricas para consistencia
+    for (let i = 0; i < pastOrCurrentTxs.length; i++) {
+      const tx = pastOrCurrentTxs[i];
+      const instNum = i + 1;
+      const newDesc = `${baseDesc} (Cuota ${instNum}/${newTotalInstallments})`;
+      if (tx.totalInstallments !== newTotalInstallments || tx.description !== newDesc) {
+        updatedTransactions.push({
+          ...tx,
+          currentInstallment: instNum,
+          totalInstallments: newTotalInstallments,
+          description: newDesc
+        });
+      }
+    }
+  } else {
+    // REDUCE_AMOUNT: Mantener el plazo y recalcular el importe de cada cuota restante
+    const count = futureTxs.length;
+    if (count > 0) {
+      const newTotalDebt = Math.max(0, Math.round((prevRemainingDebt - prepaymentAmount) * 100) / 100);
+      const rawMonthly = newTotalDebt / count;
+      const roundedMonthly = Math.round(rawMonthly * 100) / 100;
+
+      for (let i = 0; i < count; i++) {
+        const tx = futureTxs[i];
+        const isLast = i === count - 1;
+        // La última cuota absorbe cualquier céntimo por redondeo
+        const txAmt = isLast ? Math.round((newTotalDebt - roundedMonthly * (count - 1)) * 100) / 100 : roundedMonthly;
+        const oldAmt = currency === 'USD' ? (tx.originalAmount || 0) : (tx.amountPen || 0);
+
+        updatedTransactions.push({
+          ...tx,
+          originalAmount: txAmt,
+          amountPen: currency === 'USD' ? Math.round(txAmt * (tx.exchangeRate || 1) * 100) / 100 : txAmt,
+          notes: `${tx.notes || ''} [prepago: cuota mensual reducida de ${oldAmt} a ${txAmt}]`.trim()
+        });
+      }
+    }
+  }
+
+  const newRemainingDebt = Math.max(0, Math.round((prevRemainingDebt - prepaymentAmount) * 100) / 100);
+
+  const deletedSet = new Set(deletedTransactionIds);
+  const updatedMap = new Map(updatedTransactions.map(t => [t.id, t]));
+
+  const newTransactionsList = allTransactions
+    .filter(t => !deletedSet.has(t.id))
+    .map(t => updatedMap.get(t.id) || t);
+
+  return {
+    updatedTransactions,
+    deletedTransactionIds,
+    newTransactionsList,
+    summary: {
+      planDescription: baseDesc,
+      previousRemainingDebt: prevRemainingDebt,
+      newRemainingDebt,
+      eliminatedCount: deletedTransactionIds.length,
+      newMonthlyAmount:
+        mode === 'REDUCE_AMOUNT' && futureTxs.length > 0
+          ? Math.round((newRemainingDebt / futureTxs.length) * 100) / 100
+          : undefined
+    }
+  };
 }
 
 export function formatSoles(amount?: number | null): string {

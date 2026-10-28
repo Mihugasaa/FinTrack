@@ -211,6 +211,20 @@ export const CardsTab: React.FC = () => {
                     {formatSoles(totalCreditDebt)}
                   </strong>
                 </span>
+                {(() => {
+                  const futureDebtTotal = cardDebtSummary.reduce((acc, c) => acc + (c.futureInstallmentsDebt || 0), 0);
+                  if (futureDebtTotal > 0.009) {
+                    return (
+                      <>
+                        <span className="debt-summary-sep">•</span>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          Cuotas futuras diferidas: <strong className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>{formatSoles(futureDebtTotal)}</strong>
+                        </span>
+                      </>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )
           ) : isFutureMonth ? (
@@ -311,7 +325,10 @@ export const CardsTab: React.FC = () => {
                       card.hasPositiveBalance ? (
                         <span className="text-success">A favor en cuenta</span>
                       ) : card.totalAccumulatedDebt > 0 ? (
-                        <span className="text-muted">{usedPercent.toFixed(0)}% de línea utilizada</span>
+                        <span className="text-muted" title={card.futureInstallmentsDebt ? `Incluye ${formatSoles(card.futureInstallmentsDebt)} en cuotas diferidas no facturadas` : undefined}>
+                          {usedPercent.toFixed(0)}% de línea utilizada
+                          {card.futureInstallmentsDebt && card.futureInstallmentsDebt > 0 ? ` (${card.totalInstallmentPlansCount || 1} plan en cuotas)` : ''}
+                        </span>
                       ) : (
                         <span className="text-muted">Sin deuda acumulada</span>
                       )
@@ -360,6 +377,14 @@ export const CardsTab: React.FC = () => {
                             <span className="card-zen-status-pill success">● Al día</span>
                           )}
                         </div>
+                        {cardDueInMonth > 0.009 && Math.abs(cardDueInMonth - card.totalAccumulatedDebt) > 0.05 && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px', textAlign: 'right' }}>
+                            A pagar este mes:{' '}
+                            <strong className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                              {formatSoles(cardDueInMonth)}
+                            </strong>
+                          </div>
+                        )}
                       </>
                     )
                   ) : isFutureMonth ? (
@@ -443,7 +468,21 @@ export const CardsTab: React.FC = () => {
                   <span>Pago: día {card.paymentDueDay}</span>
                 </div>
                 <div className="card-zen-footer-right tabular-nums">
-                  {limit > 0 && <span>Límite: {formatSoles(limit)}</span>}
+                  {limit > 0 && (
+                    <span>
+                      Límite: {formatSoles(limit)} •{' '}
+                      <span
+                        style={{
+                          color:
+                            card.availableCredit !== undefined && card.availableCredit <= 0
+                              ? 'var(--accent-danger)'
+                              : 'var(--text-secondary)'
+                        }}
+                      >
+                        Disp.: {formatSoles(card.availableCredit ?? Math.max(0, limit - (card.hasPositiveBalance ? 0 : card.totalAccumulatedDebt)))}
+                      </span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

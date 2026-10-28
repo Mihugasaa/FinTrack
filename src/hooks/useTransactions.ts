@@ -712,26 +712,32 @@ export function useTransactions({
     SupabaseDataService.deleteTransaction(id);
   };
 
-  // Elimina una transacción recurrente y todas sus repeticiones futuras a partir de su fecha (local + nube).
+  // Elimina una transacción recurrente o compra en cuotas y todas sus repeticiones futuras a partir de su fecha (local + nube).
   const deleteTransactionAndFuture = (id: string): string[] => {
     const baseTx = transactions.find(t => t.id === id);
-    if (!baseTx || !baseTx.isFixedSubscription) {
+    if (!baseTx || (!baseTx.isFixedSubscription && !baseTx.installmentPlanId)) {
       deleteTransactionById(id);
       return [id];
     }
 
-    const normDesc = baseTx.description.trim().toLowerCase();
-
-    // Encontrar todas las transacciones vinculadas a esta suscripción desde esta fecha en adelante
-    const matches = transactions.filter(t =>
-      t.id === baseTx.id ||
-      (
-        t.isFixedSubscription &&
-        t.description.trim().toLowerCase() === normDesc &&
-        (t.categoryId === baseTx.categoryId || t.paymentMethodId === baseTx.paymentMethodId) &&
-        t.date >= baseTx.date
-      )
-    );
+    let matches: Transaction[] = [];
+    if (baseTx.installmentPlanId) {
+      matches = transactions.filter(t =>
+        t.id === baseTx.id ||
+        (t.installmentPlanId === baseTx.installmentPlanId && t.date >= baseTx.date)
+      );
+    } else {
+      const normDesc = baseTx.description.trim().toLowerCase();
+      matches = transactions.filter(t =>
+        t.id === baseTx.id ||
+        (
+          t.isFixedSubscription &&
+          t.description.trim().toLowerCase() === normDesc &&
+          (t.categoryId === baseTx.categoryId || t.paymentMethodId === baseTx.paymentMethodId) &&
+          t.date >= baseTx.date
+        )
+      );
+    }
 
     const idsToDelete = matches.map(t => t.id);
     const idSet = new Set(idsToDelete);

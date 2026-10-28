@@ -36,7 +36,8 @@ import {
   getEffectiveBillingCloseDate,
   getEndOfMonthDate,
   getFallbackReceivablePaymentDate,
-  evaluateCardsLiquidityCoverage
+  evaluateCardsLiquidityCoverage,
+  getActiveInstallmentPlansForCard
 } from '@/lib/calculations';
 import {
   Transaction,
@@ -452,6 +453,8 @@ function useFinanceController() {
     setPaymentDate,
     paymentTargetMonth,
     setPaymentTargetMonth,
+    prepaymentMode,
+    setPrepaymentMode,
     editingCardPaymentId,
     editingCardPaymentIndex,
     showAllHistoricalPayments,
@@ -465,7 +468,7 @@ function useFinanceController() {
     setApplyItf,
     itfAmountInput,
     setItfAmountInput
-  } = useCardPayments({ paymentMethods, currentYear, currentMonth });
+  } = useCardPayments({ paymentMethods, currentYear, currentMonth, transactions, setTransactions });
 
   // Cuentas por cobrar: préstamos que hice, agrupados por deudor, con cobros
   const {
@@ -1849,7 +1852,7 @@ function useFinanceController() {
   const financialHealth = useMemo(() => {
     const currentFlow = monthlyHistoricalFlow.find(m => m.key === monthKey);
     const totalIncome = currentFlow?.inVal || (diagnostic.totalAvailable - initialDebitForMonth - debitStats.collectedFromDebtors) || totalSalaryAmount;
-    const cardObligations = cardDebtSummary.reduce((acc, c) => acc + (c.consumedToDate || 0) + (c.initialDebt || 0), 0);
+    const cardObligations = cardDebtSummary.reduce((acc, c) => acc + (c.consumedToDate || 0) + (c.futureInstallmentsDebt || 0) + (c.initialDebt || 0), 0);
     const cardPaid = cardDebtSummary.reduce((acc, c) => acc + (c.paidToDate || 0), 0);
     return computeFinancialHealthScore({
       totalIncome,
@@ -2584,6 +2587,8 @@ function useFinanceController() {
     setPaymentDate,
     paymentTargetMonth,
     setPaymentTargetMonth,
+    prepaymentMode,
+    setPrepaymentMode,
     editingCardPaymentId,
     editingCardPaymentIndex,
     showAllHistoricalPayments,
@@ -2767,7 +2772,8 @@ function useFinanceController() {
     formatDisplayDate,
     formatSoles,
     renderTodayDividerRow,
-    renderTodayDividerMobile
+    renderTodayDividerMobile,
+    getActiveInstallmentPlansForCard
   };
 }
 

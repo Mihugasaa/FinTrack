@@ -104,6 +104,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     payment_due_date DATE NOT NULL,
     is_fixed_subscription BOOLEAN DEFAULT FALSE,
     is_refund BOOLEAN DEFAULT FALSE,
+    is_installment BOOLEAN DEFAULT FALSE,
+    installment_plan_id TEXT,
+    current_installment INT,
+    total_installments INT,
+    original_total_amount NUMERIC(12, 2),
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

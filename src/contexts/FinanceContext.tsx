@@ -1287,8 +1287,11 @@ function useFinanceController() {
     const pKey = `${pYear}-${pMonth.toString().padStart(2, '0')}`;
 
     const prevTxs = transactions.filter(t => t.date.startsWith(pKey));
-    const prevExpense = prevTxs.reduce((sum, t) => sum + (t.amountPen || 0), 0);
-    const currExpense = currentMonthTransactions.reduce((sum, t) => sum + (t.amountPen || 0), 0);
+    const prevNetExpense = prevTxs.reduce((sum, t) => sum + (t.isRefund ? -Math.abs(t.amountPen || 0) : (t.amountPen || 0)), 0);
+    const currNetExpense = currentMonthTransactions.reduce((sum, t) => sum + (t.isRefund ? -Math.abs(t.amountPen || 0) : (t.amountPen || 0)), 0);
+
+    const prevExpense = Math.max(0, prevNetExpense);
+    const currExpense = Math.max(0, currNetExpense);
 
     const maxExp = Math.max(prevExpense, currExpense, 1);
     const prevPercent = prevExpense > 0 ? (prevExpense / maxExp) * 100 : 0;
@@ -1522,13 +1525,13 @@ function useFinanceController() {
     const items = Array.from(map.values())
       .filter(item => item.total > 0.005)
       .sort((a, b) => b.total - a.total);
-    const totalSpent = Math.max(0, diagnostic.totalExpensesConsumed) || items.reduce((acc, i) => acc + i.total, 0) || 1;
+    const totalSpent = items.reduce((acc, i) => acc + i.total, 0) || 1;
 
     return items.map(item => ({
       ...item,
       percentage: (item.total / totalSpent) * 100
     }));
-  }, [currentMonthTransactions, categories, diagnostic.totalExpensesConsumed]);
+  }, [currentMonthTransactions, categories]);
 
   // Desglose de Gastos por Categoría del AÑO completo (para la donut de la vista
   // Anual). Agrega todo el historial cargado del año visible, neto de reembolsos.

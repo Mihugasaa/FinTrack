@@ -462,9 +462,21 @@ export const OverviewTab: React.FC = () => {
               <ArrowUpRight size={14} color="var(--accent-danger)" />{' '}
               {isCurrentActiveMonth ? 'Gastos y pagos' : isFutureMonth ? 'Salidas programadas' : 'Gastos y pagos'}
             </span>
-            <span className="zen-flow-amount tabular-nums text-danger">
-              -{formatSoles(isCurrentActiveMonth ? realizedOutflow : isFutureMonth ? scheduledOutflow : pastOutflow)}
-            </span>
+            {(() => {
+              const currentOutflowVal = isCurrentActiveMonth ? realizedOutflow : isFutureMonth ? scheduledOutflow : pastOutflow;
+              if (currentOutflowVal < -0.009) {
+                return (
+                  <span className="zen-flow-amount tabular-nums text-success">
+                    +{formatSoles(Math.abs(currentOutflowVal))}
+                  </span>
+                );
+              }
+              return (
+                <span className="zen-flow-amount tabular-nums text-danger">
+                  -{formatSoles(Math.max(0, currentOutflowVal))}
+                </span>
+              );
+            })()}
             <div className="zen-flow-sub">
               {isCurrentActiveMonth ? (
                 realizedOutflow === 0 && pendingThisMonth === 0 ? (
@@ -472,7 +484,7 @@ export const OverviewTab: React.FC = () => {
                 ) : (
                   <>
                     <span>
-                      Débito: {formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas: {formatSoles(debitStats.cardPaymentsPaidMonth)}
+                      Débito: {debitStats.debitExpensesPaidToday < -0.009 ? `+${formatSoles(Math.abs(debitStats.debitExpensesPaidToday))} (abono neto)` : formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas: {formatSoles(debitStats.cardPaymentsPaidMonth)}
                     </span>
                     {debtPaidToday > 0 && <span>Deudas: {formatSoles(debtPaidToday)}</span>}
                     {pendingThisMonth > 0 && (

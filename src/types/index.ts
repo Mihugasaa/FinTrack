@@ -185,6 +185,26 @@ export interface CardMonthCoverage {
   isCovered: boolean;
 }
 
+export interface CardPendingCycle {
+  monthKey: string;              // 'YYYY-MM' de vencimiento
+  dueDate: string;               // 'YYYY-MM-DD' fecha límite de pago
+  closeDate: string;             // 'YYYY-MM-DD' fecha de corte de facturación
+  startDate: string;             // 'YYYY-MM-DD' fecha de inicio del ciclo facturado
+  unpaidPen: number;
+  unpaidUsd: number;
+  unpaidUsdInPen?: number;
+  billedPen: number;
+  billedUsd: number;
+  coveredPen: number;
+  coveredUsd: number;
+  isClosed: boolean;             // true si el corte ya ocurrió a la fecha
+  isOverdue: boolean;            // true si ya venció y hay saldo impago
+  cycleName: string;             // Ej: "Estado de cuenta al 26/10"
+  periodLabel: string;           // Ej: "26/09 al 26/10"
+  label: string;                 // Etiqueta completa con corte, periodo y vencimiento
+  txCount: number;
+}
+
 export interface CardAmortizationSchedule {
   byCardAndMonth: Map<string, CardMonthCoverage>;
   unpaidPenByMonth: Map<string, number>;
@@ -194,7 +214,7 @@ export interface CardAmortizationSchedule {
   billedPenByMonth: Map<string, number>;
   billedUsdByMonth: Map<string, number>;
   paidInAdvanceByMonth: Map<string, number>;
-  pendingCyclesByCard: Map<string, Array<{ monthKey: string; dueDate: string; unpaidPen: number; unpaidUsd: number; unpaidUsdInPen?: number; label: string }>>;
+  pendingCyclesByCard: Map<string, CardPendingCycle[]>;
 }
 
 export interface PayablePayment {

@@ -7,6 +7,7 @@ import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { useFinance } from '@/contexts/FinanceContext';
 import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 import { calculateItf } from '@/lib/calculations';
+import type { CardPendingCycle } from '@/types';
 
 type PaymentSourceType = 'DEBIT_ACCOUNT' | 'MERCHANT_REFUND' | 'BANK_CREDIT' | 'USD_SAVINGS_ACCOUNT';
 
@@ -48,7 +49,8 @@ export const PaymentModal: React.FC = () => {
     applyItf,
     setApplyItf,
     itfAmountInput,
-    setItfAmountInput
+    setItfAmountInput,
+    cardDebtSummary
   } = useFinance();
   const onClose = handleClosePaymentModal;
   const onSubmit = handleMakeCardPayment;
@@ -80,7 +82,17 @@ export const PaymentModal: React.FC = () => {
     : 0;
   const totalDebitFromAccount = calculatedPen + effectiveItf;
 
-  const pendingCycles = cardAmortization?.pendingCyclesByCard?.get(paymentCardId) || [];
+  const currentCardSummary = React.useMemo(() => {
+    return cardDebtSummary?.find(c => c.paymentMethodId === paymentCardId);
+  }, [cardDebtSummary, paymentCardId]);
+
+  const totalCardDebt = currentCardSummary?.totalAccumulatedDebt ?? 0;
+  const totalCardDebtPen = currentCardSummary?.totalAccumulatedDebtPen ?? totalCardDebt;
+  const totalCardDebtUsd = currentCardSummary?.totalAccumulatedDebtUsd ?? 0;
+
+  const pendingCycles: CardPendingCycle[] = React.useMemo(() => {
+    return cardAmortization?.pendingCyclesByCard?.get(paymentCardId) || [];
+  }, [cardAmortization, paymentCardId]);
 
   // Filtrado de estados de cuenta reales: Meses vencidos impagos + ciclo actual + ciclo siguiente como máximo.
   // Los meses a futuro lejano (ej. 2027 a 2030) corresponden a cuotas no facturadas y se amortizan vía planes de cuotas.
@@ -98,13 +110,41 @@ export const PaymentModal: React.FC = () => {
     return pendingCycles.filter(c => c.monthKey <= maxAllowedMonthKey);
   }, [pendingCycles, maxAllowedMonthKey]);
 
-  const matchedCycle = filteredPendingCycles.find(c => c.monthKey === paymentTargetMonth) || (paymentTargetMonth === '' ? filteredPendingCycles[0] : null);
+  // Ciclo vencido (si existe uno impago cuya fecha límite de pago ya expiró)
+  const overdueCycle = React.useMemo(() => {
+    return filteredPendingCycles.find(c => c.isOverdue && (c.unpaidPen > 0.009 || c.unpaidUsd > 0.009));
+  }, [filteredPendingCycles]);
+
+  // Ciclo cerrado más reciente con saldo impago (el estado de cuenta facturado actual)
+  const currentClosedCycle = React.useMemo(() => {
+    const closedCycles = filteredPendingCycles.filter(c => c.isClosed && (c.unpaidPen > 0.009 || c.unpaidUsd > 0.009));
+    return closedCycles.length > 0 ? closedCycles[closedCycles.length - 1] : null;
+  }, [filteredPendingCycles]);
+
+  // Resolución automática inteligente del ciclo:
+  // 1. Si hay un estado de cuenta cerrado facturado reciente (el que cortó el día 26),
+  // ese es el estado de cuenta que corresponde pagar en el banco en esta fecha.
+  // 2. Si no, si hay un ciclo vencido previo sin regularizar.
+  // 3. Si no hay ninguno cerrado, el primer ciclo pendiente disponible.
+  const autoResolvedCycle = React.useMemo(() => {
+    if (filteredPendingCycles.length === 0) return null;
+    if (currentClosedCycle) return currentClosedCycle;
+    if (overdueCycle) return overdueCycle;
+    return filteredPendingCycles[0];
+  }, [filteredPendingCycles, currentClosedCycle, overdueCycle]);
+
+  const matchedCycle = React.useMemo(() => {
+    if (paymentTargetMonth === '') return autoResolvedCycle;
+    return filteredPendingCycles.find(c => c.monthKey === paymentTargetMonth) || null;
+  }, [paymentTargetMonth, autoResolvedCycle, filteredPendingCycles]);
 
   const cycleOptions = [
     {
       value: '',
-      label: 'Automático (según vencimiento)',
-      subtitle: 'Cubre el estado de cuenta más próximo a vencer',
+      label: autoResolvedCycle ? `Automático (${autoResolvedCycle.cycleName})` : 'Automático (según vencimiento)',
+      subtitle: autoResolvedCycle
+        ? `${autoResolvedCycle.periodLabel} • Vence: ${autoResolvedCycle.dueDate.split('-').slice(1).reverse().join('/')} • Saldo: ${formatSoles(autoResolvedCycle.unpaidPen)}`
+        : 'Cubre el estado de cuenta facturado más próximo a vencer',
       icon: <CalendarClock size={15} style={{ color: 'var(--accent-brand)' }} />
     },
     ...filteredPendingCycles.map(c => {
@@ -113,9 +153,13 @@ export const PaymentModal: React.FC = () => {
       if (c.unpaidUsd > 0) parts.push(`$${c.unpaidUsd.toFixed(2)} USD`);
       return {
         value: c.monthKey,
-        label: c.label,
-        subtitle: `Saldo pendiente: ${parts.join(' • ') || formatSoles(0)}`,
-        icon: <Calendar size={15} style={{ color: 'var(--accent-warning)' }} />
+        label: c.isOverdue
+          ? `⚠️ [Vencido] ${c.cycleName}`
+          : c.isClosed
+            ? `[Facturado] ${c.cycleName}`
+            : `[En curso] ${c.cycleName}`,
+        subtitle: `${c.periodLabel} • Vence: ${c.dueDate.split('-').slice(1).reverse().join('/')} • Saldo: ${parts.join(' • ') || formatSoles(0)}`,
+        icon: <Calendar size={15} style={{ color: c.isOverdue ? 'var(--accent-danger)' : c.isClosed ? 'var(--accent-warning)' : 'var(--accent-info)' }} />
       };
     }),
     ...(activePlans.length > 0 ? activePlans.map(plan => {
@@ -132,7 +176,7 @@ export const PaymentModal: React.FC = () => {
     {
       value: 'EXTRAORDINARY',
       label: 'Abono general a la tarjeta',
-      subtitle: 'Reduce tu deuda total sin asignar a un mes específico',
+      subtitle: 'Reduce tu deuda total sin asignar a un ciclo específico',
       icon: <CreditCard size={15} style={{ color: 'var(--accent-success)' }} />
     }
   ];
@@ -177,13 +221,13 @@ export const PaymentModal: React.FC = () => {
 
           {/* Mes o estado de cuenta a pagar */}
           <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <label className="form-label" style={{ margin: 0 }}>Mes o estado de cuenta</label>
               {selectedPlan ? (
                 <button
                   type="button"
                   className="btn-secondary"
-                  style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}
+                  style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: '6px', fontWeight: 600 }}
                   onClick={() => {
                     setPaymentAmount(selectedPlan.remainingDebt.toFixed(2));
                     if (selectedPlan.currency === 'USD') {
@@ -192,24 +236,41 @@ export const PaymentModal: React.FC = () => {
                   }}
                   title="Pagar la deuda total de este plan"
                 >
-                  Pagar deuda total ({selectedPlan.currency === 'USD' ? `$${selectedPlan.remainingDebt.toFixed(2)}` : formatSoles(selectedPlan.remainingDebt)})
+                  Pagar plan ({selectedPlan.currency === 'USD' ? `$${selectedPlan.remainingDebt.toFixed(2)}` : formatSoles(selectedPlan.remainingDebt)})
                 </button>
-              ) : matchedCycle ? (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}
-                  onClick={() => {
-                    const dueAmt = paymentCurrency === 'USD'
-                      ? (matchedCycle.unpaidUsd > 0 ? matchedCycle.unpaidUsd : matchedCycle.unpaidPen)
-                      : matchedCycle.unpaidPen;
-                    setPaymentAmount(dueAmt.toFixed(2));
-                  }}
-                  title="Usar el saldo pendiente de este mes"
-                >
-                  Pagar mes completo ({paymentCurrency === 'USD' && matchedCycle.unpaidUsd > 0 ? `$${matchedCycle.unpaidUsd.toFixed(2)}` : formatSoles(matchedCycle.unpaidPen)})
-                </button>
-              ) : null}
+              ) : paymentTargetMonth === 'EXTRAORDINARY' ? (
+                totalCardDebt > 0 && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: '6px', fontWeight: 600 }}
+                    onClick={() => {
+                      const tot = paymentCurrency === 'USD' ? (totalCardDebtUsd > 0 ? totalCardDebtUsd : totalCardDebt) : totalCardDebtPen;
+                      setPaymentAmount(tot.toFixed(2));
+                    }}
+                    title="Pagar la deuda total acumulada de la tarjeta"
+                  >
+                    Pagar deuda total ({paymentCurrency === 'USD' && totalCardDebtUsd > 0 ? `$${totalCardDebtUsd.toFixed(2)}` : formatSoles(totalCardDebtPen)})
+                  </button>
+                )
+              ) : (
+                matchedCycle && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: '6px', fontWeight: 600 }}
+                    onClick={() => {
+                      const dueAmt = paymentCurrency === 'USD'
+                        ? (matchedCycle.unpaidUsd > 0 ? matchedCycle.unpaidUsd : matchedCycle.unpaidPen)
+                        : matchedCycle.unpaidPen;
+                      setPaymentAmount(dueAmt.toFixed(2));
+                    }}
+                    title={`Pagar el estado de cuenta facturado (${matchedCycle.periodLabel})`}
+                  >
+                    Pagar ciclo ({paymentCurrency === 'USD' && matchedCycle.unpaidUsd > 0 ? `$${matchedCycle.unpaidUsd.toFixed(2)}` : formatSoles(matchedCycle.unpaidPen)})
+                  </button>
+                )
+              )}
             </div>
             <CustomSelect
               id="select-payment-target-cycle"
@@ -843,8 +904,8 @@ export const PaymentModal: React.FC = () => {
               {isEditing
                 ? 'Guardar cambios'
                 : parsedAmt > 0
-                ? `Pagar ${paymentCurrency === 'USD' ? `$${parsedAmt.toFixed(2)} USD` : formatSoles(parsedAmt)}`
-                : 'Confirmar pago'}
+                  ? `Pagar ${paymentCurrency === 'USD' ? `$${parsedAmt.toFixed(2)} USD` : formatSoles(parsedAmt)}`
+                  : 'Confirmar pago'}
             </button>
           </div>
 

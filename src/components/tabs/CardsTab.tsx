@@ -958,7 +958,7 @@ export const CardsTab: React.FC = () => {
                           <button
                             type="button"
                             className="btn-pay-contextual"
-                            onClick={() => handleOpenCreateCardPayment(r.plan.cardId)}
+                            onClick={() => handleOpenCreateCardPayment(plan.cardId, plan.nextDueDate ? plan.nextDueDate.slice(0, 7) : undefined)}
                             title={`Pagar ${plan.cardName}`}
                           >
                             <CreditCard size={13} style={{ color: 'var(--accent-brand)' }} />

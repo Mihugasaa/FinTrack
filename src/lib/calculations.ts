@@ -13,6 +13,7 @@ import {
   CardPaymentPlanItem,
   CardsGlobalLiquidityAssessment,
   CardMonthCoverage,
+  CardPendingCycle,
   CardAmortizationSchedule,
   ActiveInstallmentPlanInfo,
   ApplyPrepaymentParams,
@@ -226,6 +227,60 @@ export interface DueDateDetail {
  */
 export function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
+}
+
+/**
+ * Obtiene las fechas bancarias reales de un ciclo de facturación (fecha de corte,
+ * fecha de inicio y fecha de vencimiento) a partir de la tarjeta y el mes de vencimiento (YYYY-MM).
+ */
+export function getCardCycleBillingDates(
+  dueYearMonth: string,
+  card: PaymentMethod
+): {
+  closeDate: string;
+  startDate: string;
+  dueDate: string;
+  closeMonthKey: string;
+} {
+  const [yStr, mStr] = dueYearMonth.split('-');
+  const dueYear = parseInt(yStr, 10);
+  const dueMonth = parseInt(mStr, 10);
+  const corte = card.billingCloseDay || 26;
+  const pago = card.paymentDueDay || corte;
+
+  // Si pago <= corte, el corte se dio en el mes anterior al mes de vencimiento
+  let closeYear = dueYear;
+  let closeMonth = dueMonth;
+  if (pago <= corte) {
+    closeMonth = dueMonth === 1 ? 12 : dueMonth - 1;
+    closeYear = dueMonth === 1 ? dueYear - 1 : dueYear;
+  }
+
+  const closeInfo = getEffectiveBillingCloseDate(closeYear, closeMonth, corte);
+  const closeDate = closeInfo.effectiveDate;
+  const closeMonthKey = `${closeYear}-${closeMonth.toString().padStart(2, '0')}`;
+
+  // El corte previo (inicio del ciclo) ocurrió el mes anterior a closeMonth
+  let prevCloseYear = closeMonth === 1 ? closeYear - 1 : closeYear;
+  let prevCloseMonth = closeMonth === 1 ? 12 : closeMonth - 1;
+  const prevCloseInfo = getEffectiveBillingCloseDate(prevCloseYear, prevCloseMonth, corte);
+
+  // La fecha de inicio es el día calendario siguiente al corte anterior
+  const [py, pm, pd] = prevCloseInfo.effectiveDate.split('-').map(Number);
+  const startDt = new Date(py, pm - 1, pd, 12, 0, 0);
+  startDt.setDate(startDt.getDate() + 1);
+  const startYear = startDt.getFullYear();
+  const startMonthStr = (startDt.getMonth() + 1).toString().padStart(2, '0');
+  const startDayStr = startDt.getDate().toString().padStart(2, '0');
+  const startDate = `${startYear}-${startMonthStr}-${startDayStr}`;
+
+  // Fecha límite de pago nominal ajustada a día hábil bancario
+  const maxDaysDue = getDaysInMonth(dueYear, dueMonth);
+  const effPayDay = Math.min(pago, maxDaysDue);
+  const rawDueDate = `${dueYear}-${dueMonth.toString().padStart(2, '0')}-${effPayDay.toString().padStart(2, '0')}`;
+  const dueDate = adjustToNextBusinessDay(rawDueDate).adjustedDate;
+
+  return { closeDate, startDate, dueDate, closeMonthKey };
 }
 
 /**
@@ -773,7 +828,7 @@ export function computeCardBillingAmortization(params: {
   const billedPenByMonth = new Map<string, number>();
   const billedUsdByMonth = new Map<string, number>();
   const paidInAdvanceByMonth = new Map<string, number>();
-  const pendingCyclesByCard = new Map<string, Array<{ monthKey: string; dueDate: string; unpaidPen: number; unpaidUsd: number; unpaidUsdInPen?: number; label: string }>>();
+  const pendingCyclesByCard = new Map<string, CardPendingCycle[]>();
 
   const MONTH_NAMES_LOCAL = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -788,10 +843,12 @@ export function computeCardBillingAmortization(params: {
       return !!aliased && aliased.name.toLowerCase() === card.name.toLowerCase();
     });
 
-    // 2. Agrupar consumos facturados por mes de vencimiento
+    // 2. Agrupar consumos facturados por ciclo de facturación y mes de vencimiento
     interface CycleBucket {
       monthKey: string;
       dueDate: string;
+      closeDate: string;
+      startDate: string;
       billedPen: number;
       billedUsd: number;
       billedUsdInPen: number;
@@ -799,6 +856,7 @@ export function computeCardBillingAmortization(params: {
       coveredUsd: number;
       paidInAdvancePen: number;
       paidInMonthPen: number;
+      txCount: number;
     }
 
     const bucketsMap = new Map<string, CycleBucket>();
@@ -806,25 +864,30 @@ export function computeCardBillingAmortization(params: {
     cardTxs.forEach(t => {
       const netPen = t.isRefund ? -Math.abs(t.amountPen || 0) : (t.amountPen || 0);
       const netUsd = t.isRefund ? -Math.abs(t.originalAmount || 0) : (t.originalAmount || 0);
-      const dd = t.paymentDueDate || t.date || '';
+      const dd = t.paymentDueDate || (card.billingCloseDay ? calculatePaymentDueDate(t.date, card) : t.date) || '';
       const mk = dd.slice(0, 7);
       if (!isMonthKey(mk)) return;
 
       let b = bucketsMap.get(mk);
       if (!b) {
+        const cycleDates = getCardCycleBillingDates(mk, card);
         b = {
           monthKey: mk,
-          dueDate: dd || `${mk}-15`,
+          dueDate: dd || cycleDates.dueDate,
+          closeDate: cycleDates.closeDate,
+          startDate: cycleDates.startDate,
           billedPen: 0,
           billedUsd: 0,
           billedUsdInPen: 0,
           coveredPen: 0,
           coveredUsd: 0,
           paidInAdvancePen: 0,
-          paidInMonthPen: 0
+          paidInMonthPen: 0,
+          txCount: 0
         };
         bucketsMap.set(mk, b);
       }
+      b.txCount += 1;
       if (t.currency === 'USD') {
         b.billedUsd += netUsd;
         b.billedUsdInPen += netPen;
@@ -856,7 +919,7 @@ export function computeCardBillingAmortization(params: {
       return {
         raw: p,
         isUsd,
-        remPen: Math.max(0, pen),
+        remPen: !isUsd ? Math.max(0, pen) : 0,
         remUsd: isUsd ? Math.max(0, nom) : 0,
         targetMonth: p.targetMonth && isMonthKey(p.targetMonth) ? p.targetMonth : null,
         paymentDate: p.paymentDate
@@ -878,7 +941,7 @@ export function computeCardBillingAmortization(params: {
         p.remUsd -= appliedUsd;
       }
 
-      if (p.remPen > 0) {
+      if (!p.isUsd && p.remPen > 0) {
         const neededPen = Math.max(0, b.billedPen - b.coveredPen);
         const appliedPen = Math.min(neededPen, p.remPen);
         b.coveredPen += appliedPen;
@@ -909,7 +972,7 @@ export function computeCardBillingAmortization(params: {
           }
         }
 
-        if (p.remPen > 0.005) {
+        if (!p.isUsd && p.remPen > 0.005) {
           const neededPen = Math.max(0, b.billedPen - b.coveredPen);
           if (neededPen > 0.005) {
             const appliedPen = Math.min(neededPen, p.remPen);
@@ -929,7 +992,10 @@ export function computeCardBillingAmortization(params: {
     });
 
     // 4. Registrar la cobertura mensual y acumular globales
-    const cardPendingCycles: Array<{ monthKey: string; dueDate: string; unpaidPen: number; unpaidUsd: number; unpaidUsdInPen?: number; label: string }> = [];
+    const cardPendingCycles: CardPendingCycle[] = [];
+
+    const nowAmort = new Date();
+    const todayStrAmort = `${nowAmort.getFullYear()}-${(nowAmort.getMonth() + 1).toString().padStart(2, '0')}-${nowAmort.getDate().toString().padStart(2, '0')}`;
 
     sortedBuckets.forEach(b => {
       const unpaidPen = round2(Math.max(0, b.billedPen - b.coveredPen));
@@ -966,19 +1032,51 @@ export function computeCardBillingAmortization(params: {
       unpaidTotalPenByMonth.set(b.monthKey, round2((unpaidTotalPenByMonth.get(b.monthKey) || 0) + unpaidTotalPen));
       paidInAdvanceByMonth.set(b.monthKey, round2((paidInAdvanceByMonth.get(b.monthKey) || 0) + b.paidInAdvancePen));
 
+      const cycleDates = getCardCycleBillingDates(b.monthKey, card);
+      const closeDate = b.closeDate || cycleDates.closeDate;
+      const startDate = b.startDate || cycleDates.startDate;
+      const dueDate = b.dueDate || cycleDates.dueDate;
+
+      const isClosed = todayStrAmort >= closeDate;
+      const isOverdue = todayStrAmort > dueDate && (unpaidPen > 0.009 || unpaidUsd > 0.009);
+
+      const [cYear, cMonth, cDay] = closeDate.split('-');
+      const [sYear, sMonth, sDay] = startDate.split('-');
+      const [dYear, dMonth, dDay] = dueDate.split('-');
+
+      const cycleName = isClosed 
+        ? `Estado de cuenta al ${cDay}/${cMonth}` 
+        : `Consumos en curso (Corte ${cDay}/${cMonth})`;
+      const periodLabel = `${sDay}/${sMonth} al ${cDay}/${cMonth}`;
+
+      let label = '';
+      if (isOverdue) {
+        label = `⚠️ [Vencido] ${cycleName} (${periodLabel}) • Venció el ${dDay}/${dMonth}`;
+      } else if (isClosed) {
+        label = `[Facturado] ${cycleName} (${periodLabel}) • Vence el ${dDay}/${dMonth}`;
+      } else {
+        label = `[En curso] ${cycleName} (${periodLabel}) • Vence el ${dDay}/${dMonth}`;
+      }
+
       if (!isCovered) {
-        const [yStr, mStr] = b.monthKey.split('-');
-        const mIdx = parseInt(mStr, 10) - 1;
-        const monthName = MONTH_NAMES_LOCAL[mIdx] || b.monthKey;
-        const dayStr = b.dueDate.split('-')[2] || '';
-        const label = `${monthName} ${yStr} (Vence el ${dayStr}/${mStr})`;
         cardPendingCycles.push({
           monthKey: b.monthKey,
-          dueDate: b.dueDate,
+          dueDate,
+          closeDate,
+          startDate,
           unpaidPen,
           unpaidUsd,
           unpaidUsdInPen,
-          label
+          billedPen: round2(b.billedPen),
+          billedUsd: round2(b.billedUsd),
+          coveredPen: round2(b.coveredPen),
+          coveredUsd: round2(b.coveredUsd),
+          isClosed,
+          isOverdue,
+          cycleName,
+          periodLabel,
+          label,
+          txCount: b.txCount || 0
         });
       }
     });

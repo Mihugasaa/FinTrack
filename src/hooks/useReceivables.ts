@@ -258,7 +258,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
         amountPaid: pay,
         amount: pay,
         paymentDate: dateStr,
-        paymentMethodId: 'pm-1',
+        paymentMethodId: defaultDebitMethodId || 'pm-1',
         notes: collectNotes || 'Abono en cascada a préstamo',
         createdAt: nowIso
       };
@@ -306,7 +306,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       amountPaid: amountToCollect,
       amount: amountToCollect,
       paymentDate: dateStr,
-      paymentMethodId: 'pm-1',
+      paymentMethodId: defaultDebitMethodId || 'pm-1',
       notes: collectNotes || undefined,
       createdAt: nowIso
     };

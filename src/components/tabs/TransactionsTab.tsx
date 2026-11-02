@@ -74,7 +74,7 @@ export const TransactionsTab: React.FC = () => {
       const eff = (r.payments && r.payments.length > 0)
         ? r.payments
         : (r.paidAmount > 0 ? [{ paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr) }] : []);
-      return acc + eff.filter(pay => pay.paymentDate.startsWith(monthKey)).length;
+      return acc + eff.filter(pay => (pay.paymentDate || '').split('T')[0].startsWith(monthKey)).length;
     }, 0);
   }, [receivables, monthKey, currentDateStr]);
   const [naturalText, setNaturalText] = useState('');
@@ -529,7 +529,7 @@ export const TransactionsTab: React.FC = () => {
                           </td>
                           <td>
                             <span className="badge badge-neutral" style={{ color: '#10b981' }}>
-                              Cuenta Débito / Bancos
+                              {paymentMethods.find(p => p.id === pay.paymentMethodId)?.name || 'Cuenta Débito / Bancos'}
                             </span>
                           </td>
                           <td className="tx-amount-cell" style={{ color: 'var(--accent-success)' }}>

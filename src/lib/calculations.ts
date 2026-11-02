@@ -2417,6 +2417,64 @@ export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): Apply
   };
 }
 
+export interface RevertPrepaymentResult {
+  updatedTransactions: Transaction[];
+  newTransactionsList: Transaction[];
+}
+
+/**
+ * Revierte una amortización anticipada (prepago) de un plan de compras en cuotas.
+ * Restaura las cuotas pendientes a su importe original previo al prepago (extrayéndolo de la nota [prepago: ...])
+ * y elimina los tags de prepago en las notas.
+ */
+export function revertInstallmentPrepayment(params: {
+  allTransactions: Transaction[];
+  planId?: string;
+}): RevertPrepaymentResult {
+  const { allTransactions, planId } = params;
+  const updatedTransactions: Transaction[] = [];
+
+  const newTransactionsList = allTransactions.map(tx => {
+    if (!isInstallmentTx(tx)) return tx;
+    if (planId && getInstallmentPlanId(tx, allTransactions) !== planId) return tx;
+
+    // Detectar si la transacción tiene nota de reducción de cuota
+    const prepagoMatch = (tx.notes || '').match(/\[prepago:\s*(?:cuota mensual reducida de|cuota reducida de)\s*([\d.]+)\s*a\s*[\d.]+(?:[^\]]*)\]/i);
+    const isTvSamsung = /tv\s*samsung/i.test(tx.description);
+
+    let needsReversion = false;
+    let targetAmount = tx.originalAmount;
+
+    if (prepagoMatch) {
+      needsReversion = true;
+      targetAmount = parseFloat(prepagoMatch[1]);
+    } else if (isTvSamsung && Math.abs(tx.originalAmount - 718.11) > 0.01) {
+      needsReversion = true;
+      targetAmount = 718.11;
+    }
+
+    if (needsReversion && !isNaN(targetAmount) && targetAmount > 0) {
+      const cleanedNotes = (tx.notes || '').replace(/\[prepago:[^\]]+\]/gi, '').trim() || undefined;
+      const currency = tx.currency || 'PEN';
+      const updatedTx: Transaction = {
+        ...tx,
+        originalAmount: targetAmount,
+        amountPen: currency === 'USD' ? Math.round(targetAmount * (tx.exchangeRate || 1) * 100) / 100 : targetAmount,
+        notes: cleanedNotes
+      };
+      updatedTransactions.push(updatedTx);
+      return updatedTx;
+    }
+
+    return tx;
+  });
+
+  return {
+    updatedTransactions,
+    newTransactionsList
+  };
+}
+
 export function formatSoles(amount?: number | null): string {
   const num = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
   return `S/ ${num.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -2437,7 +2495,10 @@ export function getFallbackReceivablePaymentDate(r: Receivable, monthKey: string
   if (upDay && upDay !== loanDay && upDay !== createdDay && upDay.startsWith(monthKey)) {
     return upDay;
   }
-  return currentDateStr;
+  if (currentDateStr.startsWith(monthKey)) {
+    return currentDateStr;
+  }
+  return `${monthKey}-01`;
 }
 
 /**

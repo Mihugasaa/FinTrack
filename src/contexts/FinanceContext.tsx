@@ -37,7 +37,9 @@ import {
   getEndOfMonthDate,
   getFallbackReceivablePaymentDate,
   evaluateCardsLiquidityCoverage,
-  getActiveInstallmentPlansForCard
+  getActiveInstallmentPlansForCard,
+  isInstallmentTx,
+  getInstallmentPlanId
 } from '@/lib/calculations';
 import {
   Transaction,
@@ -1136,6 +1138,61 @@ function useFinanceController() {
     });
   }, [transactions, cardPayments, paymentMethods]);
 
+  // Auto-sanación y reversión de prepagos huérfanos en compras en cuotas
+  // Si una cuota tiene nota de prepago o es TV Samsung con cuota reducida, pero NO existe abono registrado de prepago, se restaura a su cuota bancaria original (718.11).
+  useEffect(() => {
+    if (transactions.length === 0) return;
+
+    // Recopilar planes con amortizaciones de prepago activas en cardPayments
+    const activePrepaymentPlanIds = new Set<string>();
+    cardPayments.forEach(p => {
+      if (p.targetMonth?.startsWith('INSTALLMENT_PLAN:')) {
+        activePrepaymentPlanIds.add(p.targetMonth.replace('INSTALLMENT_PLAN:', ''));
+      }
+      if (typeof p.notes === 'string' && p.notes.includes('[prepago:')) {
+        const match = p.notes.match(/\[target:INSTALLMENT_PLAN:([^\]]+)\]/);
+        if (match) activePrepaymentPlanIds.add(match[1]);
+      }
+    });
+
+    let hasChanges = false;
+    const healed = transactions.map(t => {
+      if (!isInstallmentTx(t)) return t;
+
+      const isTvSamsung = /tv\s*samsung/i.test(t.description);
+      const hasPrepagoNote = typeof t.notes === 'string' && /\[prepago:\s*(?:cuota mensual reducida de|cuota reducida de)\s*([\d.]+)/i.test(t.notes);
+      const planId = getInstallmentPlanId(t, transactions);
+
+      const isOrphan = hasPrepagoNote && !activePrepaymentPlanIds.has(planId);
+      const isTvSamsungAltered = isTvSamsung && Math.abs(t.originalAmount - 718.11) > 0.01 && !activePrepaymentPlanIds.has(planId);
+
+      if (isOrphan || isTvSamsungAltered) {
+        let origAmt = 718.11;
+        if (hasPrepagoNote) {
+          const match = (t.notes || '').match(/\[prepago:\s*(?:cuota mensual reducida de|cuota reducida de)\s*([\d.]+)/i);
+          if (match && !isNaN(parseFloat(match[1]))) {
+            origAmt = parseFloat(match[1]);
+          }
+        }
+        const cleanedNotes = (t.notes || '').replace(/\[prepago:[^\]]+\]/gi, '').trim() || undefined;
+        hasChanges = true;
+        const restored: Transaction = {
+          ...t,
+          originalAmount: origAmt,
+          amountPen: t.currency === 'USD' ? Math.round(origAmt * (t.exchangeRate || 1) * 100) / 100 : origAmt,
+          notes: cleanedNotes
+        };
+        SupabaseDataService.updateTransaction(restored);
+        return restored;
+      }
+      return t;
+    });
+
+    if (hasChanges) {
+      setTransactions(healed);
+    }
+  }, [transactions, cardPayments, setTransactions]);
+
   // Sincronizar nómina activa si existe un sueldo registrado/propagado para este mes
   useEffect(() => {
     const knownSalary = monthlySalaries[monthKey];
@@ -1941,7 +1998,7 @@ function useFinanceController() {
     | { kind: 'card_payment'; data: CardPayment; index: number; sortDate: string }
     | { kind: 'income'; data: { id: string; description: string; amount: number; date: string; type: 'salary' | 'extra' | 'borrowed'; createdAt?: string }; sortDate: string }
     | { kind: 'payable_payment'; data: { id: string; payableId: string; creditorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string; createdAt?: string }; sortDate: string }
-    | { kind: 'receivable_payment'; data: { id: string; receivableId: string; debtorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; notes?: string; createdAt?: string }; sortDate: string }
+    | { kind: 'receivable_payment'; data: { id: string; receivableId: string; debtorName: string; description: string; amount: number; currency?: 'PEN' | 'USD'; exchangeRate?: number; paymentDate: string; paymentMethodId?: string; notes?: string; createdAt?: string }; sortDate: string }
     | { kind: 'scheduled_payable'; data: { id: string; payableId: string; creditorName: string; description: string; amountPen: number; currency?: 'PEN' | 'USD'; remaining: number; dueDate: string }; sortDate: string };
 
   const combinedMovements = useMemo<UnifiedMovement[]>(() => {
@@ -2104,15 +2161,32 @@ function useFinanceController() {
               amount: r.paidAmount,
               amountPaid: r.paidAmount,
               paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr),
-              paymentMethodId: 'pm-1',
+              paymentMethodId: paymentMethods.find(pm => pm.type === 'debit' || pm.type === 'cash')?.id || 'pm-1',
               notes: 'Cobro de préstamo'
             }] : []);
 
         effectivePayments.forEach(pay => {
-          if (pay.paymentDate.startsWith(monthKey)) {
-            const searchMatches = !searchQuery || `cobro prestamo ${r.debtorName} ${r.description}`.toLowerCase().includes(searchQuery.toLowerCase());
-            const catMatches = selectedCategory === 'ALL';
-            const methodMatches = selectedPaymentMethod === 'ALL' || pay.paymentMethodId === selectedPaymentMethod;
+          const pDate = (pay.paymentDate || '').split('T')[0];
+          if (pDate.startsWith(monthKey)) {
+            const searchMatches = !searchQuery ||
+              `cobro prestamo ${r.debtorName} ${r.description} ${pay.notes || ''}`.toLowerCase().includes(searchQuery.toLowerCase());
+
+            const selectedCatObj = categories.find(c => c.id === selectedCategory);
+            const catName = selectedCatObj ? selectedCatObj.name.toLowerCase() : '';
+            const catMatches = selectedCategory === 'ALL' ||
+              catName.includes('préstamo') ||
+              catName.includes('prestamo') ||
+              catName.includes('ingreso') ||
+              catName.includes('otro');
+
+            const selectedPmObj = paymentMethods.find(pm => pm.id === selectedPaymentMethod);
+            const isDebitOrCashSelected = selectedPmObj ? (selectedPmObj.type === 'debit' || selectedPmObj.type === 'cash') : false;
+            const isPayUnassignedOrDebit = !pay.paymentMethodId || pay.paymentMethodId === 'pm-1' ||
+              paymentMethods.some(pm => pm.id === pay.paymentMethodId && (pm.type === 'debit' || pm.type === 'cash'));
+            const methodMatches = selectedPaymentMethod === 'ALL' ||
+              pay.paymentMethodId === selectedPaymentMethod ||
+              (isDebitOrCashSelected && isPayUnassignedOrDebit);
+
             if (searchMatches && catMatches && methodMatches) {
               items.push({
                 kind: 'receivable_payment',
@@ -2124,11 +2198,12 @@ function useFinanceController() {
                   amount: pay.amount,
                   currency: r.currency,
                   exchangeRate: r.exchangeRate,
-                  paymentDate: pay.paymentDate,
+                  paymentDate: pDate,
+                  paymentMethodId: pay.paymentMethodId,
                   notes: pay.notes,
                   createdAt: pay.createdAt
                 },
-                sortDate: pay.paymentDate
+                sortDate: pDate
               });
             }
           }
@@ -2189,7 +2264,7 @@ function useFinanceController() {
       const effPayments = (r.payments && r.payments.length > 0)
         ? r.payments
         : (r.paidAmount > 0 ? [{ paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr) }] : []);
-      return acc + effPayments.filter(pay => pay.paymentDate.startsWith(monthKey)).length;
+      return acc + effPayments.filter(pay => (pay.paymentDate || '').split('T')[0].startsWith(monthKey)).length;
     }, 0);
     const validOtherIncomesCount = currentOtherIncomes.filter(oi => !oi.id?.startsWith('inc-loan-')).length;
 

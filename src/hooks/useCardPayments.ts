@@ -5,7 +5,7 @@ import { SupabaseDataService } from '@/services/supabaseData.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { initialPaymentMethods } from '@/lib/defaults';
-import { calculateItf, applyInstallmentPrepayment } from '@/lib/calculations';
+import { calculateItf, applyInstallmentPrepayment, revertInstallmentPrepayment } from '@/lib/calculations';
 import { CardPayment, PaymentMethod, CurrencyCode, Transaction, PrepaymentMode } from '@/types';
 import { generateUUID } from '@/lib/utils';
 
@@ -283,6 +283,33 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
 
   const handleDeleteCardPayment = (targetId?: string, _targetIndex?: number) => {
     if (!targetId) return;
+
+    // Si el abono a eliminar era un prepago a un plan de cuotas, revertir las cuotas afectadas
+    const paymentToDelete = cardPayments.find(p => p.id === targetId);
+    if (paymentToDelete && transactions && setTransactions) {
+      const isPlanPrepayment =
+        paymentToDelete.targetMonth?.startsWith('INSTALLMENT_PLAN:') ||
+        (typeof paymentToDelete.notes === 'string' && paymentToDelete.notes.includes('[prepago:'));
+
+      if (isPlanPrepayment) {
+        let planId: string | undefined;
+        if (paymentToDelete.targetMonth?.startsWith('INSTALLMENT_PLAN:')) {
+          planId = paymentToDelete.targetMonth.replace('INSTALLMENT_PLAN:', '');
+        }
+        const revertResult = revertInstallmentPrepayment({
+          allTransactions: transactions,
+          planId
+        });
+
+        if (revertResult.updatedTransactions.length > 0) {
+          setTransactions(revertResult.newTransactionsList);
+          revertResult.updatedTransactions.forEach(utx => {
+            SupabaseDataService.updateTransaction(utx);
+          });
+        }
+      }
+    }
+
     setCardPayments(prev => prev.filter(p => p.id !== targetId));
     SupabaseDataService.deleteCardPayment(targetId);
   };

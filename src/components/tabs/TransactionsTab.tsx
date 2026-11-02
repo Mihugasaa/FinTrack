@@ -2,7 +2,13 @@
 
 import React, { useState } from 'react';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
-import { getFallbackReceivablePaymentDate } from '@/lib/calculations';
+import {
+  getFallbackReceivablePaymentDate,
+  isInstallmentPrepayment,
+  isInstallmentTx,
+  getInstallmentPlanId,
+  getInstallmentBaseDescription
+} from '@/lib/calculations';
 import { useFinance } from '@/contexts/FinanceContext';
 import {
   Search,
@@ -21,6 +27,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
+import { CardPayment } from '@/types';
 
 export const TransactionsTab: React.FC = () => {
   const {
@@ -66,8 +73,25 @@ export const TransactionsTab: React.FC = () => {
     isParsingNaturalExpense,
     handleOpenEditCollectPayment,
     handleOpenEditIncome,
-    setActiveTab
+    setActiveTab,
+    transactions
   } = useFinance();
+
+  const getPrepaySubDesc = (pay: CardPayment) => {
+    const planId = (pay.targetMonth || '').replace('INSTALLMENT_PLAN:', '');
+    const planTx = transactions.find(t => isInstallmentTx(t) && (
+      (planId && getInstallmentPlanId(t, transactions) === planId) ||
+      (pay.notes && typeof pay.notes === 'string' && pay.notes.includes(getInstallmentBaseDescription(t.description)))
+    ));
+    const planName = planTx ? getInstallmentBaseDescription(planTx.description) : '';
+    if (planName) return `Amortización de cuotas • ${planName}`;
+    const slugMatch = planId.match(/-(tv[a-z0-9_-]*)/i) || planId.match(/plan-(?:legacy-[^-]+-)+([a-z0-9_-]+)/i);
+    if (slugMatch) {
+      const clean = slugMatch[1].replace(/-+/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+      return `Amortización de cuotas • ${clean}`;
+    }
+    return 'Amortización de compras en cuotas';
+  };
 
   const currentMonthReceivablePaymentsCount = React.useMemo(() => {
     return receivables.reduce((acc, r) => {
@@ -640,11 +664,13 @@ export const TransactionsTab: React.FC = () => {
                             <div className="tx-concept-main">
                               <span>{isRefundSource ? `Reembolso a ${pm?.name || 'Tarjeta'}` : `Pago a ${pm?.name || 'Tarjeta de Crédito'}`}</span>
                               <span className={`badge ${isRefundSource ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.65rem' }}>
-                                {isRefundSource ? 'Reembolso' : 'Amortización Tarjeta'}
+                                {isRefundSource ? 'Reembolso' : (isInstallmentPrepayment(pay) ? 'Amortización Cuotas' : 'Amortización Tarjeta')}
                               </span>
                             </div>
                             <div className="tx-concept-sub">
-                              {isRefundSource ? 'Abono externo de comercio / banco' : 'Amortización ciclo facturado'}
+                              {isRefundSource
+                                ? 'Abono externo de comercio / banco'
+                                : (isInstallmentPrepayment(pay) ? getPrepaySubDesc(pay) : 'Amortización ciclo facturado')}
                               {pay.currency === 'USD' && (
                                 <span> • T.C. {(pay.exchangeRate || 1).toFixed(4)}</span>
                               )}
@@ -1095,18 +1121,24 @@ export const TransactionsTab: React.FC = () => {
                                 {isRefund ? `Reembolso ${pm?.name || 'Tarjeta'}` : `Pago a ${pm?.name || 'Tarjeta'}`}
                               </span>
                             </div>
-                            <div className="mobile-tx-meta" title={`${formatDisplayDate(pay.paymentDate)} • ${isRefund ? 'Comercio/Banco' : 'Débito'}`}>
+                            <div className="mobile-tx-meta" title={`${formatDisplayDate(pay.paymentDate)} • ${isRefund ? 'Comercio/Banco' : (isInstallmentPrepayment(pay) ? getPrepaySubDesc(pay) : 'Débito')}`}>
                               <span>{formatDisplayDate(pay.paymentDate)}</span>
                               <span>•</span>
-                              {isFuture ? (
-                                <span className="badge badge-scheduled" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⏳ Programado</span>
+                              {isInstallmentPrepayment(pay) ? (
+                                <span style={{ color: 'var(--accent-brand)', fontWeight: 600 }}>{getPrepaySubDesc(pay)}</span>
                               ) : (
-                                <span className="badge badge-immediate" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⚡ Inmediato</span>
+                                <>
+                                  {isFuture ? (
+                                    <span className="badge badge-scheduled" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⏳ Programado</span>
+                                  ) : (
+                                    <span className="badge badge-immediate" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>⚡ Inmediato</span>
+                                  )}
+                                  <span>•</span>
+                                  <span style={{ color: 'var(--accent-brand)', fontWeight: 500 }}>
+                                    {pay.sourceType === 'USD_SAVINGS_ACCOUNT' ? 'Ahorros USD' : (isRefund ? 'Comercio/Banco' : 'Débito')}
+                                  </span>
+                                </>
                               )}
-                              <span>•</span>
-                              <span style={{ color: 'var(--accent-brand)', fontWeight: 500 }}>
-                                {pay.sourceType === 'USD_SAVINGS_ACCOUNT' ? 'Ahorros USD' : (isRefund ? 'Comercio/Banco' : 'Débito')}
-                              </span>
                               {pay.currency === 'USD' && (
                                 <>
                                   <span>•</span>
@@ -1119,7 +1151,7 @@ export const TransactionsTab: React.FC = () => {
                         <div className="mobile-tx-right">
                           <div className="mobile-tx-tags">
                             <span className={`badge ${isRefund ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
-                              {isRefund ? 'Reembolso' : (pay.currency === 'USD' ? '$ USD' : 'Amortización')}
+                              {isRefund ? 'Reembolso' : (isInstallmentPrepayment(pay) ? 'Amortización Cuotas' : (pay.currency === 'USD' ? '$ USD' : 'Amortización'))}
                             </span>
                           </div>
                           <span className="mobile-tx-amount tabular-nums" style={{ color: isRefund ? 'var(--accent-success)' : 'var(--accent-danger)' }}>

@@ -803,6 +803,17 @@ export function getReceivableCollectionMonth(r: Receivable): string {
 }
 
 /**
+ * Determina si un pago a tarjeta es una amortización extraordinaria / prepago de compras en cuotas.
+ * Estos abonos impactan directamente el capital del plan (reduciendo o eliminando cuotas en transactions)
+ * y no constituyen abonos a ciclos de facturación rotativos/ordinarios.
+ */
+export function isInstallmentPrepayment(p: { targetMonth?: string; notes?: string }): boolean {
+  if (p.targetMonth && p.targetMonth.startsWith('INSTALLMENT_PLAN:')) return true;
+  if (typeof p.notes === 'string' && (p.notes.includes('[prepago:') || p.notes.includes('[target:INSTALLMENT_PLAN:'))) return true;
+  return false;
+}
+
+/**
  * Amortización y cobertura de facturación de tarjetas de crédito.
  * 
  * Vincula los abonos realizados a las tarjetas con los vencimientos de ciclo bancario,
@@ -900,10 +911,11 @@ export function computeCardBillingAmortization(params: {
       }
     });
 
-    // 3. Filtrar abonos de esta tarjeta (excluyendo reembolsos y créditos de banco que ya netean)
+    // 3. Filtrar abonos de esta tarjeta (excluyendo reembolsos, créditos de banco y amortizaciones extraordinarias de cuotas)
     const validPayments = cardPayments
       .filter(p => {
         if (p.sourceType === 'MERCHANT_REFUND' || p.sourceType === 'BANK_CREDIT') return false;
+        if (isInstallmentPrepayment(p)) return false; // Amortizaciones de cuotas ya reducen directamente el cronograma en transactions
         if (p.paymentMethodId === card.id) return true;
         const aliased = paymentMethods.find(pm => pm.id === p.paymentMethodId);
         return !!aliased && aliased.name.toLowerCase() === card.name.toLowerCase();
@@ -1785,20 +1797,23 @@ export function calculateCardsDebtSummary(
     const totalInstallmentPlansCount = activeInstallmentPlans.size;
 
     // 2. DESGLOSE DE ABONOS POR MONEDA (Soles y Dólares)
+    // Se excluyen las amortizaciones extraordinarias de cuotas porque ya redujeron directamente futureInstallmentsPen en transactions
+    const isRegularPayment = (p: CardPayment | any) => !isInstallmentPrepayment(p);
+
     const paidPenThisMonth = cardPayments
-      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate.startsWith(targetYM) && p.currency !== 'USD')
+      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate.startsWith(targetYM) && p.currency !== 'USD' && isRegularPayment(p))
       .reduce((acc, curr) => acc + (curr.amountPen !== undefined ? curr.amountPen : curr.amountPaid), 0);
 
     const paidPenToDate = cardPayments
-      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate <= todayStr && p.currency !== 'USD')
+      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate <= todayStr && p.currency !== 'USD' && isRegularPayment(p))
       .reduce((acc, curr) => acc + (curr.amountPen !== undefined ? curr.amountPen : curr.amountPaid), 0);
 
     const paidThisMonthUsd = cardPayments
-      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate.startsWith(targetYM) && p.currency === 'USD')
+      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate.startsWith(targetYM) && p.currency === 'USD' && isRegularPayment(p))
       .reduce((acc, curr) => acc + (curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid), 0);
 
     const paidToDateUsd = cardPayments
-      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate <= todayStr && p.currency === 'USD')
+      .filter(p => matchesCard(p.paymentMethodId) && p.paymentDate <= todayStr && p.currency === 'USD' && isRegularPayment(p))
       .reduce((acc, curr) => acc + (curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid), 0);
 
     // 3. ESTADO DE DEUDA EN DÓLARES (Bimonetario, incluyendo cuotas diferidas en USD)

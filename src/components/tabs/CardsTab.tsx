@@ -11,6 +11,13 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
+import {
+  isInstallmentTx,
+  getInstallmentPlanId,
+  getInstallmentBaseDescription,
+  isInstallmentPrepayment
+} from '@/lib/calculations';
+import { CardPayment } from '@/types';
 
 export const CardsTab: React.FC = () => {
   const {
@@ -38,7 +45,8 @@ export const CardsTab: React.FC = () => {
     formatSoles,
     isCurrentActiveMonth,
     isPastMonth,
-    isFutureMonth
+    isFutureMonth,
+    transactions
   } = useFinance();
 
   // Cálculo de Deuda Consolidada Total en Tarjetas de Crédito (a la fecha de hoy)
@@ -79,13 +87,35 @@ export const CardsTab: React.FC = () => {
     ? [...cardPayments].sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
     : currentMonthCardPayments;
 
-  const formatPaymentTargetMonth = (ym: string) => {
+  const formatPaymentTargetDescription = (pay: CardPayment): string => {
+    if (isInstallmentPrepayment(pay)) {
+      const planId = (pay.targetMonth || '').replace('INSTALLMENT_PLAN:', '');
+      const planTx = transactions.find(t => isInstallmentTx(t) && (
+        (planId && getInstallmentPlanId(t, transactions) === planId) ||
+        (pay.notes && typeof pay.notes === 'string' && pay.notes.includes(getInstallmentBaseDescription(t.description)))
+      ));
+      const planName = planTx ? getInstallmentBaseDescription(planTx.description) : '';
+      if (planName) {
+        return `Amortización de cuotas: ${planName}`;
+      }
+      const slugMatch = planId.match(/-(tv[a-z0-9_-]*)/i) || planId.match(/plan-(?:legacy-[^-]+-)+([a-z0-9_-]+)/i);
+      if (slugMatch) {
+        const clean = slugMatch[1].replace(/-+/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        return `Amortización de cuotas: ${clean}`;
+      }
+      return 'Amortización de compras en cuotas';
+    }
+
+    const ym = pay.targetMonth;
+    if (!ym) return 'Abono general a tarjeta';
     const parts = ym.split('-');
-    if (parts.length !== 2) return ym;
-    const [y, m] = parts;
-    const idx = parseInt(m, 10);
-    const name = monthNames[idx] || ym;
-    return `${name} ${y}`;
+    if (parts.length === 2) {
+      const [y, m] = parts;
+      const idx = parseInt(m, 10);
+      const name = monthNames[idx] || ym;
+      return `Para ciclo de ${name} ${y}`;
+    }
+    return `Para ciclo ${ym}`;
   };
 
   return (
@@ -631,7 +661,7 @@ export const CardsTab: React.FC = () => {
                                   </span>
                                   {hasTargetCycle && (
                                     <span style={{ fontSize: '0.725rem', color: 'var(--accent-success)', fontWeight: 600 }}>
-                                      • Para ciclo de {formatPaymentTargetMonth(pay.targetMonth!)}
+                                      • {formatPaymentTargetDescription(pay)}
                                     </span>
                                   )}
                                 </div>
@@ -735,7 +765,7 @@ export const CardsTab: React.FC = () => {
                                   <>
                                     <span>•</span>
                                     <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
-                                      Para ciclo {formatPaymentTargetMonth(pay.targetMonth!)}
+                                      {formatPaymentTargetDescription(pay)}
                                     </span>
                                   </>
                                 ) : (
@@ -796,7 +826,7 @@ export const CardsTab: React.FC = () => {
                           <div className="mobile-tx-footer-row">
                             {hasTargetCycle ? (
                               <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
-                                Para ciclo de {formatPaymentTargetMonth(pay.targetMonth!)}
+                                {formatPaymentTargetDescription(pay)}
                               </span>
                             ) : (
                               <span />

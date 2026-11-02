@@ -956,8 +956,51 @@ export function computeCardBillingAmortization(params: {
       }
     });
 
-    // PASO 2: Amortización cronológica FIFO (pagos sin targetMonth o remanentes)
     const sortedBuckets = Array.from(bucketsMap.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+    // PASO 1.b: Imputación heurística inteligente por coincidencia de monto exacto de ciclo facturado
+    // Si un pago no especificó targetMonth (ej. pagos automáticos legados o registros sin tag),
+    // pero su monto coincide al céntimo (<= 0.01) con lo pendiente o con el total facturado de un ciclo cerrado,
+    // se asocia con prioridad a ese ciclo para evitar que discrepancias menores pasadas (ej. redondeos o faltantes de S/ 0.99)
+    // desvíen o contaminen el pago completo del ciclo actual.
+    paymentRem.forEach(p => {
+      if (p.targetMonth) return;
+      if (p.remPen <= 0.005 && p.remUsd <= 0.005) return;
+
+      const pPayMonth = p.paymentDate.slice(0, 7);
+
+      for (const b of sortedBuckets) {
+        if (!p.isUsd && p.remPen > 0.005) {
+          const neededPen = round2(Math.max(0, b.billedPen - b.coveredPen));
+          const isExactMatch = neededPen > 0.005 && (Math.abs(p.remPen - neededPen) <= 0.01 || Math.abs(p.remPen - b.billedPen) <= 0.01);
+          if (isExactMatch) {
+            const appliedPen = Math.min(neededPen, p.remPen);
+            b.coveredPen += appliedPen;
+            p.remPen -= appliedPen;
+
+            if (pPayMonth < b.monthKey) {
+              b.paidInAdvancePen += appliedPen;
+            } else {
+              b.paidInMonthPen += appliedPen;
+            }
+            break;
+          }
+        }
+
+        if (p.isUsd && p.remUsd > 0.005) {
+          const neededUsd = round2(Math.max(0, b.billedUsd - b.coveredUsd));
+          const isExactMatch = neededUsd > 0.005 && (Math.abs(p.remUsd - neededUsd) <= 0.01 || Math.abs(p.remUsd - b.billedUsd) <= 0.01);
+          if (isExactMatch) {
+            const appliedUsd = Math.min(neededUsd, p.remUsd);
+            b.coveredUsd += appliedUsd;
+            p.remUsd -= appliedUsd;
+            break;
+          }
+        }
+      }
+    });
+
+    // PASO 2: Amortización cronológica FIFO (pagos sin targetMonth o remanentes)
 
     paymentRem.forEach(p => {
       if (p.remPen <= 0.005 && p.remUsd <= 0.005) return;

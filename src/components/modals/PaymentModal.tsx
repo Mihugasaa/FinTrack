@@ -53,7 +53,6 @@ export const PaymentModal: React.FC = () => {
     cardDebtSummary
   } = useFinance();
   const onClose = handleClosePaymentModal;
-  const onSubmit = handleMakeCardPayment;
   const isEditing = editingCardPaymentId !== null;
   const [isEditingItf, setIsEditingItf] = React.useState(false);
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
@@ -138,6 +137,14 @@ export const PaymentModal: React.FC = () => {
     return filteredPendingCycles.find(c => c.monthKey === paymentTargetMonth) || null;
   }, [paymentTargetMonth, autoResolvedCycle, filteredPendingCycles]);
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const effectiveTarget = (paymentTargetMonth === '' && autoResolvedCycle?.monthKey)
+      ? autoResolvedCycle.monthKey
+      : paymentTargetMonth;
+    handleMakeCardPayment(e, effectiveTarget);
+  };
+
   const cycleOptions = [
     {
       value: '',
@@ -203,7 +210,7 @@ export const PaymentModal: React.FC = () => {
           </button>
         </div>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">Tarjeta a la que abonaste</label>
             <CustomSelect
@@ -264,6 +271,9 @@ export const PaymentModal: React.FC = () => {
                         ? (matchedCycle.unpaidUsd > 0 ? matchedCycle.unpaidUsd : matchedCycle.unpaidPen)
                         : matchedCycle.unpaidPen;
                       setPaymentAmount(dueAmt.toFixed(2));
+                      if (!paymentTargetMonth && matchedCycle.monthKey) {
+                        setPaymentTargetMonth(matchedCycle.monthKey);
+                      }
                     }}
                     title={`Pagar el estado de cuenta facturado (${matchedCycle.periodLabel})`}
                   >

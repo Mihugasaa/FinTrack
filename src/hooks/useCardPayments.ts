@@ -130,7 +130,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
     setIsPaymentModalOpen(true);
   };
 
-  const handleMakeCardPayment = (e: React.FormEvent) => {
+  const handleMakeCardPayment = (e: React.FormEvent, overrideTargetMonth?: string) => {
     e.preventDefault();
     if (!paymentAmount || !paymentCardId) return;
 
@@ -152,6 +152,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
       }
     }
 
+    const resolvedTarget = overrideTargetMonth !== undefined ? overrideTargetMonth : paymentTargetMonth;
+
     if (editingCardPaymentId !== null) {
       // Modificar pago existente de forma precisa por ID único
       const existing = cardPayments.find(p => p.id === editingCardPaymentId);
@@ -161,8 +163,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
         .replace(/\[itf:[^\]]*\]/g, '')
         .replace(/\[target:[^\]]*\]/g, '')
         .trim();
-      if (paymentTargetMonth) {
-        cleanNotes = `${cleanNotes ? `${cleanNotes} ` : ''}[target:${paymentTargetMonth}]`;
+      if (resolvedTarget) {
+        cleanNotes = `${cleanNotes ? `${cleanNotes} ` : ''}[target:${resolvedTarget}]`;
       }
       if (effectiveItf > 0) {
         cleanNotes = `${cleanNotes ? `${cleanNotes} ` : ''}[itf:${effectiveItf.toFixed(2)}]`;
@@ -181,7 +183,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
         itfAmount: effectiveItf > 0 ? effectiveItf : 0,
         paymentDate: targetDate,
         sourceType: paymentSourceType,
-        targetMonth: paymentTargetMonth || undefined,
+        targetMonth: resolvedTarget || undefined,
         notes: updatedNotes
       };
 
@@ -203,8 +205,8 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
     }
 
     // Si el pago es una amortización anticipada de un plan de compras en cuotas
-    if (paymentTargetMonth && paymentTargetMonth.startsWith('INSTALLMENT_PLAN:') && transactions && setTransactions) {
-      const planId = paymentTargetMonth.replace('INSTALLMENT_PLAN:', '');
+    if (resolvedTarget && resolvedTarget.startsWith('INSTALLMENT_PLAN:') && transactions && setTransactions) {
+      const planId = resolvedTarget.replace('INSTALLMENT_PLAN:', '');
       const prepayResult = applyInstallmentPrepayment({
         allTransactions: transactions,
         planId,
@@ -231,9 +233,9 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
 
     // Creación de nuevo abono con UUID nativo
     let newNotes = '';
-    if (paymentTargetMonth) {
-      newNotes = `[target:${paymentTargetMonth}]`;
-      if (paymentTargetMonth.startsWith('INSTALLMENT_PLAN:')) {
+    if (resolvedTarget) {
+      newNotes = `[target:${resolvedTarget}]`;
+      if (resolvedTarget.startsWith('INSTALLMENT_PLAN:')) {
         newNotes += ` [prepago:${prepaymentMode}]`;
       }
     }
@@ -254,7 +256,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
       itfAmount: effectiveItf > 0 ? effectiveItf : 0,
       paymentDate: targetDate,
       sourceType: paymentSourceType,
-      targetMonth: paymentTargetMonth || undefined,
+      targetMonth: resolvedTarget || undefined,
       notes: finalNewNotes
     };
 

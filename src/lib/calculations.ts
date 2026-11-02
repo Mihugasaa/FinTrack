@@ -21,6 +21,7 @@ import {
   PrepaymentMode
 } from '@/types';
 import { FALLBACK_USD_PEN_RATE } from './constants';
+import { generateUUID } from './utils';
 
 /**
  * Días feriados oficiales del sistema financiero y laboral en Perú (MM-DD)
@@ -1731,11 +1732,13 @@ export function calculateCardsDebtSummary(
     const futureInstallmentsUsd = futureInstallmentTxsUsd
       .reduce((acc, curr) => acc + (curr.isRefund ? -Math.abs(curr.originalAmount) : curr.originalAmount), 0);
 
-    const activeInstallmentPlans = new Set(
-      allTransactions
-        .filter(t => matchesCard(t.paymentMethodId) && isTxPendingInstallment(t) && (t.installmentPlanId || t.description))
-        .map(t => t.installmentPlanId || t.description.replace(/\(Cuota\s+\d+[\s/de]+\d+\)/i, '').trim())
-    );
+    const activeInstallmentPlans = new Set<string>();
+    allTransactions
+      .filter(t => matchesCard(t.paymentMethodId) && isTxPendingInstallment(t))
+      .forEach(t => {
+        const pid = getInstallmentPlanId(t, allTransactions);
+        if (pid) activeInstallmentPlans.add(pid);
+      });
     const totalInstallmentPlansCount = activeInstallmentPlans.size;
 
     // 2. DESGLOSE DE ABONOS POR MONEDA (Soles y Dólares)
@@ -2007,10 +2010,12 @@ export function generateInstallmentTransactions(
 
     // Calcular la fecha de pago bancaria según el ciclo de la tarjeta
     const paymentDueDate = calculatePaymentDueDate(txDate, method);
+    const id = generateUUID();
+    const instNotes = `${baseTx.notes || ''} [isInstallment:true] [instNum:${i}] [instTotal:${totalInstallments}] [planId:${planId}] [origTotal:${totalAmount}]`.trim();
 
     results.push({
       ...baseTx,
-      id: `tx-${Date.now()}-c${i}-${Math.random().toString(36).substring(2, 5)}`,
+      id,
       date: txDate,
       originalAmount: monthlyAmount,
       exchangeRate,
@@ -2022,7 +2027,8 @@ export function generateInstallmentTransactions(
       installmentPlanId: planId,
       originalTotalAmount: totalAmount,
       hasInterest: Boolean(monthlyInstallmentOverride && monthlyInstallmentOverride > (totalAmount / totalInstallments + 0.05)),
-      description: `${baseTx.description} (Cuota ${i}/${totalInstallments})`
+      description: `${baseTx.description} (Cuota ${i}/${totalInstallments})`,
+      notes: instNotes
     });
 
     // Avanzar 1 mes
@@ -2055,16 +2061,34 @@ export function getInstallmentBaseDescription(description?: string): string {
 }
 
 /**
- * Identifica de forma unívoca y persistente el ID del plan de cuotas al que pertenece una transacción
+ * Identifica de forma unívoca, canónica y persistente el ID del plan de cuotas al que pertenece una transacción.
+ * Si se pasa la lista de transacciones contextual, enlaza bidireccionalmente cuotas huérfanas
+ * que pertenezcan a la misma compra base (misma tarjeta y descripción base limpia).
  */
-export function getInstallmentPlanId(t: Transaction): string {
+export function getInstallmentPlanId(t: Transaction, allTxs?: Transaction[]): string {
   if (t.installmentPlanId) return t.installmentPlanId;
   if (typeof t.notes === 'string') {
     const m = t.notes.match(/\[planId:([^\]]+)\]/);
     if (m && m[1]) return m[1];
   }
-  const clean = getInstallmentBaseDescription(t.description || 'plan');
-  return `plan_${t.paymentMethodId}_${clean.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+  const clean = getInstallmentBaseDescription(t.description || 'plan').toLowerCase().replace(/[^a-z0-9]+/g, '_').trim();
+  
+  if (allTxs && allTxs.length > 0) {
+    const match = allTxs.find(other => 
+      other.id !== t.id &&
+      (other.paymentMethodId === t.paymentMethodId) &&
+      isInstallmentTx(other) &&
+      getInstallmentBaseDescription(other.description).toLowerCase().replace(/[^a-z0-9]+/g, '_').trim() === clean &&
+      (other.installmentPlanId || (typeof other.notes === 'string' && other.notes.includes('[planId:')))
+    );
+    if (match) {
+      if (match.installmentPlanId) return match.installmentPlanId;
+      const m = (match.notes || '').match(/\[planId:([^\]]+)\]/);
+      if (m && m[1]) return m[1];
+    }
+  }
+
+  return `plan_${t.paymentMethodId}_${clean}`;
 }
 
 /**
@@ -2109,10 +2133,10 @@ export function getActiveInstallmentPlansForCard(
     return false;
   };
 
-  // Agrupar por ID de plan
+  // Agrupar por ID de plan canónico unificado
   const groupsByPlan = new Map<string, Transaction[]>();
   for (const tx of installmentTxs) {
-    const pid = getInstallmentPlanId(tx);
+    const pid = getInstallmentPlanId(tx, installmentTxs);
     const existing = groupsByPlan.get(pid) || [];
     existing.push(tx);
     groupsByPlan.set(pid, existing);
@@ -2131,10 +2155,18 @@ export function getActiveInstallmentPlansForCard(
     const currency = firstPending.currency || 'PEN';
     const description = getInstallmentBaseDescription(firstPending.description) || 'Compra en cuotas';
 
-    const totalInstallments = Math.max(
+    // Determinar totalInstallments de forma resiliente
+    let totalInstallments = Math.max(
       ...groupTxs.map(t => t.totalInstallments || 0),
+      ...groupTxs.map(t => {
+        const m = (t.description || '').match(/\(Cuota\s+\d+[\s/de]+(\d+)\)/i);
+        return m ? parseInt(m[1], 10) : 0;
+      }),
       groupTxs.length
     );
+    if (totalInstallments < groupTxs.length) {
+      totalInstallments = groupTxs.length;
+    }
 
     const remainingInstallments = pendingTxs.length;
     const currentInstallment = firstPending.currentInstallment || (totalInstallments - remainingInstallments + 1);
@@ -2176,7 +2208,7 @@ export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): Apply
   const sysTodayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
   const todayStr = paymentDate || sysTodayStr;
 
-  const planTxs = allTransactions.filter(t => isInstallmentTx(t) && getInstallmentPlanId(t) === planId);
+  const planTxs = allTransactions.filter(t => isInstallmentTx(t) && getInstallmentPlanId(t, allTransactions) === planId);
   if (planTxs.length === 0 || prepaymentAmount <= 0) {
     return {
       updatedTransactions: [],

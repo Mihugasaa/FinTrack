@@ -164,49 +164,7 @@ export class SupabaseDataService {
         return null;
       }
 
-      return data.map((row: any) => {
-        let pmId = row.payment_method_id || '';
-        if (!pmId && row.notes) {
-          const m = row.notes.match(/\[pmId:([^\]]+)\]/);
-          if (m && m[1]) pmId = m[1];
-        }
-
-        const isRefund = !!(row as any).is_refund ||
-          (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
-
-        const isAuditConfirmed = !!(row as any).is_audit_confirmed ||
-          (typeof row.notes === 'string' && (row.notes.includes('[auditConfirmed:true]') || row.notes.includes('[audit_confirmed:true]')));
-
-        let anchorDay: number | undefined;
-        if (typeof row.notes === 'string') {
-          const am = row.notes.match(/\[anchorDay:(\d+)\]/);
-          if (am && am[1]) anchorDay = parseInt(am[1], 10);
-        }
-        if (!anchorDay && row.date && !!row.is_fixed_subscription) {
-          const parts = row.date.split('-');
-          if (parts.length === 3) anchorDay = parseInt(parts[2], 10);
-        }
-
-        return {
-          id: row.id,
-          date: row.date,
-          description: row.description,
-          categoryId: row.category_id || '',
-          paymentMethodId: pmId,
-          currency: row.currency || 'PEN',
-          originalAmount: parseFloat(row.original_amount),
-          exchangeRate: parseFloat(row.exchange_rate || '1.0'),
-          amountPen: parseFloat(row.amount_pen),
-          paymentDueDate: row.payment_due_date,
-          hasCustomDueDate: !!(row as any).has_custom_due_date || (typeof row.notes === 'string' && row.notes.includes('[manualDueDate:true]')),
-          isFixedSubscription: !!row.is_fixed_subscription,
-          isRefund: isRefund,
-          isAuditConfirmed: isAuditConfirmed,
-          notes: row.notes,
-          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
-          anchorDay
-        };
-      });
+      return data.map((row: any) => this.mapTransactionRow(row));
     } catch (e) {
       this.logSupabaseError('getTransactions (catch)', e);
       return null;
@@ -234,101 +192,109 @@ export class SupabaseDataService {
         return null;
       }
 
-      return data.map((row: any) => {
-        let pmId = row.payment_method_id || '';
-        if (!pmId && row.notes) {
-          const m = row.notes.match(/\[pmId:([^\]]+)\]/);
-          if (m && m[1]) pmId = m[1];
-        }
-
-        const isRefund = !!(row as any).is_refund ||
-          (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
-
-        const isAuditConfirmed = !!(row as any).is_audit_confirmed ||
-          (typeof row.notes === 'string' && (row.notes.includes('[auditConfirmed:true]') || row.notes.includes('[audit_confirmed:true]')));
-
-        let anchorDay: number | undefined;
-        if (typeof row.notes === 'string') {
-          const am = row.notes.match(/\[anchorDay:(\d+)\]/);
-          if (am && am[1]) anchorDay = parseInt(am[1], 10);
-        }
-        if (!anchorDay && row.date && !!row.is_fixed_subscription) {
-          const parts = row.date.split('-');
-          if (parts.length === 3) anchorDay = parseInt(parts[2], 10);
-        }
-
-        // Rehidratación formal y heurística de Compras en Cuotas
-        const notesStr = typeof row.notes === 'string' ? row.notes : '';
-        const descMatch = (row.description || '').match(/\(Cuota\s+(\d+)[\s/de]+(\d+)\)/i);
-        const isInstallment = !!(row as any).is_installment ||
-          notesStr.includes('[isInstallment:true]') ||
-          notesStr.includes('[installment:') ||
-          !!descMatch;
-
-        let currentInstallment: number | undefined = (row as any).current_installment != null ? parseInt((row as any).current_installment, 10) : undefined;
-        let totalInstallments: number | undefined = (row as any).total_installments != null ? parseInt((row as any).total_installments, 10) : undefined;
-        let installmentPlanId: string | undefined = (row as any).installment_plan_id || undefined;
-        let originalTotalAmount: number | undefined = (row as any).original_total_amount != null ? parseFloat((row as any).original_total_amount) : undefined;
-
-        if (!currentInstallment && notesStr) {
-          const m = notesStr.match(/\[instNum:(\d+)\]/);
-          if (m && m[1]) currentInstallment = parseInt(m[1], 10);
-        }
-        if (!totalInstallments && notesStr) {
-          const m = notesStr.match(/\[instTotal:(\d+)\]/);
-          if (m && m[1]) totalInstallments = parseInt(m[1], 10);
-        }
-        if (!installmentPlanId && notesStr) {
-          const m = notesStr.match(/\[planId:([^\]]+)\]/);
-          if (m && m[1]) installmentPlanId = m[1];
-        }
-        if (!originalTotalAmount && notesStr) {
-          const m = notesStr.match(/\[origTotal:([^\]]+)\]/);
-          if (m && m[1]) originalTotalAmount = parseFloat(m[1]);
-        }
-
-        // Respaldo heurístico para transacciones legadas creadas previamente
-        if (descMatch) {
-          if (!currentInstallment) currentInstallment = parseInt(descMatch[1], 10);
-          if (!totalInstallments) totalInstallments = parseInt(descMatch[2], 10);
-          if (!installmentPlanId) {
-            const baseDesc = (row.description || '').replace(/\(Cuota\s+\d+[\s/de]+\d+\)/i, '').trim().toLowerCase();
-            installmentPlanId = `plan-legacy-${pmId}-${baseDesc.replace(/\s+/g, '-')}`;
-          }
-          if (!originalTotalAmount && totalInstallments) {
-            originalTotalAmount = Math.round(parseFloat(row.amount_pen) * totalInstallments * 100) / 100;
-          }
-        }
-
-        return {
-          id: row.id,
-          date: row.date,
-          description: row.description,
-          categoryId: row.category_id || '',
-          paymentMethodId: pmId,
-          currency: row.currency || 'PEN',
-          originalAmount: parseFloat(row.original_amount),
-          exchangeRate: parseFloat(row.exchange_rate || '1.0'),
-          amountPen: parseFloat(row.amount_pen),
-          paymentDueDate: row.payment_due_date,
-          hasCustomDueDate: !!(row as any).has_custom_due_date || (typeof row.notes === 'string' && row.notes.includes('[manualDueDate:true]')),
-          isFixedSubscription: !!row.is_fixed_subscription,
-          isRefund: isRefund,
-          isAuditConfirmed: isAuditConfirmed,
-          isInstallment: isInstallment || undefined,
-          currentInstallment,
-          totalInstallments,
-          installmentPlanId,
-          originalTotalAmount,
-          notes: row.notes,
-          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
-          anchorDay
-        };
-      });
+      return data.map((row: any) => this.mapTransactionRow(row));
     } catch (e) {
       this.logSupabaseError('getAllTransactions (catch)', e);
       return null;
     }
+  }
+
+  /**
+   * Mapeador canónico y blindado de filas PostgreSQL de transactions a objetos TypeScript Transaction.
+   * Centraliza de forma unívoca la rehidratación formal y heurística de campos de cuotas (is_installment,
+   * installment_plan_id, current_installment, total_installments, original_total_amount), reembolsos,
+   * flags de auditoría y medios de pago para garantizar paridad absoluta en todas las consultas.
+   */
+  public static mapTransactionRow(row: any): Transaction {
+    let pmId = row.payment_method_id || '';
+    if (!pmId && row.notes) {
+      const m = row.notes.match(/\[pmId:([^\]]+)\]/);
+      if (m && m[1]) pmId = m[1];
+    }
+
+    const isRefund = !!(row as any).is_refund ||
+      (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
+
+    const isAuditConfirmed = !!(row as any).is_audit_confirmed ||
+      (typeof row.notes === 'string' && (row.notes.includes('[auditConfirmed:true]') || row.notes.includes('[audit_confirmed:true]')));
+
+    let anchorDay: number | undefined;
+    if (typeof row.notes === 'string') {
+      const am = row.notes.match(/\[anchorDay:(\d+)\]/);
+      if (am && am[1]) anchorDay = parseInt(am[1], 10);
+    }
+    if (!anchorDay && row.date && !!row.is_fixed_subscription) {
+      const parts = row.date.split('-');
+      if (parts.length === 3) anchorDay = parseInt(parts[2], 10);
+    }
+
+    // Rehidratación formal y heurística de Compras en Cuotas
+    const notesStr = typeof row.notes === 'string' ? row.notes : '';
+    const descMatch = (row.description || '').match(/\(Cuota\s+(\d+)[\s/de]+(\d+)\)/i);
+    const isInstallment = !!(row as any).is_installment ||
+      notesStr.includes('[isInstallment:true]') ||
+      notesStr.includes('[installment:') ||
+      !!descMatch;
+
+    let currentInstallment: number | undefined = (row as any).current_installment != null ? parseInt((row as any).current_installment, 10) : undefined;
+    let totalInstallments: number | undefined = (row as any).total_installments != null ? parseInt((row as any).total_installments, 10) : undefined;
+    let installmentPlanId: string | undefined = (row as any).installment_plan_id || undefined;
+    let originalTotalAmount: number | undefined = (row as any).original_total_amount != null ? parseFloat((row as any).original_total_amount) : undefined;
+
+    if (!currentInstallment && notesStr) {
+      const m = notesStr.match(/\[instNum:(\d+)\]/);
+      if (m && m[1]) currentInstallment = parseInt(m[1], 10);
+    }
+    if (!totalInstallments && notesStr) {
+      const m = notesStr.match(/\[instTotal:(\d+)\]/);
+      if (m && m[1]) totalInstallments = parseInt(m[1], 10);
+    }
+    if (!installmentPlanId && notesStr) {
+      const m = notesStr.match(/\[planId:([^\]]+)\]/);
+      if (m && m[1]) installmentPlanId = m[1];
+    }
+    if (!originalTotalAmount && notesStr) {
+      const m = notesStr.match(/\[origTotal:([^\]]+)\]/);
+      if (m && m[1]) originalTotalAmount = parseFloat(m[1]);
+    }
+
+    // Respaldo heurístico para transacciones legadas creadas previamente
+    if (descMatch) {
+      if (!currentInstallment) currentInstallment = parseInt(descMatch[1], 10);
+      if (!totalInstallments) totalInstallments = parseInt(descMatch[2], 10);
+      if (!installmentPlanId) {
+        const baseDesc = (row.description || '').replace(/\(Cuota\s+\d+[\s/de]+\d+\)/i, '').trim().toLowerCase();
+        installmentPlanId = `plan-legacy-${pmId}-${baseDesc.replace(/\s+/g, '-')}`;
+      }
+      if (!originalTotalAmount && totalInstallments) {
+        originalTotalAmount = Math.round(parseFloat(row.amount_pen) * totalInstallments * 100) / 100;
+      }
+    }
+
+    return {
+      id: row.id,
+      date: row.date,
+      description: row.description,
+      categoryId: row.category_id || '',
+      paymentMethodId: pmId,
+      currency: row.currency || 'PEN',
+      originalAmount: parseFloat(row.original_amount),
+      exchangeRate: parseFloat(row.exchange_rate || '1.0'),
+      amountPen: parseFloat(row.amount_pen),
+      paymentDueDate: row.payment_due_date,
+      hasCustomDueDate: !!(row as any).has_custom_due_date || (typeof row.notes === 'string' && row.notes.includes('[manualDueDate:true]')),
+      isFixedSubscription: !!row.is_fixed_subscription,
+      isRefund: isRefund,
+      isAuditConfirmed: isAuditConfirmed,
+      isInstallment: isInstallment || undefined,
+      currentInstallment,
+      totalInstallments,
+      installmentPlanId,
+      originalTotalAmount,
+      notes: row.notes,
+      createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
+      anchorDay
+    };
   }
 
   // GET: Obtener todas las suscripciones o gastos fijos recurrentes
@@ -351,49 +317,7 @@ export class SupabaseDataService {
         return null;
       }
 
-      return data.map((row: any) => {
-        let pmId = row.payment_method_id || '';
-        if (!pmId && row.notes) {
-          const m = row.notes.match(/\[pmId:([^\]]+)\]/);
-          if (m && m[1]) pmId = m[1];
-        }
-
-        const isRefund = !!(row as any).is_refund ||
-          (typeof row.notes === 'string' && (row.notes.includes('[isRefund:true]') || row.notes.includes('[refund]')));
-
-        const isAuditConfirmed = !!(row as any).is_audit_confirmed ||
-          (typeof row.notes === 'string' && (row.notes.includes('[auditConfirmed:true]') || row.notes.includes('[audit_confirmed:true]')));
-
-        let anchorDay: number | undefined;
-        if (typeof row.notes === 'string') {
-          const am = row.notes.match(/\[anchorDay:(\d+)\]/);
-          if (am && am[1]) anchorDay = parseInt(am[1], 10);
-        }
-        if (!anchorDay && row.date && !!row.is_fixed_subscription) {
-          const parts = row.date.split('-');
-          if (parts.length === 3) anchorDay = parseInt(parts[2], 10);
-        }
-
-        return {
-          id: row.id,
-          date: row.date,
-          description: row.description,
-          categoryId: row.category_id || '',
-          paymentMethodId: pmId,
-          currency: row.currency || 'PEN',
-          originalAmount: parseFloat(row.original_amount),
-          exchangeRate: parseFloat(row.exchange_rate || '1.0'),
-          amountPen: parseFloat(row.amount_pen),
-          paymentDueDate: row.payment_due_date,
-          hasCustomDueDate: !!(row as any).has_custom_due_date || (typeof row.notes === 'string' && row.notes.includes('[manualDueDate:true]')),
-          isFixedSubscription: true,
-          isRefund: isRefund,
-          isAuditConfirmed: isAuditConfirmed,
-          notes: row.notes,
-          createdAt: row.created_at || (row.notes ? (row.notes.match(/\[created:([^\]]+)\]/)?.[1]) : undefined) || undefined,
-          anchorDay
-        };
-      });
+      return data.map((row: any) => this.mapTransactionRow(row));
     } catch (e) {
       this.logSupabaseError('getRecurringSubscriptions (catch)', e);
       return null;

@@ -13,7 +13,9 @@ import {
   getDaysInMonth,
   getEffectiveDayOfMonth,
   resolveTransactionAnchorDay,
-  computeRecurringDate
+  computeRecurringDate,
+  isInstallmentTx,
+  getInstallmentBaseDescription
 } from '@/lib/calculations';
 import { initialCategories } from '@/lib/defaults';
 import { FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
@@ -137,7 +139,26 @@ export function useTransactions({
               }
             }
 
-            return { ...ct, paymentMethodId: pmId, isRefund: !!isRefund, isAuditConfirmed: !!isAuditConfirmed };
+            // Preservación blindada de metadatos de Compras en Cuotas (nube, notas y local)
+            const isInstallment = ct.isInstallment ?? localMatch?.isInstallment ?? false;
+            const installmentPlanId = ct.installmentPlanId || localMatch?.installmentPlanId;
+            const currentInstallment = ct.currentInstallment || localMatch?.currentInstallment;
+            const totalInstallments = ct.totalInstallments || localMatch?.totalInstallments;
+            const originalTotalAmount = ct.originalTotalAmount || localMatch?.originalTotalAmount;
+            const hasInterest = ct.hasInterest ?? localMatch?.hasInterest;
+
+            return {
+              ...ct,
+              paymentMethodId: pmId,
+              isRefund: !!isRefund,
+              isAuditConfirmed: !!isAuditConfirmed,
+              isInstallment: !!isInstallment,
+              installmentPlanId,
+              currentInstallment,
+              totalInstallments,
+              originalTotalAmount,
+              hasInterest
+            };
           });
 
           const cloudSigs = new Set(
@@ -159,32 +180,88 @@ export function useTransactions({
     }
   }, [paymentMethods, selectedMethodId]);
 
-  // Auto-sanación silenciosa: alinea automáticamente vencimientos de tarjetas de crédito
-  // al corte hábil bancario real en segundo plano, sin requerir acciones manuales ni botones extras.
+  // Auto-sanación silenciosa:
+  // 1. Alinea automáticamente vencimientos de tarjetas de crédito al corte hábil bancario real.
+  // 2. Unifica y reconecta canónicamente transacciones pertenecientes al mismo plan de cuotas diferidas
+  //    (evitando que Cuota 1 se fracture de Cuotas 2..N si perdió metadatos o planId en la nube).
   useEffect(() => {
     if (!paymentMethods || paymentMethods.length === 0 || transactions.length === 0) return;
+
+    // Mapa de metadatos de plan por (paymentMethodId + cleanBaseDesc)
+    const planMetaMap = new Map<string, { planId: string; totalInstallments: number; originalTotalAmount?: number }>();
+
+    transactions.forEach(t => {
+      if (!isInstallmentTx(t) || t.isRefund) return;
+      const cleanDesc = getInstallmentBaseDescription(t.description).toLowerCase().replace(/[^a-z0-9]+/g, '_').trim();
+      if (!cleanDesc) return;
+      const key = `${t.paymentMethodId}_${cleanDesc}`;
+
+      const existing = planMetaMap.get(key);
+      const planId = t.installmentPlanId || existing?.planId || (t.notes?.match(/\[planId:([^\]]+)\]/)?.[1]);
+
+      const descMatch = (t.description || '').match(/\(Cuota\s+(\d+)[\s/de]+(\d+)\)/i);
+      const totalFromDesc = descMatch ? parseInt(descMatch[2], 10) : undefined;
+      const totalInstallments = Math.max(t.totalInstallments || 0, totalFromDesc || 0, existing?.totalInstallments || 0, 1);
+      const origTotal = t.originalTotalAmount || existing?.originalTotalAmount;
+
+      if (planId || totalInstallments > (existing?.totalInstallments || 0)) {
+        planMetaMap.set(key, {
+          planId: planId || existing?.planId || `plan_${key}`,
+          totalInstallments,
+          originalTotalAmount: origTotal
+        });
+      }
+    });
+
     let hasChanges = false;
     const healed = transactions.map(t => {
-      // Si la fecha fue personalizada manualmente por el usuario o posteo bancario, RESPETARLA TOTALMENTE
-      const isManual = t.hasCustomDueDate || (typeof t.notes === 'string' && t.notes.includes('[manualDueDate:true]'));
-      if (isManual) return t;
+      let currentT = t;
 
+      // Sanación de vencimiento bancario según ciclo
+      const isManual = t.hasCustomDueDate || (typeof t.notes === 'string' && t.notes.includes('[manualDueDate:true]'));
       const pm = resolvePaymentMethod(t, paymentMethods);
-      if (pm && pm.type === 'credit' && pm.billingCloseDay) {
+      if (!isManual && pm && pm.type === 'credit' && pm.billingCloseDay) {
         const correctDueDate = calculatePaymentDueDate(t.date, pm);
         if (correctDueDate && t.paymentDueDate !== correctDueDate) {
-          hasChanges = true;
-          SupabaseDataService.updateTransaction({
-            ...t,
-            paymentMethodId: pm.id,
-            paymentDueDate: correctDueDate
-          });
-          return {
-            ...t,
+          currentT = {
+            ...currentT,
             paymentMethodId: pm.id,
             paymentDueDate: correctDueDate
           };
         }
+      }
+
+      // Sanación canónica de compras en cuotas
+      if (isInstallmentTx(t) && !t.isRefund) {
+        const cleanDesc = getInstallmentBaseDescription(t.description).toLowerCase().replace(/[^a-z0-9]+/g, '_').trim();
+        const key = `${currentT.paymentMethodId}_${cleanDesc}`;
+        const meta = planMetaMap.get(key);
+
+        if (meta) {
+          const descMatch = (t.description || '').match(/\(Cuota\s+(\d+)[\s/de]+(\d+)\)/i);
+          const currentInst = t.currentInstallment || (descMatch ? parseInt(descMatch[1], 10) : undefined);
+          const needsFix = !currentT.isInstallment ||
+            currentT.installmentPlanId !== meta.planId ||
+            currentT.totalInstallments !== meta.totalInstallments ||
+            (!currentT.currentInstallment && currentInst);
+
+          if (needsFix) {
+            currentT = {
+              ...currentT,
+              isInstallment: true,
+              installmentPlanId: meta.planId,
+              totalInstallments: meta.totalInstallments,
+              currentInstallment: currentInst || currentT.currentInstallment,
+              originalTotalAmount: currentT.originalTotalAmount || meta.originalTotalAmount
+            };
+          }
+        }
+      }
+
+      if (currentT !== t) {
+        hasChanges = true;
+        SupabaseDataService.updateTransaction(currentT);
+        return currentT;
       }
       return t;
     });
@@ -527,6 +604,31 @@ export function useTransactions({
           resolvedAnchor = undefined;
         }
 
+        const isTxInstallment = currentTx?.isInstallment ?? isInstallmentTx(currentTx || ({} as any));
+        const installmentPlanId = currentTx?.installmentPlanId;
+        const currentInstallment = currentTx?.currentInstallment;
+        const totalInstallments = currentTx?.totalInstallments;
+        const originalTotalAmount = currentTx?.originalTotalAmount;
+        const hasInterestVal = currentTx?.hasInterest;
+
+        if (isTxInstallment) {
+          if (!finalNotes.includes('[isInstallment:true]')) {
+            finalNotes = finalNotes ? `${finalNotes} [isInstallment:true]` : '[isInstallment:true]';
+          }
+          if (currentInstallment && !finalNotes.includes('[instNum:')) {
+            finalNotes = `${finalNotes} [instNum:${currentInstallment}]`;
+          }
+          if (totalInstallments && !finalNotes.includes('[instTotal:')) {
+            finalNotes = `${finalNotes} [instTotal:${totalInstallments}]`;
+          }
+          if (installmentPlanId && !finalNotes.includes('[planId:')) {
+            finalNotes = `${finalNotes} [planId:${installmentPlanId}]`;
+          }
+          if (originalTotalAmount && !finalNotes.includes('[origTotal:')) {
+            finalNotes = `${finalNotes} [origTotal:${originalTotalAmount}]`;
+          }
+        }
+
         const updatedTx: Transaction = {
           id: editingTransactionId,
           date: txDate,
@@ -543,6 +645,12 @@ export function useTransactions({
           anchorDay: resolvedAnchor,
           isRefund: isRefundMode,
           isAuditConfirmed: currentTx?.isAuditConfirmed,
+          isInstallment: isTxInstallment || undefined,
+          installmentPlanId,
+          currentInstallment,
+          totalInstallments,
+          originalTotalAmount,
+          hasInterest: hasInterestVal,
           notes: finalNotes || undefined
         };
         setTransactions(prev =>
@@ -715,7 +823,8 @@ export function useTransactions({
   // Elimina una transacción recurrente o compra en cuotas y todas sus repeticiones futuras a partir de su fecha (local + nube).
   const deleteTransactionAndFuture = (id: string): string[] => {
     const baseTx = transactions.find(t => t.id === id);
-    if (!baseTx || (!baseTx.isFixedSubscription && !baseTx.installmentPlanId)) {
+    const isInst = baseTx ? isInstallmentTx(baseTx) : false;
+    if (!baseTx || (!baseTx.isFixedSubscription && !baseTx.installmentPlanId && !isInst)) {
       deleteTransactionById(id);
       return [id];
     }
@@ -725,6 +834,17 @@ export function useTransactions({
       matches = transactions.filter(t =>
         t.id === baseTx.id ||
         (t.installmentPlanId === baseTx.installmentPlanId && t.date >= baseTx.date)
+      );
+    } else if (isInst) {
+      const cleanDesc = getInstallmentBaseDescription(baseTx.description).toLowerCase().trim();
+      matches = transactions.filter(t =>
+        t.id === baseTx.id ||
+        (
+          isInstallmentTx(t) &&
+          t.paymentMethodId === baseTx.paymentMethodId &&
+          getInstallmentBaseDescription(t.description).toLowerCase().trim() === cleanDesc &&
+          t.date >= baseTx.date
+        )
       );
     } else {
       const normDesc = baseTx.description.trim().toLowerCase();

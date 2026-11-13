@@ -63,7 +63,7 @@ export const ReceivablesTab: React.FC = () => {
     handleCascadePay,
     handleOpenAddLoanForCreditor,
     handleOpenPayPayable,
-    handleDeletePayable,
+    promptDeletePayable,
     currentYear,
     currentMonth,
     setDebtConfirmData,
@@ -96,7 +96,7 @@ export const ReceivablesTab: React.FC = () => {
       isDirectAction: true,
       onConfirm: () => {
         // Se registra con la misma fecha que se mostró en la confirmación.
-        handleCascadeCollect(group.debtorName, totalRem, dateStr, 'Cobro total de deuda');
+        handleCascadeCollect(group.debtorName, totalRem, dateStr, 'Cobro total de deuda', isPureUsd ? 'USD' : 'PEN');
         setDebtConfirmData(null);
       }
     });
@@ -126,7 +126,7 @@ export const ReceivablesTab: React.FC = () => {
       newRemaining: 0,
       isDirectAction: true,
       onConfirm: () => {
-        handleCascadePay(group.creditorName, totalRem, dateStr, 'Liquidación total de deuda');
+        handleCascadePay(group.creditorName, totalRem, dateStr, 'Liquidación total de deuda', isPureUsd ? 'USD' : 'PEN');
         setDebtConfirmData(null);
       }
     });
@@ -1028,7 +1028,7 @@ export const ReceivablesTab: React.FC = () => {
                                       <button
                                         className="btn-action-icon"
                                         style={{ color: 'var(--accent-danger)' }}
-                                        onClick={() => handleDeletePayable(item.id)}
+                                        onClick={() => promptDeletePayable(item, group.creditorName)}
                                         title="Eliminar este compromiso"
                                       >
                                         <Trash2 size={13} />

@@ -36,6 +36,9 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
   const [collectingDebtorGroup, setCollectingDebtorGroup] = useState<{
     debtorName: string;
     totalRemaining: number;
+    totalRemainingUsd?: number;
+    hasUsd?: boolean;
+    isPureUsd?: boolean;
     items: Receivable[];
   } | null>(null);
   const [collectAmountInput, setCollectAmountInput] = useState('');
@@ -232,7 +235,27 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     setIsCollectModalOpen(true);
   };
 
-  const handleOpenGroupCollectModal = (group: { debtorName: string; totalRemaining: number; items: Receivable[] }) => {
+  // Moneda en que se registra el cobro: la del préstamo; en un deudor con varios
+  // préstamos, dólares solo si todos son en dólares (si hay mezcla, soles).
+  const collectCurrency: CurrencyCode = collectingDebtorGroup
+    ? (collectingDebtorGroup.hasUsd && collectingDebtorGroup.isPureUsd ? 'USD' : 'PEN')
+    : (collectingRec?.currency === 'USD' ? 'USD' : 'PEN');
+  const collectRemaining = collectingDebtorGroup
+    ? (collectCurrency === 'USD' ? (collectingDebtorGroup.totalRemainingUsd || 0) : collectingDebtorGroup.totalRemaining)
+    : (collectingRec?.remainingAmount || 0);
+  const collectExchangeRate = (collectingDebtorGroup
+    ? collectingDebtorGroup.items.find(i => i.currency === 'USD')?.exchangeRate
+    : collectingRec?.exchangeRate) || FALLBACK_USD_PEN_RATE;
+  const collectHasMixedCurrency = !!collectingDebtorGroup?.hasUsd && !collectingDebtorGroup?.isPureUsd;
+
+  const handleOpenGroupCollectModal = (group: {
+    debtorName: string;
+    totalRemaining: number;
+    totalRemainingUsd?: number;
+    hasUsd?: boolean;
+    isPureUsd?: boolean;
+    items: Receivable[];
+  }) => {
     setCollectingDebtorGroup(group);
     setCollectingRec(null);
     setCollectAmountInput('');
@@ -241,7 +264,10 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     setIsCollectModalOpen(true);
   };
 
-  const handleCascadeCollect = (debtorName: string, amountToCollect: number, collectDate?: string, collectNotes?: string) => {
+  // `inputCurrency` es la moneda del monto recibido. Cada préstamo se abona en su
+  // propia moneda, convirtiendo con su tipo de cambio cuando difiere (p. ej. soles
+  // recibidos que se aplican a un préstamo en dólares).
+  const handleCascadeCollect = (debtorName: string, amountToCollect: number, collectDate?: string, collectNotes?: string, inputCurrency: CurrencyCode = 'PEN') => {
     let remainingToApply = amountToCollect;
     const targetGroup = debtorGroups.find(g => g.debtorName.toLowerCase() === debtorName.toLowerCase());
     if (!targetGroup) return;
@@ -252,8 +278,16 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     const updates = new Map<string, { newPaid: number; isDone: boolean; paymentRecord: ReceivablePayment }>();
 
     for (const item of itemsToPay) {
-      if (remainingToApply <= 0) break;
-      const pay = Math.min(item.remainingAmount, remainingToApply);
+      if (remainingToApply <= 0.005) break;
+      const itemCurrency: CurrencyCode = item.currency === 'USD' ? 'USD' : 'PEN';
+      const rate = item.exchangeRate || FALLBACK_USD_PEN_RATE;
+      const toInput = (amt: number) => (itemCurrency === inputCurrency ? amt : itemCurrency === 'USD' ? amt * rate : amt / rate);
+      const toItem = (amt: number) => (itemCurrency === inputCurrency ? amt : itemCurrency === 'USD' ? amt / rate : amt * rate);
+      const itemRemInput = toInput(item.remainingAmount);
+      const payInput = Math.min(itemRemInput, remainingToApply);
+      // Si cubre todo el saldo, se salda exacto (sin residuos de céntimos por conversión)
+      const pay = payInput >= itemRemInput - 0.005 ? item.remainingAmount : Math.round(toItem(payInput) * 100) / 100;
+      if (pay <= 0) continue;
       const newPaid = item.paidAmount + pay;
       const newRem = Math.max(0, item.originalAmount - newPaid);
       const isDone = newRem <= 0;
@@ -273,7 +307,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       };
 
       updates.set(item.id, { newPaid, isDone, paymentRecord: pRecord });
-      remainingToApply -= pay;
+      remainingToApply -= payInput;
     }
 
     // Actualizar estado local
@@ -341,7 +375,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
 
   const executeSaveCollect = (num: number) => {
     if (collectingDebtorGroup) {
-      handleCascadeCollect(collectingDebtorGroup.debtorName, num, collectPaymentDate, collectPaymentNotes.trim() || undefined);
+      handleCascadeCollect(collectingDebtorGroup.debtorName, num, collectPaymentDate, collectPaymentNotes.trim() || undefined, collectCurrency);
       setIsCollectModalOpen(false);
       setCollectingDebtorGroup(null);
       setCollectAmountInput('');
@@ -364,7 +398,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     if (isNaN(num) || num <= 0) return;
 
     if (setDebtConfirmData) {
-      const rawRem = collectingDebtorGroup ? collectingDebtorGroup.totalRemaining : (collectingRec?.remainingAmount || 0);
+      const rawRem = collectRemaining;
       const party = collectingDebtorGroup ? collectingDebtorGroup.debtorName : (collectingRec?.debtorName || 'Deudor');
       const desc = collectingDebtorGroup
         ? `Abono consolidado para ${collectingDebtorGroup.items.length} ${collectingDebtorGroup.items.length === 1 ? 'préstamo' : 'préstamos acumulados'}`
@@ -377,8 +411,9 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
         partyName: party,
         description: desc,
         amount: num,
-        currency: 'PEN',
-        amountPen: num,
+        currency: collectCurrency,
+        exchangeRate: collectCurrency === 'USD' ? collectExchangeRate : undefined,
+        amountPen: collectCurrency === 'USD' ? Math.round(num * collectExchangeRate * 100) / 100 : num,
         date: collectPaymentDate || todayStr,
         notes: collectPaymentNotes.trim() || undefined,
         currentRemaining: rawRem,
@@ -677,6 +712,10 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     totalReceivablesRemainingUsd,
     handleOpenCollectModal,
     handleOpenGroupCollectModal,
+    collectCurrency,
+    collectRemaining,
+    collectExchangeRate,
+    collectHasMixedCurrency,
     handleCascadeCollect,
     handleCollectReceivable,
     handleSaveCollect,

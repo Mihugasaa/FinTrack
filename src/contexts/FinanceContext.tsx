@@ -45,14 +45,16 @@ import {
   evaluateCardsLiquidityCoverage,
   getActiveInstallmentPlansForCard,
   isInstallmentTx,
-  getInstallmentPlanId
+  getInstallmentPlanId,
+  healOrphanPrepaymentTags
 } from '@/lib/calculations';
 import {
   Transaction,
   PaymentMethod,
   CardPayment,
   CardAmortizationSchedule,
-  Receivable
+  Receivable,
+  Payable
 } from '@/types';
 
 const MONTH_NAMES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -256,6 +258,8 @@ function useFinanceController() {
   // Préstamos ya sincronizados desde la nube (evita detectar falsos "huérfanos"
   // mientras la lista aún no llega). Sin nube, el estado local es la fuente de verdad.
   const [areReceivablesSynced, setAreReceivablesSynced] = useState(() => !isSupabaseConfigured);
+  // Historial COMPLETO de abonos a tarjeta cargado (no solo el del mes visible).
+  const [areCardPaymentsSynced, setAreCardPaymentsSynced] = useState(() => !isSupabaseConfigured);
 
   // Ids de préstamos cuya salida se conserva a propósito sin el préstamo (borrado
   // conservando el desembolso, o aviso de restauración descartado). Mismo esquema
@@ -298,7 +302,7 @@ function useFinanceController() {
   // Estado para modal de confirmación segura de eliminación
   const [itemToDelete, setItemToDelete] = useState<{
     id: string;
-    type: 'transaction' | 'income' | 'receivable';
+    type: 'transaction' | 'income' | 'receivable' | 'payable';
     description: string;
     amount: number;
     currency?: string;
@@ -313,6 +317,9 @@ function useFinanceController() {
     collectionsCount?: number;
     /** Préstamo: salida de dinero vinculada en Movimientos (desembolso). */
     linkedTransaction?: { id: string; date: string; amountPen: number };
+    /** Deuda propia: lo ya pagado y lo que entró a la cuenta débito (en soles). */
+    payablePaidPen?: number;
+    payableCreditedPen?: number;
   } | null>(null);
 
   // Estado para modal de confirmación segura de abono/cobranza de deudas o préstamos
@@ -605,6 +612,10 @@ function useFinanceController() {
     totalReceivablesRemainingUsd,
     handleOpenCollectModal,
     handleOpenGroupCollectModal,
+    collectCurrency,
+    collectRemaining,
+    collectExchangeRate,
+    collectHasMixedCurrency,
     handleCascadeCollect,
     handleCollectReceivable,
     handleSaveCollect,
@@ -945,6 +956,7 @@ function useFinanceController() {
           return Array.from(byKey.values());
         });
       }
+      if (allPayments) setAreCardPaymentsSynced(true);
     });
 
     // Periodos mensuales completos: saldo inicial y sueldo base de TODOS los meses.
@@ -1127,6 +1139,7 @@ function useFinanceController() {
               return Array.from(byKey.values());
             });
           }
+          if (allPayments) setAreCardPaymentsSynced(true);
         }),
         SupabaseDataService.getAllMonthlyPeriods().then(periods => {
           if (!periods) return;
@@ -1179,12 +1192,16 @@ function useFinanceController() {
     });
   }, [transactions, cardPayments, paymentMethods]);
 
-  // Auto-sanación y reversión de prepagos huérfanos en compras en cuotas
-  // Si una cuota tiene nota de prepago o es TV Samsung con cuota reducida, pero NO existe abono registrado de prepago, se restaura a su cuota bancaria original (718.11).
+  // Reparación de prepagos huérfanos en compras en cuotas: si una cuota conserva la
+  // nota de un prepago cuyo abono ya no existe, se le devuelve lo que ese prepago le
+  // descontó. Solo corre con TODO el historial de abonos cargado; con una carga
+  // parcial confundiría prepagos vigentes con huérfanos y los revertiría.
   useEffect(() => {
-    if (transactions.length === 0) return;
+    if (transactions.length === 0 || !areCardPaymentsSynced) return;
 
-    // Recopilar planes con amortizaciones de prepago activas en cardPayments
+    const existingPaymentIds = new Set(cardPayments.map(p => (p.id || '').toLowerCase()).filter(Boolean));
+
+    // Planes con algún prepago vigente (para notas antiguas sin id de abono)
     const activePrepaymentPlanIds = new Set<string>();
     cardPayments.forEach(p => {
       if (p.targetMonth?.startsWith('INSTALLMENT_PLAN:')) {
@@ -1198,41 +1215,19 @@ function useFinanceController() {
 
     let hasChanges = false;
     const healed = transactions.map(t => {
-      if (!isInstallmentTx(t)) return t;
-
-      const isTvSamsung = /tv\s*samsung/i.test(t.description);
-      const hasPrepagoNote = typeof t.notes === 'string' && /\[prepago:\s*(?:cuota mensual reducida de|cuota reducida de)\s*([\d.]+)/i.test(t.notes);
+      if (!isInstallmentTx(t) || !(t.notes || '').includes('[prepago:')) return t;
       const planId = getInstallmentPlanId(t, transactions);
-
-      const isOrphan = hasPrepagoNote && !activePrepaymentPlanIds.has(planId);
-      const isTvSamsungAltered = isTvSamsung && Math.abs(t.originalAmount - 718.11) > 0.01 && !activePrepaymentPlanIds.has(planId);
-
-      if (isOrphan || isTvSamsungAltered) {
-        let origAmt = 718.11;
-        if (hasPrepagoNote) {
-          const match = (t.notes || '').match(/\[prepago:\s*(?:cuota mensual reducida de|cuota reducida de)\s*([\d.]+)/i);
-          if (match && !isNaN(parseFloat(match[1]))) {
-            origAmt = parseFloat(match[1]);
-          }
-        }
-        const cleanedNotes = (t.notes || '').replace(/\[prepago:[^\]]+\]/gi, '').trim() || undefined;
-        hasChanges = true;
-        const restored: Transaction = {
-          ...t,
-          originalAmount: origAmt,
-          amountPen: t.currency === 'USD' ? Math.round(origAmt * (t.exchangeRate || 1) * 100) / 100 : origAmt,
-          notes: cleanedNotes
-        };
-        SupabaseDataService.updateTransaction(restored);
-        return restored;
-      }
-      return t;
+      const restored = healOrphanPrepaymentTags(t, existingPaymentIds, activePrepaymentPlanIds.has(planId));
+      if (!restored) return t;
+      hasChanges = true;
+      SupabaseDataService.updateTransaction(restored);
+      return restored;
     });
 
     if (hasChanges) {
       setTransactions(healed);
     }
-  }, [transactions, cardPayments, setTransactions]);
+  }, [transactions, cardPayments, areCardPaymentsSynced, setTransactions]);
 
   // Sincronizar nómina activa si existe un sueldo registrado/propagado para este mes
   useEffect(() => {
@@ -2431,12 +2426,35 @@ function useFinanceController() {
     });
   };
 
+  // Confirmador de borrado de una deuda propia ("Yo Debo"): muestra lo pagado y lo
+  // acreditado a débito, que dejan de contar en el saldo al eliminarla.
+  const promptDeletePayable = (p: Payable, creditorLabel?: string) => {
+    const isUsd = p.currency === 'USD';
+    const rate = p.exchangeRate || FALLBACK_USD_PEN_RATE;
+    const orig = (isUsd && p.originalAmount) ? p.originalAmount : (p.originalAmount ?? p.totalAmount ?? 0);
+    const paid = p.paidAmount ?? 0;
+    const rem = (isUsd && p.remainingAmount > orig) ? Math.max(0, orig - paid) : (p.remainingAmount ?? orig);
+    setItemToDelete({
+      id: p.id,
+      type: 'payable',
+      description: `${creditorLabel || p.creditorName}: ${p.description}`,
+      amount: rem > 0 ? rem : orig,
+      currency: p.currency,
+      date: p.issueDate,
+      categoryName: 'Deuda por pagar',
+      payablePaidPen: isUsd ? paid * rate : paid,
+      payableCreditedPen: p.isCreditedToDebit ? (isUsd ? (p.amountPen || orig * rate) : orig) : 0
+    });
+  };
+
   const handleConfirmDelete = (options?: { deleteLinkedTransaction?: boolean }) => {
     if (!itemToDelete) return;
     if (itemToDelete.type === 'transaction') {
       deleteTransactionById(itemToDelete.id);
     } else if (itemToDelete.type === 'income') {
       deleteExtraIncome(itemToDelete.id);
+    } else if (itemToDelete.type === 'payable') {
+      handleDeletePayable(itemToDelete.id);
     } else if (itemToDelete.type === 'receivable') {
       deleteReceivable(itemToDelete.id);
       const linked = itemToDelete.linkedTransaction;
@@ -2498,6 +2516,8 @@ function useFinanceController() {
       deleteTransactionAndFuture(itemToDelete.id);
     } else if (itemToDelete.type === 'income') {
       deleteExtraIncome(itemToDelete.id);
+    } else if (itemToDelete.type === 'payable') {
+      handleDeletePayable(itemToDelete.id);
     } else if (itemToDelete.type === 'receivable') {
       deleteReceivable(itemToDelete.id);
     }
@@ -2681,6 +2701,7 @@ function useFinanceController() {
     handleConfirmDelete,
     handleConfirmDeleteFuture,
     promptDeleteReceivable,
+    promptDeletePayable,
     handleRevertReceivableFromDelete,
     orphanLoanDisbursements,
     restoreOrphanLoans,
@@ -2905,6 +2926,10 @@ function useFinanceController() {
     totalReceivablesRemainingUsd,
     handleOpenCollectModal,
     handleOpenGroupCollectModal,
+    collectCurrency,
+    collectRemaining,
+    collectExchangeRate,
+    collectHasMixedCurrency,
     handleCascadeCollect,
     handleCollectReceivable,
     handleSaveCollect,

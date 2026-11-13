@@ -4411,6 +4411,12 @@ body.modal-open {
   line-height: 1.45;
 }
 
+/* Variante de advertencia (mismo tono que el aviso de gasto recurrente) */
+.delete-alt-notice.is-danger {
+  background: var(--accent-danger-subtle);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
 /* Opción de borrar también la salida vinculada (mismo patrón que el check de
    "Descontar de mi cuenta bancaria" del formulario de préstamo) */
 .delete-linked-option {

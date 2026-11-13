@@ -25,6 +25,10 @@ export const CollectModal: React.FC = () => {
     setCollectPaymentDate,
     collectPaymentNotes,
     setCollectPaymentNotes,
+    collectCurrency,
+    collectRemaining,
+    collectExchangeRate,
+    collectHasMixedCurrency,
     formatSoles,
     handleBackdropMouseDown,
     handleBackdropClick
@@ -34,8 +38,13 @@ export const CollectModal: React.FC = () => {
   const onSubmit = handleSaveCollect;
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
 
-  const rawRem = collectingDebtorGroup ? collectingDebtorGroup.totalRemaining : (collectingRec?.remainingAmount || 0);
+  // El cobro se registra en la moneda del préstamo (dólares si todos son en USD).
+  const isUsd = collectCurrency === 'USD';
+  const rawRem = collectRemaining;
   const maxRem = Math.round(rawRem * 100) / 100;
+  const fmt = (n: number) => (isUsd ? `$ ${n.toFixed(2)} USD` : formatSoles(n));
+  const sym = isUsd ? '$' : 'S/';
+  const typedAmount = parseFloat(collectAmountInput);
 
   return (
     <div
@@ -147,15 +156,22 @@ export const CollectModal: React.FC = () => {
               }}
             >
               <span style={{ color: 'var(--text-secondary)' }}>Saldo pendiente actual:</span>
-              <strong className="tabular-nums" style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--accent-warning)' }}>
-                {formatSoles(rawRem)}
-              </strong>
+              <span style={{ textAlign: 'right' }}>
+                <strong className="tabular-nums" style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--accent-warning)', display: 'block' }}>
+                  {fmt(rawRem)}
+                </strong>
+                {isUsd && (
+                  <span className="tabular-nums" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {formatSoles(rawRem * collectExchangeRate)}
+                  </span>
+                )}
+              </span>
             </div>
           </div>
 
           {/* Monto Input y Botones Rápidos */}
           <div className="form-group">
-            <label className="form-label">Monto recibido (S/)</label>
+            <label className="form-label">Monto recibido ({isUsd ? '$ USD' : 'S/'})</label>
             <input
               id="input-collect-amount"
               type="number"
@@ -168,6 +184,16 @@ export const CollectModal: React.FC = () => {
               value={collectAmountInput}
               onChange={e => setCollectAmountInput(e.target.value)}
             />
+            {isUsd && !isNaN(typedAmount) && typedAmount > 0 && (
+              <span className="tabular-nums" style={{ display: 'block', marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Equivale a {formatSoles(typedAmount * collectExchangeRate)} (TC {collectExchangeRate.toFixed(4)})
+              </span>
+            )}
+            {collectHasMixedCurrency && (
+              <span style={{ display: 'block', marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Sus préstamos en dólares se descuentan al tipo de cambio de cada uno.
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
@@ -177,7 +203,7 @@ export const CollectModal: React.FC = () => {
               style={{ flex: 1, padding: '6px 10px', fontSize: '0.75rem', borderRadius: '6px' }}
               onClick={() => setCollectAmountInput((maxRem / 2).toFixed(2))}
             >
-              Mitad • 50%: S/ {(maxRem / 2).toFixed(2)}
+              Mitad • 50%: {sym} {(maxRem / 2).toFixed(2)}
             </button>
             <button
               type="button"
@@ -185,7 +211,7 @@ export const CollectModal: React.FC = () => {
               style={{ flex: 1, padding: '6px 10px', fontSize: '0.75rem', borderRadius: '6px' }}
               onClick={() => setCollectAmountInput(maxRem.toFixed(2))}
             >
-              Total • 100%: S/ {maxRem.toFixed(2)}
+              Total • 100%: {sym} {maxRem.toFixed(2)}
             </button>
           </div>
 

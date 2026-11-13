@@ -5,9 +5,40 @@ import { SupabaseDataService } from '@/services/supabaseData.service';
 import { ExchangeRateService, ExchangeRateResult } from '@/services/exchangeRate.service';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR } from '@/lib/constants';
 import { initialPaymentMethods } from '@/lib/defaults';
-import { calculateItf, applyInstallmentPrepayment, revertInstallmentPrepayment } from '@/lib/calculations';
+import {
+  calculateItf,
+  applyInstallmentPrepayment,
+  revertInstallmentPrepayment,
+  encodePrepaymentUndo,
+  decodePrepaymentUndo,
+  isInstallmentPrepayment
+} from '@/lib/calculations';
 import { CardPayment, PaymentMethod, CurrencyCode, Transaction, PrepaymentMode } from '@/types';
 import { generateUUID } from '@/lib/utils';
+
+// Plan de cuotas al que apunta un abono de prepago (por su campo o por sus notas).
+const getPrepaymentPlanId = (p?: CardPayment): string | undefined => {
+  if (!p) return undefined;
+  if (p.targetMonth?.startsWith('INSTALLMENT_PLAN:')) return p.targetMonth.replace('INSTALLMENT_PLAN:', '');
+  return (p.notes || '').match(/\[target:INSTALLMENT_PLAN:([^\]]+)\]/)?.[1];
+};
+
+const getPrepaymentMode = (notes?: string): PrepaymentMode | undefined =>
+  (notes || '').match(/\[prepago:(REDUCE_TERM|REDUCE_AMOUNT)\]/)?.[1] as PrepaymentMode | undefined;
+
+// Persiste en Supabase la diferencia entre dos versiones de la lista de movimientos
+// (cuotas borradas, recreadas o modificadas por un prepago o su reversión).
+const persistTransactionChanges = (before: Transaction[], after: Transaction[]) => {
+  const beforeMap = new Map(before.map(t => [t.id, t]));
+  const afterIds = new Set(after.map(t => t.id));
+  const deletedIds = before.filter(t => !afterIds.has(t.id)).map(t => t.id);
+  if (deletedIds.length > 0) SupabaseDataService.deleteTransactions(deletedIds);
+  after.forEach(t => {
+    const prev = beforeMap.get(t.id);
+    if (!prev) SupabaseDataService.createTransaction(t);
+    else if (prev !== t) SupabaseDataService.updateTransaction(t);
+  });
+};
 
 interface UseCardPaymentsDeps {
   paymentMethods: PaymentMethod[];
@@ -119,6 +150,7 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
     setHasUserManuallyEditedPaymentTc(true);
     setPaymentDate(pay.paymentDate);
     setPaymentTargetMonth(pay.targetMonth || '');
+    setPrepaymentMode(getPrepaymentMode(pay.notes) || 'REDUCE_TERM');
     setPaymentSourceType(pay.sourceType || 'DEBIT_ACCOUNT');
     if (pay.itfAmount !== undefined) {
       setApplyItf(pay.itfAmount > 0);
@@ -163,6 +195,53 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
         .replace(/\[itf:[^\]]*\]/g, '')
         .replace(/\[target:[^\]]*\]/g, '')
         .trim();
+
+      // Prepago de cuotas: si cambió lo que afecta al cronograma, se deshace el efecto
+      // anterior de ESTE abono y se aplica el nuevo (las cuotas quedan coherentes).
+      const wasPrepayment = !!existing && isInstallmentPrepayment(existing);
+      const isPrepaymentNow = !!resolvedTarget && resolvedTarget.startsWith('INSTALLMENT_PLAN:');
+      const prepaymentChanged = (wasPrepayment || isPrepaymentNow) && (
+        !existing ||
+        (existing.targetMonth || '') !== (resolvedTarget || '') ||
+        (existing.currency || 'PEN') !== paymentCurrency ||
+        Math.abs((existing.originalAmount ?? existing.amountPaid) - num) > 0.001 ||
+        Math.abs((existing.exchangeRate ?? 1) - rate) > 0.00001 ||
+        (getPrepaymentMode(existing.notes) || 'REDUCE_TERM') !== prepaymentMode
+      );
+      if (prepaymentChanged && transactions && setTransactions) {
+        let list = transactions;
+        if (wasPrepayment && existing) {
+          list = revertInstallmentPrepayment({
+            allTransactions: list,
+            planId: getPrepaymentPlanId(existing),
+            prepaymentId: existing.id,
+            undo: decodePrepaymentUndo(existing.notes)
+          }).newTransactionsList;
+        }
+        cleanNotes = cleanNotes
+          .replace(/\[prepago:(REDUCE_TERM|REDUCE_AMOUNT)\]/g, '')
+          .replace(/\[undo:[^\]]*\]/g, '')
+          .trim();
+        if (isPrepaymentNow) {
+          const prepayResult = applyInstallmentPrepayment({
+            allTransactions: list,
+            planId: resolvedTarget.replace('INSTALLMENT_PLAN:', ''),
+            prepaymentAmount: num,
+            mode: prepaymentMode,
+            paymentDate: targetDate,
+            cardPayments,
+            paymentMethods,
+            prepaymentId: editingCardPaymentId,
+            prepaymentCurrency: paymentCurrency,
+            exchangeRate: rate
+          });
+          list = prepayResult.newTransactionsList;
+          cleanNotes = `${cleanNotes} [prepago:${prepaymentMode}]${prepayResult.undo ? ` ${encodePrepaymentUndo(prepayResult.undo)}` : ''}`.trim();
+        }
+        setTransactions(list);
+        persistTransactionChanges(transactions, list);
+      }
+
       if (resolvedTarget) {
         cleanNotes = `${cleanNotes ? `${cleanNotes} ` : ''}[target:${resolvedTarget}]`;
       }
@@ -204,7 +283,11 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
       return;
     }
 
+    // El id se genera antes para marcar con él los cambios del prepago en las cuotas.
+    const generatedId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : generateUUID();
+
     // Si el pago es una amortización anticipada de un plan de compras en cuotas
+    let undoTag = '';
     if (resolvedTarget && resolvedTarget.startsWith('INSTALLMENT_PLAN:') && transactions && setTransactions) {
       const planId = resolvedTarget.replace('INSTALLMENT_PLAN:', '');
       const prepayResult = applyInstallmentPrepayment({
@@ -214,21 +297,16 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
         mode: prepaymentMode,
         paymentDate: targetDate,
         cardPayments,
-        paymentMethods
+        paymentMethods,
+        prepaymentId: generatedId,
+        prepaymentCurrency: paymentCurrency,
+        exchangeRate: rate
       });
 
-      // Actualizar estado local inmediatamente
+      // Actualizar estado local inmediatamente y persistir los cambios en Supabase
       setTransactions(prepayResult.newTransactionsList);
-
-      // Persistir de forma atómica en Supabase
-      if (prepayResult.deletedTransactionIds.length > 0) {
-        SupabaseDataService.deleteTransactions(prepayResult.deletedTransactionIds);
-      }
-      if (prepayResult.updatedTransactions.length > 0) {
-        for (const utx of prepayResult.updatedTransactions) {
-          SupabaseDataService.updateTransaction(utx);
-        }
-      }
+      persistTransactionChanges(transactions, prepayResult.newTransactionsList);
+      if (prepayResult.undo) undoTag = encodePrepaymentUndo(prepayResult.undo);
     }
 
     // Creación de nuevo abono con UUID nativo
@@ -237,14 +315,13 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
       newNotes = `[target:${resolvedTarget}]`;
       if (resolvedTarget.startsWith('INSTALLMENT_PLAN:')) {
         newNotes += ` [prepago:${prepaymentMode}]`;
+        if (undoTag) newNotes += ` ${undoTag}`;
       }
     }
     if (effectiveItf > 0) {
       newNotes = `${newNotes ? `${newNotes} ` : ''}[itf:${effectiveItf.toFixed(2)}]`;
     }
     const finalNewNotes = newNotes.trim() || undefined;
-
-    const generatedId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : generateUUID();
     const newPay: CardPayment = {
       id: generatedId,
       paymentMethodId: paymentCardId,
@@ -284,29 +361,21 @@ export function useCardPayments({ paymentMethods, currentYear, currentMonth, tra
   const handleDeleteCardPayment = (targetId?: string, _targetIndex?: number) => {
     if (!targetId) return;
 
-    // Si el abono a eliminar era un prepago a un plan de cuotas, revertir las cuotas afectadas
+    // Si el abono a eliminar era un prepago a un plan de cuotas, se deshace SOLO su
+    // efecto: se le devuelve a cada cuota lo que este prepago descontó y se recrean
+    // las cuotas que liquidó. Los demás prepagos y planes no se tocan.
     const paymentToDelete = cardPayments.find(p => p.id === targetId);
-    if (paymentToDelete && transactions && setTransactions) {
-      const isPlanPrepayment =
-        paymentToDelete.targetMonth?.startsWith('INSTALLMENT_PLAN:') ||
-        (typeof paymentToDelete.notes === 'string' && paymentToDelete.notes.includes('[prepago:'));
+    if (paymentToDelete && isInstallmentPrepayment(paymentToDelete) && transactions && setTransactions) {
+      const revertResult = revertInstallmentPrepayment({
+        allTransactions: transactions,
+        planId: getPrepaymentPlanId(paymentToDelete),
+        prepaymentId: paymentToDelete.id,
+        undo: decodePrepaymentUndo(paymentToDelete.notes)
+      });
 
-      if (isPlanPrepayment) {
-        let planId: string | undefined;
-        if (paymentToDelete.targetMonth?.startsWith('INSTALLMENT_PLAN:')) {
-          planId = paymentToDelete.targetMonth.replace('INSTALLMENT_PLAN:', '');
-        }
-        const revertResult = revertInstallmentPrepayment({
-          allTransactions: transactions,
-          planId
-        });
-
-        if (revertResult.updatedTransactions.length > 0) {
-          setTransactions(revertResult.newTransactionsList);
-          revertResult.updatedTransactions.forEach(utx => {
-            SupabaseDataService.updateTransaction(utx);
-          });
-        }
+      if (revertResult.updatedTransactions.length > 0 || revertResult.createdTransactions.length > 0) {
+        setTransactions(revertResult.newTransactionsList);
+        persistTransactionChanges(transactions, revertResult.newTransactionsList);
       }
     }
 

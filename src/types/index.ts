@@ -439,12 +439,45 @@ export interface ApplyPrepaymentParams {
   cardPayments?: CardPayment[];
   paymentMethods?: PaymentMethod[];
   cardAmortization?: CardAmortizationSchedule;
+  /** Id del abono que origina el prepago: marca cada cambio para poder deshacerlo solo a él. */
+  prepaymentId?: string;
+  /** Moneda del abono. Si difiere de la del plan, el monto se convierte con exchangeRate. */
+  prepaymentCurrency?: CurrencyCode;
+  /** Tipo de cambio del abono (PEN por USD). */
+  exchangeRate?: number;
+}
+
+/** Cuota eliminada por un prepago "reducir plazo": lo necesario para recrearla al revertirlo. */
+export interface LiquidatedInstallment {
+  id: string;
+  date: string;
+  paymentDueDate: string;
+  originalAmount: number;
+  amountPen: number;
+  exchangeRate: number;
+  createdAt?: string;
+}
+
+/** Datos para deshacer un prepago, guardados en las notas de su abono. */
+export interface PrepaymentUndoInfo {
+  planId: string;
+  liquidated: LiquidatedInstallment[];
+  template?: {
+    description: string;
+    categoryId: string;
+    paymentMethodId: string;
+    currency: CurrencyCode;
+    originalTotalAmount?: number;
+    hasInterest?: boolean;
+  };
 }
 
 export interface ApplyPrepaymentResult {
   updatedTransactions: Transaction[];
   deletedTransactionIds: string[];
   newTransactionsList: Transaction[];
+  /** Información para revertir este prepago (cuotas liquidadas y plantilla del plan). */
+  undo?: PrepaymentUndoInfo;
   summary: {
     planDescription: string;
     previousRemainingDebt: number;

@@ -9,6 +9,8 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 export interface UserPreferences {
   hideOverviewAudit?: boolean;
   dismissedAnomalyIds?: string[];
+  /** Salidas de préstamos borrados que el usuario decidió no restaurar. */
+  dismissedOrphanLoanIds?: string[];
   [key: string]: any;
 }
 

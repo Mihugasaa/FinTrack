@@ -19,7 +19,14 @@ import {
   initialPaymentMethods
 } from '@/lib/defaults';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
-import { generateUUID, resolvePaymentMethod, deduplicateTransactions } from '@/lib/utils';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import {
+  generateUUID,
+  resolvePaymentMethod,
+  deduplicateTransactions,
+  getLoanDisbursementReceivableId,
+  buildReceivableFromDisbursement
+} from '@/lib/utils';
 import { DebtConfirmData, CardPaymentPlanItem, CardsGlobalLiquidityAssessment } from '@/types';
 import {
   getBestCardRecommendation,
@@ -28,14 +35,13 @@ import {
   calculateCurrentDebitBalance,
   computeMonthlyDebitChain,
   computeCardBillingAmortization,
-  getReceivableCollectionMonth,
+  getReceivableCollectionEntries,
   computeFinancialHealthScore,
   formatDisplayDate,
   formatSoles,
   getEffectiveDayOfMonth,
   getEffectiveBillingCloseDate,
   getEndOfMonthDate,
-  getFallbackReceivablePaymentDate,
   evaluateCardsLiquidityCoverage,
   getActiveInstallmentPlansForCard,
   isInstallmentTx,
@@ -45,7 +51,8 @@ import {
   Transaction,
   PaymentMethod,
   CardPayment,
-  CardAmortizationSchedule
+  CardAmortizationSchedule,
+  Receivable
 } from '@/types';
 
 const MONTH_NAMES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -137,6 +144,9 @@ function useFinanceController() {
         }
         if (Array.isArray(user.preferences.dismissedAnomalyIds)) {
           setDismissedAnomalyIds(user.preferences.dismissedAnomalyIds);
+        }
+        if (Array.isArray(user.preferences.dismissedOrphanLoanIds)) {
+          setDismissedOrphanLoanIds(user.preferences.dismissedOrphanLoanIds);
         }
       }
     })();
@@ -243,6 +253,29 @@ function useFinanceController() {
     return [];
   });
 
+  // Préstamos ya sincronizados desde la nube (evita detectar falsos "huérfanos"
+  // mientras la lista aún no llega). Sin nube, el estado local es la fuente de verdad.
+  const [areReceivablesSynced, setAreReceivablesSynced] = useState(() => !isSupabaseConfigured);
+
+  // Ids de préstamos cuya salida se conserva a propósito sin el préstamo (borrado
+  // conservando el desembolso, o aviso de restauración descartado). Mismo esquema
+  // de persistencia que las alertas descartadas: profiles.preferences + localStorage.
+  const [dismissedOrphanLoanIds, setDismissedOrphanLoanIds] = useState<string[]>(() => {
+    const cachedUser = AuthService.getCurrentUser();
+    if (Array.isArray(cachedUser?.preferences?.dismissedOrphanLoanIds)) {
+      return cachedUser.preferences.dismissedOrphanLoanIds;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fintrack_dismissed_orphan_loans');
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+
   const [isOverviewAuditDismissed, setIsOverviewAuditDismissed] = useState<boolean>(() => {
     const cachedUser = AuthService.getCurrentUser();
     if (typeof cachedUser?.preferences?.hideOverviewAudit === 'boolean') {
@@ -275,6 +308,11 @@ function useFinanceController() {
     paymentMethodColor?: string;
     isFixed?: boolean;
     futureOccurrencesCount?: number;
+    /** Préstamo: monto ya cobrado (en su moneda) y número de cobros registrados. */
+    collectedAmount?: number;
+    collectionsCount?: number;
+    /** Préstamo: salida de dinero vinculada en Movimientos (desembolso). */
+    linkedTransaction?: { id: string; date: string; amountPen: number };
   } | null>(null);
 
   // Estado para modal de confirmación segura de abono/cobranza de deudas o préstamos
@@ -574,6 +612,7 @@ function useFinanceController() {
     toggleDebtorExpanded,
     handleCreateReceivable,
     deleteReceivable,
+    revertReceivableCollections,
     isEditCollectModalOpen,
     setIsEditCollectModalOpen,
     editingCollectRecId,
@@ -732,6 +771,7 @@ function useFinanceController() {
 
     const pRecs = SupabaseDataService.getReceivables().then(recs => {
       if (isMounted && recs && recs.length > 0) setReceivables(recs);
+      if (isMounted && recs) setAreReceivablesSynced(true);
     });
 
     const pPays = SupabaseDataService.getPayables().then(pays => {
@@ -961,6 +1001,7 @@ function useFinanceController() {
         }),
         SupabaseDataService.getReceivables().then(recs => {
           if (recs && recs.length > 0) setReceivables(recs);
+          if (recs) setAreReceivablesSynced(true);
         }),
         SupabaseDataService.getPayables().then(pays => {
           if (pays && pays.length > 0) setPayables(pays);
@@ -1243,10 +1284,11 @@ function useFinanceController() {
   // ¿El saldo inicial es automático (arrastrado) y no un override manual?
   const isInitialDebitAuto = !(monthKey in initialDebitBalances) && debitChain[monthKey] != null;
 
-  // Cobranzas atribuidas al mes visible (para no duplicar cobros ya arrastrados en
-  // el saldo inicial: cada cobro se cuenta una vez, en su mes de atribución).
+  // Préstamos con algún abono fechado en el mes visible. Cada abono se cuenta una
+  // sola vez, en el mes de su fecha de cobro, así no se duplica con lo ya arrastrado
+  // en el saldo inicial y coincide con lo que muestra Movimientos.
   const monthReceivables = useMemo(
-    () => receivables.filter(r => getReceivableCollectionMonth(r) === monthKey),
+    () => receivables.filter(r => getReceivableCollectionEntries(r).some(e => e.date.startsWith(monthKey))),
     [receivables, monthKey]
   );
 
@@ -2152,18 +2194,12 @@ function useFinanceController() {
 
     // 5. Cobros de Préstamos Otorgados (Ingresos recibidos por cobranzas a deudores)
     if (txTypeFilter === 'ALL' || txTypeFilter === 'INCOMES') {
+      const defaultDebitPmId = paymentMethods.find(pm => pm.type === 'debit' || pm.type === 'cash')?.id || 'pm-1';
       receivables.forEach(r => {
-        const effectivePayments = (r.payments && r.payments.length > 0)
-          ? r.payments
-          : (r.paidAmount > 0 ? [{
-              id: `legacy-rec-${r.id}`,
-              receivableId: r.id,
-              amount: r.paidAmount,
-              amountPaid: r.paidAmount,
-              paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr),
-              paymentMethodId: paymentMethods.find(pm => pm.type === 'debit' || pm.type === 'cash')?.id || 'pm-1',
-              notes: 'Cobro de préstamo'
-            }] : []);
+        // Misma fuente que el saldo de débito: cada abono en su fecha real de cobro.
+        const effectivePayments = getReceivableCollectionEntries(r).map(e => (
+          e.isLegacy ? { ...e.payment, paymentMethodId: defaultDebitPmId, notes: 'Cobro de préstamo' } : e.payment
+        ));
 
         effectivePayments.forEach(pay => {
           const pDate = (pay.paymentDate || '').split('T')[0];
@@ -2261,10 +2297,7 @@ function useFinanceController() {
       p => p.isCreditedToDebit && (p.issueDate || '').startsWith(monthKey)
     ).length;
     const receivablePaymentsThisMonth = receivables.reduce((acc, r) => {
-      const effPayments = (r.payments && r.payments.length > 0)
-        ? r.payments
-        : (r.paidAmount > 0 ? [{ paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr) }] : []);
-      return acc + effPayments.filter(pay => (pay.paymentDate || '').split('T')[0].startsWith(monthKey)).length;
+      return acc + getReceivableCollectionEntries(r).filter(e => e.date.startsWith(monthKey)).length;
     }, 0);
     const validOtherIncomesCount = currentOtherIncomes.filter(oi => !oi.id?.startsWith('inc-loan-')).length;
 
@@ -2359,7 +2392,46 @@ function useFinanceController() {
     });
   };
 
-  const handleConfirmDelete = () => {
+  // Salida de dinero (desembolso) registrada junto con un préstamo, si existe.
+  const findLoanDisbursement = useCallback((receivableId: string) => {
+    const target = receivableId.toLowerCase();
+    return transactions.find(t => getLoanDisbursementReceivableId(t) === target);
+  }, [transactions]);
+
+  // Persiste los ids de préstamos cuya salida se conserva sin el préstamo.
+  const dismissOrphanLoanIds = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setDismissedOrphanLoanIds(prev => {
+      const next = Array.from(new Set([...prev, ...ids.map(id => id.toLowerCase())]));
+      if (next.length === prev.length) return prev;
+      AuthService.updateUserPreferences({ dismissedOrphanLoanIds: next });
+      if (typeof window !== 'undefined') {
+        try { localStorage.setItem('fintrack_dismissed_orphan_loans', JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+  }, []);
+
+  // Abre el confirmador de borrado de un préstamo con el contexto necesario para
+  // ofrecer revertir sus cobros y decidir qué hacer con la salida vinculada.
+  const promptDeleteReceivable = (rec: Receivable, debtorLabel?: string) => {
+    const entries = getReceivableCollectionEntries(rec);
+    const linked = findLoanDisbursement(rec.id);
+    setItemToDelete({
+      id: rec.id,
+      type: 'receivable',
+      description: `${debtorLabel || rec.debtorName}: ${rec.description}`,
+      amount: rec.remainingAmount > 0 ? rec.remainingAmount : rec.originalAmount,
+      currency: rec.currency,
+      date: rec.loanDate || rec.createdAt || rec.dueDate,
+      categoryName: 'Cuenta por Cobrar',
+      collectedAmount: rec.paidAmount || 0,
+      collectionsCount: entries.length,
+      linkedTransaction: linked ? { id: linked.id, date: linked.date, amountPen: linked.amountPen } : undefined
+    });
+  };
+
+  const handleConfirmDelete = (options?: { deleteLinkedTransaction?: boolean }) => {
     if (!itemToDelete) return;
     if (itemToDelete.type === 'transaction') {
       deleteTransactionById(itemToDelete.id);
@@ -2367,8 +2439,57 @@ function useFinanceController() {
       deleteExtraIncome(itemToDelete.id);
     } else if (itemToDelete.type === 'receivable') {
       deleteReceivable(itemToDelete.id);
+      const linked = itemToDelete.linkedTransaction;
+      if (linked) {
+        if (options?.deleteLinkedTransaction) {
+          deleteTransactionById(linked.id);
+        } else {
+          // La salida se conserva a propósito: no ofrecer restaurar este préstamo.
+          dismissOrphanLoanIds([itemToDelete.id]);
+        }
+      }
     }
     setItemToDelete(null);
+  };
+
+  // Alternativa segura al borrado: el préstamo vuelve a Pendientes sin cobros.
+  const handleRevertReceivableFromDelete = () => {
+    if (!itemToDelete || itemToDelete.type !== 'receivable') return;
+    revertReceivableCollections(itemToDelete.id);
+    setItemToDelete(null);
+  };
+
+  // Préstamos borrados cuya salida sigue en Movimientos (y no se descartaron):
+  // se pueden reconstruir con el mismo id, deudor, monto y fecha.
+  const orphanLoanDisbursements = useMemo(() => {
+    if (!areReceivablesSynced) return [] as Receivable[];
+    const existing = new Set(receivables.map(r => r.id.toLowerCase()));
+    const dismissed = new Set(dismissedOrphanLoanIds);
+    const seen = new Set<string>();
+    const result: Receivable[] = [];
+    transactions.forEach(t => {
+      const recId = getLoanDisbursementReceivableId(t);
+      if (!recId || existing.has(recId) || dismissed.has(recId) || seen.has(recId)) return;
+      const rebuilt = buildReceivableFromDisbursement(t);
+      if (!rebuilt) return;
+      seen.add(recId);
+      result.push(rebuilt);
+    });
+    return result.sort((a, b) => (a.loanDate || '').localeCompare(b.loanDate || ''));
+  }, [areReceivablesSynced, receivables, transactions, dismissedOrphanLoanIds]);
+
+  // Restaura los préstamos huérfanos como pendientes de cobro (sin crear nuevas
+  // salidas: la original sigue en Movimientos y queda vinculada otra vez).
+  const restoreOrphanLoans = () => {
+    if (orphanLoanDisbursements.length === 0) return;
+    const toRestore = orphanLoanDisbursements.filter(o => !receivables.some(r => r.id.toLowerCase() === o.id));
+    if (toRestore.length === 0) return;
+    setReceivables(prev => [...toRestore, ...prev]);
+    toRestore.forEach(rec => SupabaseDataService.createReceivable(rec));
+  };
+
+  const dismissOrphanLoans = () => {
+    dismissOrphanLoanIds(orphanLoanDisbursements.map(o => o.id));
   };
 
   const handleConfirmDeleteFuture = () => {
@@ -2559,6 +2680,11 @@ function useFinanceController() {
     setItemToDelete,
     handleConfirmDelete,
     handleConfirmDeleteFuture,
+    promptDeleteReceivable,
+    handleRevertReceivableFromDelete,
+    orphanLoanDisbursements,
+    restoreOrphanLoans,
+    dismissOrphanLoans,
     debtConfirmData,
     setDebtConfirmData,
 
@@ -2786,6 +2912,7 @@ function useFinanceController() {
     toggleDebtorExpanded,
     handleCreateReceivable,
     deleteReceivable,
+    revertReceivableCollections,
     isEditCollectModalOpen,
     setIsEditCollectModalOpen,
     editingCollectRecId,

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
-import { getFallbackReceivablePaymentDate } from '@/lib/calculations';
+import { getReceivableCollectionEntries } from '@/lib/calculations';
 import { useFinance } from '@/contexts/FinanceContext';
 import {
   ArrowDownLeft,
@@ -15,7 +15,8 @@ import {
   Pencil,
   AlertCircle,
   CheckCircle2,
-  Users
+  Users,
+  RotateCcw
 } from 'lucide-react';
 
 export const ReceivablesTab: React.FC = () => {
@@ -47,7 +48,10 @@ export const ReceivablesTab: React.FC = () => {
     handleOpenEditCollectPayment,
     handleDeleteCollectPayment,
     handleOpenEditPayable,
-    setItemToDelete,
+    promptDeleteReceivable,
+    orphanLoanDisbursements,
+    restoreOrphanLoans,
+    dismissOrphanLoans,
     handleOpenCreatePayable,
     payablesFilter,
     setPayablesFilter,
@@ -62,8 +66,6 @@ export const ReceivablesTab: React.FC = () => {
     handleDeletePayable,
     currentYear,
     currentMonth,
-    monthKey,
-    currentDateStr,
     setDebtConfirmData,
     formatDisplayDate,
     formatSoles
@@ -93,7 +95,8 @@ export const ReceivablesTab: React.FC = () => {
       newRemaining: 0,
       isDirectAction: true,
       onConfirm: () => {
-        handleCascadeCollect(group.debtorName, totalRem);
+        // Se registra con la misma fecha que se mostró en la confirmación.
+        handleCascadeCollect(group.debtorName, totalRem, dateStr, 'Cobro total de deuda');
         setDebtConfirmData(null);
       }
     });
@@ -354,6 +357,53 @@ export const ReceivablesTab: React.FC = () => {
             </div>
           </div>
 
+          {/* Préstamos borrados cuya salida sigue en Movimientos: se pueden restaurar */}
+          {orphanLoanDisbursements.length > 0 && (() => {
+            const count = orphanLoanDisbursements.length;
+            const totalPen = orphanLoanDisbursements.reduce((acc, r) => acc + (r.amountPen ?? r.originalAmount), 0);
+            const names = Array.from(new Set(orphanLoanDisbursements.map(r => r.debtorName)));
+            const namesLabel = names.length <= 2 ? names.join(' y ') : `${names.slice(0, 2).join(', ')} y ${names.length - 2} más`;
+            const dates = orphanLoanDisbursements.map(r => r.loanDate || '').filter(Boolean);
+            const dateLabel = dates.length > 1 && dates[0] !== dates[dates.length - 1]
+              ? `del ${formatDisplayDate(dates[0])} al ${formatDisplayDate(dates[dates.length - 1])}`
+              : dates.length > 0 ? `del ${formatDisplayDate(dates[0])}` : '';
+            return (
+              <div className="loans-info-banner warning-tint" id="orphan-loans-banner">
+                <div className="loans-info-banner-left">
+                  <RotateCcw size={16} color="var(--accent-warning)" style={{ flexShrink: 0 }} />
+                  <span>
+                    {count === 1 ? 'Hay 1 préstamo borrado' : `Hay ${count} préstamos borrados`} a <strong>{namesLabel}</strong> ({formatSoles(totalPen)} {dateLabel}) {count === 1 ? 'cuya salida sigue' : 'cuyas salidas siguen'} en Movimientos. {count === 1 ? 'Puedes restaurarlo como pendiente' : 'Puedes restaurarlos como pendientes'} sin duplicar {count === 1 ? 'esa salida' : 'esas salidas'}.
+                  </span>
+                </div>
+                <div className="loans-info-banner-right" style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                    onClick={dismissOrphanLoans}
+                    title="No restaurar: la salida se queda en Movimientos sin préstamo asociado"
+                  >
+                    Descartar
+                  </button>
+                  <button
+                    id="btn-restore-orphan-loans"
+                    type="button"
+                    className="btn-primary"
+                    style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                    onClick={() => {
+                      restoreOrphanLoans();
+                      setReceivablesFilter('pending');
+                    }}
+                    title="Volver a crear estos préstamos como pendientes de cobro, con su fecha y monto originales"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Restaurar</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Cuadrícula Armónica de Fichas de Deudores */}
           <div className="loans-harmonious-grid">
             {filteredDebtorGroups.length === 0 ? (
@@ -541,8 +591,8 @@ export const ReceivablesTab: React.FC = () => {
                                       </span>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }} title={`Fecha: ${formatDisplayDate(item.createdAt || item.dueDate)}`}>
-                                    Fecha: {formatDisplayDate(item.createdAt || item.dueDate)}
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }} title={`Fecha del préstamo: ${formatDisplayDate(item.loanDate || item.createdAt || item.dueDate)}`}>
+                                    Fecha: {formatDisplayDate(item.loanDate || item.createdAt || item.dueDate)}
                                   </div>
                                 </div>
 
@@ -613,17 +663,8 @@ export const ReceivablesTab: React.FC = () => {
                                     </button>
                                     <button
                                       className="btn-action-icon"
-                                      onClick={() => {
-                                        setItemToDelete({
-                                          id: item.id,
-                                          type: 'receivable',
-                                          description: `${group.debtorName}: ${item.description}`,
-                                          amount: item.remainingAmount > 0 ? item.remainingAmount : item.originalAmount,
-                                          date: item.createdAt || item.dueDate,
-                                          categoryName: 'Cuenta por Cobrar'
-                                        });
-                                      }}
-                                      title="Eliminar este préstamo específico"
+                                      onClick={() => promptDeleteReceivable(item, group.debtorName)}
+                                      title={item.paidAmount > 0 ? 'Revertir cobros o eliminar este préstamo' : 'Eliminar este préstamo específico'}
                                     >
                                       <Trash2 size={13} />
                                     </button>
@@ -632,15 +673,7 @@ export const ReceivablesTab: React.FC = () => {
 
                                 {/* Historial de abonos recibidos para este préstamo */}
                                 {(() => {
-                                  const effPayments = (item.payments && item.payments.length > 0)
-                                    ? item.payments
-                                    : (item.paidAmount > 0 ? [{
-                                        id: `legacy-${item.id}`,
-                                        amount: item.paidAmount,
-                                        amountPaid: item.paidAmount,
-                                        paymentDate: getFallbackReceivablePaymentDate(item, monthKey, currentDateStr),
-                                        notes: 'Cobro registrado'
-                                      }] : []);
+                                  const effPayments = getReceivableCollectionEntries(item).map(e => e.payment);
                                   if (effPayments.length === 0) return null;
                                   return (
                                     <div style={{ marginTop: '4px', paddingTop: '6px', borderTop: '1px dashed var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>

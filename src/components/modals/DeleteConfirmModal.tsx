@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { AlertTriangle, X, Repeat, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertTriangle, X, Repeat, Trash2, RotateCcw } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
@@ -18,6 +18,9 @@ export interface DeleteConfirmItem {
   paymentMethodColor?: string;
   isFixed?: boolean;
   futureOccurrencesCount?: number;
+  collectedAmount?: number;
+  collectionsCount?: number;
+  linkedTransaction?: { id: string; date: string; amountPen: number };
 }
 
 export const DeleteConfirmModal: React.FC = () => {
@@ -26,19 +29,36 @@ export const DeleteConfirmModal: React.FC = () => {
     setItemToDelete,
     handleConfirmDelete,
     handleConfirmDeleteFuture,
+    handleRevertReceivableFromDelete,
     handleBackdropMouseDown,
     handleBackdropClick,
     formatDisplayDate,
     formatSoles
   } = useFinance();
   const onClose = () => setItemToDelete(null);
-  const onConfirm = handleConfirmDelete;
   const { modalBoxRef, dragHandleProps } = useSwipeToDismiss({ onClose });
+
+  // Borrar también la salida vinculada de un préstamo (desmarcado por defecto:
+  // solo se elimina lo que el usuario eligió explícitamente).
+  const [deleteLinkedTx, setDeleteLinkedTx] = useState(false);
+  useEffect(() => {
+    setDeleteLinkedTx(false);
+  }, [itemToDelete?.id]);
 
   if (!itemToDelete) return null;
   const item = itemToDelete;
+  const onConfirm = () => handleConfirmDelete({ deleteLinkedTransaction: deleteLinkedTx });
   const futureCount = item.futureOccurrencesCount ?? 0;
   const isRecurringWithFuture = item.type === 'transaction' && !!item.isFixed && futureCount > 0;
+
+  // Préstamo con cobros: la acción recomendada es revertirlos, no borrarlo.
+  const isReceivable = item.type === 'receivable';
+  const collected = isReceivable ? (item.collectedAmount ?? 0) : 0;
+  const hasCollections = collected > 0.005;
+  const linkedTx = isReceivable ? item.linkedTransaction : undefined;
+  const formatItemAmount = (amt: number) => (
+    item.currency === 'USD' ? `$ ${amt.toFixed(2)} USD` : formatSoles(amt)
+  );
 
   return (
     <div
@@ -68,7 +88,9 @@ export const DeleteConfirmModal: React.FC = () => {
                 ¿Eliminar este {item.type === 'transaction' ? 'gasto' : item.type === 'income' ? 'ingreso' : 'préstamo'}?
               </h2>
               <p style={{ margin: '3px 0 0 0', fontSize: '0.775rem', color: 'var(--text-muted)' }}>
-                Esta acción no se puede deshacer.
+                {hasCollections
+                  ? 'Puedes revertir sus cobros en lugar de borrarlo.'
+                  : 'Esta acción no se puede deshacer.'}
               </p>
             </div>
           </div>
@@ -144,8 +166,86 @@ export const DeleteConfirmModal: React.FC = () => {
           </div>
         )}
 
+        {/* Préstamo con cobros: revertir es la alternativa que conserva todo */}
+        {hasCollections && (
+          <div className="delete-alt-notice">
+            <div className="delete-alt-notice-title">
+              <RotateCcw size={13} />
+              <span>
+                {formatItemAmount(collected)} cobrados
+                {(item.collectionsCount ?? 0) > 1 ? ` en ${item.collectionsCount} abonos` : ''}
+              </span>
+            </div>
+            <p className="delete-alt-notice-text">
+              Si quieres volver a cobrarlo, revierte los cobros y el préstamo regresa a Pendientes con su salida intacta en Movimientos. Eliminarlo borra también su historial de cobros.
+            </p>
+          </div>
+        )}
+
+        {/* Préstamo con salida vinculada: decidir si también se borra el desembolso */}
+        {linkedTx && (
+          <label className="delete-linked-option" htmlFor="chk-delete-linked-tx">
+            <input
+              type="checkbox"
+              id="chk-delete-linked-tx"
+              checked={deleteLinkedTx}
+              onChange={e => setDeleteLinkedTx(e.target.checked)}
+            />
+            <span className="delete-linked-option-copy">
+              <strong>{hasCollections ? 'Al eliminar, borrar también la salida' : 'Eliminar también la salida en Movimientos'}</strong>
+              <span>
+                {formatSoles(linkedTx.amountPen)} del {formatDisplayDate(linkedTx.date)}. Si la conservas, ese dinero sigue descontado de tu saldo.
+              </span>
+            </span>
+          </label>
+        )}
+
         {/* Botones de Acción */}
-        {isRecurringWithFuture ? (
+        {hasCollections ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
+              <button
+                id="btn-revert-receivable-collections"
+                type="button"
+                className="btn-primary"
+                onClick={handleRevertReceivableFromDelete}
+                style={{ padding: '10px 14px', fontSize: '0.825rem' }}
+                title="Quitar los cobros registrados y devolver el préstamo a Pendientes"
+              >
+                <RotateCcw size={14} />
+                <span>Revertir cobros</span>
+              </button>
+              <button
+                id="btn-confirm-delete"
+                type="button"
+                className="btn-danger-confirm"
+                onClick={onConfirm}
+                style={{ padding: '10px 14px', fontSize: '0.825rem' }}
+                title="Borrar el préstamo y su historial de cobros"
+              >
+                <Trash2 size={14} />
+                <span>Eliminar préstamo</span>
+              </button>
+            </div>
+            <button
+              id="btn-cancel-delete"
+              type="button"
+              className="btn-secondary"
+              onClick={onClose}
+              style={{
+                alignSelf: 'center',
+                fontSize: '0.8rem',
+                padding: '6px 18px',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer'
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : isRecurringWithFuture ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
               <button

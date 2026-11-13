@@ -4383,6 +4383,71 @@ body.modal-open {
   transform: translateY(0);
 }
 
+/* Alternativa segura al borrado de un préstamo con cobros (revertir) */
+.delete-alt-notice {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--accent-brand-subtle);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.delete-alt-notice-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-brand);
+}
+
+.delete-alt-notice-text {
+  margin: 0;
+  font-size: 0.775rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* Opción de borrar también la salida vinculada (mismo patrón que el check de
+   "Descontar de mi cuenta bancaria" del formulario de préstamo) */
+.delete-linked-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.delete-linked-option input[type="checkbox"] {
+  accent-color: var(--accent-danger);
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.delete-linked-option-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.825rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.delete-linked-option-copy > span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* ==============================================================================
    DISEÑO SIGN IN / SIGN UP (CARD CENTRADO, PROPORCIONADO Y ELEGANTE)
    ============================================================================== */

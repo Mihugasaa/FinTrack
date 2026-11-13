@@ -284,7 +284,7 @@ export const OverviewTab: React.FC = () => {
   // curso, pasado o futuro). Los "previstos" incluyen sueldo + ingresos extra del mes.
   const monthIncome = totalSalaryAmount + debitStats.otherIncomesTotalMonth;
   const expectedInflow = monthIncome + debitStats.collectedFromDebtors + (debitStats.borrowedCreditedToDebitMonth || 0);
-  const realizedInflow = debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday + debitStats.collectedFromDebtors + (debitStats.borrowedCreditedToDebitToday || 0);
+  const realizedInflow = debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday + debitStats.collectedFromDebtorsToday + (debitStats.borrowedCreditedToDebitToday || 0);
   const debtPaidToday = debitStats.paidToCreditorsToday || 0;
   const debtPaidMonth = debitStats.paidToCreditorsMonth || 0;
   const realizedOutflow = debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidMonth + debtPaidToday;
@@ -431,16 +431,21 @@ export const OverviewTab: React.FC = () => {
             </span>
             <div className="zen-flow-sub">
               {isCurrentActiveMonth ? (
-                debitStats.isSalaryCreditedToday ? (
-                  <span>Sueldo acreditado ({formatSoles(totalSalaryAmount)})</span>
-                ) : currentOtherIncomes.length > 0 ? (
-                  <>
-                    <span>Cobrado: {formatSoles(debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday)}</span>
-                    <span>Por cobrar: {formatSoles(debitStats.salariesPending + (debitStats.otherIncomesPending ?? Math.max(0, debitStats.otherIncomesTotalMonth - debitStats.otherIncomesReceivedToday)))}</span>
-                  </>
-                ) : (
-                  <span>Sueldo previsto: {formatSoles(totalSalaryAmount)}</span>
-                )
+                <>
+                  {debitStats.isSalaryCreditedToday ? (
+                    <span>Sueldo acreditado ({formatSoles(totalSalaryAmount)})</span>
+                  ) : currentOtherIncomes.length > 0 ? (
+                    <>
+                      <span>Cobrado: {formatSoles(debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday)}</span>
+                      <span>Por cobrar: {formatSoles(debitStats.salariesPending + (debitStats.otherIncomesPending ?? Math.max(0, debitStats.otherIncomesTotalMonth - debitStats.otherIncomesReceivedToday)))}</span>
+                    </>
+                  ) : (
+                    <span>Sueldo previsto: {formatSoles(totalSalaryAmount)}</span>
+                  )}
+                  {debitStats.collectedFromDebtorsToday > 0 && (
+                    <span>Cobros: +{formatSoles(debitStats.collectedFromDebtorsToday)}</span>
+                  )}
+                </>
               ) : (
                 <>
                   <span>Sueldo: {formatSoles(totalSalaryAmount)}</span>

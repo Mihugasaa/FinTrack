@@ -144,7 +144,12 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     });
 
     return Array.from(map.values()).map(g => {
-      g.items.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
+      // Del préstamo más antiguo al más reciente según su fecha real (el cobro en
+      // cascada FIFO depende de este orden); el registro desempata el mismo día.
+      g.items.sort((a, b) =>
+        (a.loanDate || a.createdAt || '').slice(0, 10).localeCompare((b.loanDate || b.createdAt || '').slice(0, 10)) ||
+        (a.createdAt || '').localeCompare(b.createdAt || '')
+      );
       g.isFullyPaid = g.totalRemaining <= 0;
       g.paidPercentage = g.totalOriginal > 0 ? Math.min(100, Math.round((g.totalPaid / g.totalOriginal) * 100)) : 0;
       return g;
@@ -208,16 +213,22 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReceivableModalOpen, loanCurrency, loanDate]);
 
+  // Fecha de cobro por defecto: hoy si se mira el mes en curso, si no el día 1 del
+  // mes visible. Siempre es un día válido del mes (nunca un 31 de noviembre).
+  const getDefaultCollectDate = () => {
+    const now = new Date();
+    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
+    const targetDay = isCurrentActiveMonth ? now.getDate() : 1;
+    const safeDay = getEffectiveDayOfMonth(currentYear, currentMonth, targetDay).toString().padStart(2, '0');
+    return `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${safeDay}`;
+  };
+
   const handleOpenCollectModal = (rec: Receivable) => {
     setCollectingDebtorGroup(null);
     setCollectingRec(rec);
     setCollectAmountInput('');
     setCollectPaymentNotes('');
-    const now = new Date();
-    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
-    const targetDay = isCurrentActiveMonth ? now.getDate() : 1;
-    const safeDay = getEffectiveDayOfMonth(currentYear, currentMonth, targetDay).toString().padStart(2, '0');
-    setCollectPaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${safeDay}`);
+    setCollectPaymentDate(getDefaultCollectDate());
     setIsCollectModalOpen(true);
   };
 
@@ -226,11 +237,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     setCollectingRec(null);
     setCollectAmountInput('');
     setCollectPaymentNotes('');
-    const now = new Date();
-    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
-    const targetDay = isCurrentActiveMonth ? now.getDate() : 1;
-    const safeDay = getEffectiveDayOfMonth(currentYear, currentMonth, targetDay).toString().padStart(2, '0');
-    setCollectPaymentDate(`${currentYear}-${currentMonth.toString().padStart(2, '0')}-${safeDay}`);
+    setCollectPaymentDate(getDefaultCollectDate());
     setIsCollectModalOpen(true);
   };
 
@@ -241,7 +248,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
 
     // Préstamos con saldo pendiente (ordenados del más antiguo al más reciente)
     const itemsToPay = targetGroup.items.filter(i => i.remainingAmount > 0);
-    const dateStr = collectDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
+    const dateStr = collectDate || getDefaultCollectDate();
     const updates = new Map<string, { newPaid: number; isDone: boolean; paymentRecord: ReceivablePayment }>();
 
     for (const item of itemsToPay) {
@@ -252,8 +259,10 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       const isDone = newRem <= 0;
 
       const nowIso = new Date().toISOString();
+      // UUID real: el mismo id viaja a Supabase, así revertir o editar el cobro
+      // antes de recargar actúa sobre la fila correcta.
       const pRecord: ReceivablePayment = {
-        id: `rpay-${Date.now()}-${item.id}`,
+        id: generateUUID(),
         receivableId: item.id,
         amountPaid: pay,
         amount: pay,
@@ -294,14 +303,14 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     const targetRec = receivables.find(r => r.id === id);
     if (!targetRec) return;
 
-    const dateStr = collectDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
+    const dateStr = collectDate || getDefaultCollectDate();
     const newPaid = targetRec.paidAmount + amountToCollect;
     const newRemaining = Math.max(0, targetRec.originalAmount - newPaid);
     const isDone = newRemaining === 0;
 
     const nowIso = new Date().toISOString();
     const pRecord: ReceivablePayment = {
-      id: `rpay-${Date.now()}-${id}`,
+      id: generateUUID(),
       receivableId: id,
       amountPaid: amountToCollect,
       amount: amountToCollect,
@@ -360,7 +369,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
       const desc = collectingDebtorGroup
         ? `Abono consolidado para ${collectingDebtorGroup.items.length} ${collectingDebtorGroup.items.length === 1 ? 'préstamo' : 'préstamos acumulados'}`
         : (collectingRec?.description || 'Cobranza de préstamo');
-      const todayStr = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
+      const todayStr = getDefaultCollectDate();
 
       setDebtConfirmData({
         type: 'receivable',
@@ -537,6 +546,17 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     SupabaseDataService.deleteReceivable(id);
   };
 
+  // Revierte todos los cobros de un préstamo: vuelve a Pendientes con su saldo
+  // original, conservando el préstamo y su salida en Movimientos.
+  const revertReceivableCollections = (id: string) => {
+    setReceivables(prev => prev.map(r => (
+      r.id === id
+        ? { ...r, paidAmount: 0, remainingAmount: r.originalAmount, status: 'pending', payments: [] }
+        : r
+    )));
+    SupabaseDataService.revertAllReceivablePayments(id);
+  };
+
   const handleOpenEditCollectPayment = (recId: string, payment: ReceivablePayment, debtorName?: string) => {
     setEditingCollectRecId(recId);
     setEditingCollectPaymentId(payment.id);
@@ -664,6 +684,7 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     toggleDebtorExpanded,
     handleCreateReceivable,
     deleteReceivable,
+    revertReceivableCollections,
     isEditCollectModalOpen,
     setIsEditCollectModalOpen,
     editingCollectRecId,

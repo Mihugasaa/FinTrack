@@ -553,15 +553,44 @@ export function useTransactions({
     }
   };
 
+  // Copias de los meses siguientes de un gasto recurrente (mismo criterio que
+  // "eliminar de aquí en adelante").
+  const getFutureRecurringCopies = (baseTx: Transaction): Transaction[] => {
+    const normDesc = baseTx.description.trim().toLowerCase();
+    return transactions.filter(t =>
+      t.id !== baseTx.id &&
+      t.isFixedSubscription &&
+      t.description.trim().toLowerCase() === normDesc &&
+      (t.categoryId === baseTx.categoryId || t.paymentMethodId === baseTx.paymentMethodId) &&
+      t.date > baseTx.date
+    );
+  };
+
+  // Si al editar un gasto recurrente se desmarca "recurrente", cuántas copias
+  // futuras se quitarán al guardar (para avisarlo en el formulario).
+  const futureRecurringCopiesCount = useMemo(() => {
+    if (!editingTransactionId || isRecurring) return 0;
+    const tx = transactions.find(t => t.id === editingTransactionId);
+    if (!tx || !tx.isFixedSubscription) return 0;
+    return getFutureRecurringCopies(tx).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingTransactionId, isRecurring, transactions]);
+
   const handleCreateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!desc || !amount || isSubmittingExpense) return;
+    // Monto válido y, en dólares, un tipo de cambio válido: sin él el gasto se
+    // guardaría como si fuera en soles (TC = 1).
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) return;
+    const parsedTc = parseFloat(exchangeRate);
+    if (currency === 'USD' && (isNaN(parsedTc) || parsedTc <= 0)) return;
 
     setIsSubmittingExpense(true);
 
     try {
-      const numAmount = parseFloat(amount);
-      const numTc = currency === 'USD' ? parseFloat(exchangeRate || '1') : 1;
+      const numAmount = parsedAmount;
+      const numTc = currency === 'USD' ? parsedTc : 1;
       const amountPen = currency === 'USD' ? numAmount * numTc : numAmount;
 
       const method = paymentMethods.find(p => p.id === selectedMethodId);
@@ -658,6 +687,16 @@ export function useTransactions({
         );
         // PUT a Supabase en la nube
         SupabaseDataService.updateTransaction(updatedTx);
+
+        // Si dejó de ser recurrente, se quitan sus copias de los meses siguientes
+        if (!isRecurring && currentTx?.isFixedSubscription) {
+          const futureIds = getFutureRecurringCopies(currentTx).map(t => t.id);
+          if (futureIds.length > 0) {
+            const idSet = new Set(futureIds);
+            setTransactions(prev => prev.filter(t => !idSet.has(t.id)));
+            SupabaseDataService.deleteTransactions(futureIds);
+          }
+        }
 
         // Si se convirtió en recurrente al editar y antes no lo era, proyectar 24 meses futuros
         if (isRecurring && !currentTx?.isFixedSubscription) {
@@ -928,6 +967,7 @@ export function useTransactions({
     handleParseNaturalExpense,
     handleCreateTransaction,
     deleteTransactionById,
-    deleteTransactionAndFuture
+    deleteTransactionAndFuture,
+    futureRecurringCopiesCount
   };
 }

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { FALLBACK_USD_PEN_RATE, FALLBACK_USD_PEN_RATE_STR4 } from '@/lib/constants';
-import { getReceivableCollectionEntries } from '@/lib/calculations';
+import { getReceivableCollectionEntries, daysUntilDate } from '@/lib/calculations';
 import { useFinance } from '@/contexts/FinanceContext';
 import {
   ArrowDownLeft,
@@ -946,7 +946,7 @@ export const ReceivablesTab: React.FC = () => {
                                       Fecha: {formatDisplayDate(item.createdAt || item.dueDate)}
                                     </div>
                                     {item.dueDate && !itemPaid && (() => {
-                                      const days = Math.ceil((new Date(`${item.dueDate}T12:00:00`).getTime() - Date.now()) / 86400000);
+                                      const days = daysUntilDate(item.dueDate);
                                       const overdue = days < 0;
                                       const soon = days >= 0 && days <= 5;
                                       const color = overdue ? 'var(--accent-danger)' : soon ? 'var(--accent-warning)' : 'var(--accent-info)';

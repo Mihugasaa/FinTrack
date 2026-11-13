@@ -36,6 +36,7 @@ export const ReceivableModal: React.FC = () => {
     loanPaymentMethodId,
     setLoanPaymentMethodId,
     paymentMethods,
+    receivables,
     handleBackdropMouseDown,
     handleBackdropClick
   } = useFinance();
@@ -45,6 +46,9 @@ export const ReceivableModal: React.FC = () => {
   };
   const onSubmit = handleCreateReceivable;
   const isEditing = !!editingReceivableId;
+  // Al editar, el monto no puede quedar por debajo de lo ya cobrado
+  const alreadyCollected = isEditing ? (receivables.find(r => r.id === editingReceivableId)?.paidAmount || 0) : 0;
+  const collectedLabel = loanCurrency === 'USD' ? `$ ${alreadyCollected.toFixed(2)}` : `S/ ${alreadyCollected.toFixed(2)}`;
   const debitMethods = React.useMemo(() => {
     return (paymentMethods || []).filter(p => p.type === 'debit' || p.type === 'cash');
   }, [paymentMethods]);
@@ -101,12 +105,26 @@ export const ReceivableModal: React.FC = () => {
                 id="input-loan-amount"
                 type="number"
                 step="0.01"
+                min={alreadyCollected > 0 ? alreadyCollected.toFixed(2) : '0.01'}
                 placeholder="0.00"
                 className="form-input"
                 required
                 value={loanAmount}
-                onChange={e => setLoanAmount(e.target.value)}
+                onChange={e => {
+                  e.currentTarget.setCustomValidity('');
+                  setLoanAmount(e.target.value);
+                }}
+                onInvalid={e => {
+                  if (alreadyCollected > 0 && e.currentTarget.validity.rangeUnderflow) {
+                    e.currentTarget.setCustomValidity(`Ya cobraste ${collectedLabel}. El monto no puede ser menor.`);
+                  }
+                }}
               />
+              {alreadyCollected > 0 && (
+                <span style={{ display: 'block', marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Ya cobraste {collectedLabel}. El monto no puede ser menor.
+                </span>
+              )}
             </div>
 
             <div className="form-group">

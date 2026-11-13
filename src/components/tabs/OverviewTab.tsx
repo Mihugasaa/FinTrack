@@ -287,7 +287,7 @@ export const OverviewTab: React.FC = () => {
   const realizedInflow = debitStats.salariesReceivedToday + debitStats.otherIncomesReceivedToday + debitStats.collectedFromDebtorsToday + (debitStats.borrowedCreditedToDebitToday || 0);
   const debtPaidToday = debitStats.paidToCreditorsToday || 0;
   const debtPaidMonth = debitStats.paidToCreditorsMonth || 0;
-  const realizedOutflow = debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidMonth + debtPaidToday;
+  const realizedOutflow = debitStats.debitExpensesPaidToday + debitStats.cardPaymentsPaidToday + debtPaidToday;
   const pastOutflow = debitStats.debitExpensesTotalMonth + debitStats.cardPaymentsPaidMonth + debtPaidMonth;
   // Salida programada del mes futuro: gastos débito registrados + cuotas de tarjeta
   // por vencer pendientes de pago (netas de abonos previos o anticipados) + deudas propias programadas de ese mes.
@@ -489,7 +489,7 @@ export const OverviewTab: React.FC = () => {
                 ) : (
                   <>
                     <span>
-                      Débito: {debitStats.debitExpensesPaidToday < -0.009 ? `+${formatSoles(Math.abs(debitStats.debitExpensesPaidToday))} (abono neto)` : formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas: {formatSoles(debitStats.cardPaymentsPaidMonth)}
+                      Débito: {debitStats.debitExpensesPaidToday < -0.009 ? `+${formatSoles(Math.abs(debitStats.debitExpensesPaidToday))} (abono neto)` : formatSoles(debitStats.debitExpensesPaidToday)} • Tarjetas: {formatSoles(debitStats.cardPaymentsPaidToday)}
                     </span>
                     {debtPaidToday > 0 && <span>Deudas: {formatSoles(debtPaidToday)}</span>}
                     {pendingThisMonth > 0 && (

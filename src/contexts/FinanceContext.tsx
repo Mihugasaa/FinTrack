@@ -215,7 +215,7 @@ function useFinanceController() {
         const parsed = JSON.parse(stored);
         const map: Record<string, number> = {};
         Object.entries(parsed).forEach(([k, v]: [string, any]) => {
-          if (v && v.amount) map[k] = v.amount;
+          if (v && typeof v.amount === 'number') map[k] = v.amount;
         });
         return map;
       }
@@ -826,13 +826,13 @@ function useFinanceController() {
 
     // 3. Saldo Débito Inicial y Sueldo
     SupabaseDataService.getMonthlyPeriod(currentYear, currentMonth).then(period => {
-      if (period && period.initialDebitBalance !== undefined && period.initialDebitBalance > 0) {
+      if (period && (period.hasDebitOverride || period.initialDebitBalance > 0)) {
         setInitialDebitBalances(prev => ({
           ...prev,
           [monthKey]: period.initialDebitBalance
         }));
       }
-      if (period && period.baseSalary !== undefined && period.baseSalary > 0) {
+      if (period && (period.salarySet || period.baseSalary > 0)) {
         const cachedConfig = monthlySalaryConfigs[monthKey];
         const effectiveSource = period.salarySource || cachedConfig?.source || 'Empleo Principal (Nómina)';
         const effectivePayDay = period.salaryPayDay || cachedConfig?.payDay || 30;
@@ -968,21 +968,21 @@ function useFinanceController() {
       setInitialDebitBalances(prev => {
         const fromCloud: Record<string, number> = {};
         Object.entries(periods).forEach(([k, v]) => {
-          if (v.initialDebitBalance > 0) fromCloud[k] = v.initialDebitBalance;
+          if (v.hasDebitOverride || v.initialDebitBalance > 0) fromCloud[k] = v.initialDebitBalance;
         });
         return { ...fromCloud, ...prev };
       });
       setMonthlySalaries(prev => {
         const fromCloud: Record<string, number> = {};
         Object.entries(periods).forEach(([k, v]) => {
-          if (v.baseSalary > 0) fromCloud[k] = v.baseSalary;
+          if (v.salarySet || v.baseSalary > 0) fromCloud[k] = v.baseSalary;
         });
         return { ...fromCloud, ...prev };
       });
       setMonthlySalaryConfigs(prev => {
         const fromCloud: Record<string, { amount: number; source: string; payDay: number }> = {};
         Object.entries(periods).forEach(([k, v]) => {
-          if (v.baseSalary > 0) {
+          if (v.salarySet || v.baseSalary > 0) {
             fromCloud[k] = {
               amount: v.baseSalary,
               source: v.salarySource || 'Empleo Principal (Nómina)',
@@ -1032,10 +1032,10 @@ function useFinanceController() {
           }
         }),
         SupabaseDataService.getMonthlyPeriod(currentYear, currentMonth).then(period => {
-          if (period && period.initialDebitBalance !== undefined && period.initialDebitBalance > 0) {
+          if (period && (period.hasDebitOverride || period.initialDebitBalance > 0)) {
             setInitialDebitBalances(prev => ({ ...prev, [monthKey]: period.initialDebitBalance }));
           }
-          if (period && period.baseSalary !== undefined && period.baseSalary > 0) {
+          if (period && (period.salarySet || period.baseSalary > 0)) {
             const cachedConfig = monthlySalaryConfigs[monthKey];
             const effectiveSource = period.salarySource || cachedConfig?.source || 'Empleo Principal (Nómina)';
             const effectivePayDay = period.salaryPayDay || cachedConfig?.payDay || 30;
@@ -1146,21 +1146,21 @@ function useFinanceController() {
           setInitialDebitBalances(prev => {
             const fromCloud: Record<string, number> = {};
             Object.entries(periods).forEach(([k, v]) => {
-              if (v.initialDebitBalance > 0) fromCloud[k] = v.initialDebitBalance;
+              if (v.hasDebitOverride || v.initialDebitBalance > 0) fromCloud[k] = v.initialDebitBalance;
             });
             return { ...fromCloud, ...prev };
           });
           setMonthlySalaries(prev => {
             const fromCloud: Record<string, number> = {};
             Object.entries(periods).forEach(([k, v]) => {
-              if (v.baseSalary > 0) fromCloud[k] = v.baseSalary;
+              if (v.salarySet || v.baseSalary > 0) fromCloud[k] = v.baseSalary;
             });
             return { ...fromCloud, ...prev };
           });
           setMonthlySalaryConfigs(prev => {
             const fromCloud: Record<string, { amount: number; source: string; payDay: number }> = {};
             Object.entries(periods).forEach(([k, v]) => {
-              if (v.baseSalary > 0) {
+              if (v.salarySet || v.baseSalary > 0) {
                 fromCloud[k] = {
                   amount: v.baseSalary,
                   source: v.salarySource || 'Empleo Principal (Nómina)',
@@ -1233,7 +1233,7 @@ function useFinanceController() {
   useEffect(() => {
     const knownSalary = monthlySalaries[monthKey];
     const knownConfig = monthlySalaryConfigs[monthKey];
-    if (knownSalary && knownSalary > 0) {
+    if (knownSalary !== undefined && knownSalary >= 0) {
       const currentAmt = salaries[0]?.amount || 0;
       const currentSrc = salaries[0]?.source || '';
       const currentDay = salaries[0]?.payDay || 30;
@@ -1321,16 +1321,19 @@ function useFinanceController() {
   // ==============================================================================
   const debitStats = useMemo(() => {
     const debitMethodIds = paymentMethods.filter(p => p.type === 'debit' || p.type === 'cash').map(p => p.id);
-    const cardPaymentsThisMonthTotal = cardPayments
-      .filter(p => p.paymentDate.startsWith(monthKey) && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT' && p.sourceType !== 'USD_SAVINGS_ACCOUNT')
-      .reduce((acc, curr) => {
-        const nominalAmt = curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid;
-        const penAmt = curr.amountPen !== undefined 
-          ? curr.amountPen 
-          : (curr.currency === 'USD' && curr.exchangeRate ? Math.round(nominalAmt * curr.exchangeRate * 100) / 100 : curr.amountPaid);
-        const itf = curr.itfAmount || 0;
-        return acc + penAmt + itf;
-      }, 0);
+    const debitCardPayments = cardPayments
+      .filter(p => p.paymentDate.startsWith(monthKey) && p.sourceType !== 'MERCHANT_REFUND' && p.sourceType !== 'BANK_CREDIT' && p.sourceType !== 'USD_SAVINGS_ACCOUNT');
+    const sumCardPayments = (list: CardPayment[]) => list.reduce((acc, curr) => {
+      const nominalAmt = curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid;
+      const penAmt = curr.amountPen !== undefined
+        ? curr.amountPen
+        : (curr.currency === 'USD' && curr.exchangeRate ? Math.round(nominalAmt * curr.exchangeRate * 100) / 100 : curr.amountPaid);
+      const itf = curr.itfAmount || 0;
+      return acc + penAmt + itf;
+    }, 0);
+    const cardPaymentsThisMonthTotal = sumCardPayments(debitCardPayments);
+    // Solo los abonos con fecha hasta hoy ya salieron de la cuenta
+    const cardPaymentsPaidToday = sumCardPayments(debitCardPayments.filter(p => p.paymentDate <= currentDateStr));
 
     const base = calculateCurrentDebitBalance(
       initialDebitForMonth,
@@ -1341,7 +1344,8 @@ function useFinanceController() {
       debitMethodIds,
       cardPaymentsThisMonthTotal,
       currentDateStr,
-      payables
+      payables,
+      cardPaymentsPaidToday
     );
 
     // Deudas propias que vencen en el mes visible y aún no se pagan: se restan del
@@ -1974,7 +1978,7 @@ function useFinanceController() {
       const key = `${currentYear}-${m.toString().padStart(2, '0')}`;
       const extraTotal = (extraIncomes[key] || []).reduce((acc, curr) => acc + curr.amount, 0);
       // Sueldo real del mes (si se guardó uno propio); si no, el sueldo global vigente.
-      const monthSalary = monthlySalaries[key] || currentSalary;
+      const monthSalary = (key in monthlySalaries) ? monthlySalaries[key] : currentSalary;
       const inVal = Number((monthSalary + extraTotal).toFixed(2));
       const outVal = Number((outByMonth.get(key) || 0).toFixed(2));
       const consumed = Number((consumedByMonth.get(key) || 0).toFixed(2));
@@ -2556,7 +2560,7 @@ function useFinanceController() {
       delete next[monthKey];
       return next;
     });
-    SupabaseDataService.updateInitialDebitBalance(currentYear, currentMonth, 0);
+    SupabaseDataService.updateInitialDebitBalance(currentYear, currentMonth, 0, false);
     setIsAdjustDebitModalOpen(false);
   };
 

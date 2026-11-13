@@ -638,6 +638,8 @@ export interface DebitBalanceResult {
   debitExpensesTotalMonth: number;
   debitExpenses: number;
   cardPaymentsPaidMonth: number;
+  /** Abonos a tarjeta del mes con fecha hasta la fecha de corte (los que ya salieron). */
+  cardPaymentsPaidToday: number;
   paidToCreditorsToday?: number;
   paidToCreditorsMonth?: number;
   borrowedCreditedToDebitToday?: number;
@@ -658,8 +660,12 @@ export function calculateCurrentDebitBalance(
   debitMethodIds: string[],
   cardPaymentsThisMonthTotal: number,
   currentDateStr: string,
-  payables: Payable[] = []
+  payables: Payable[] = [],
+  cardPaymentsPaidToday?: number
 ): DebitBalanceResult {
+  // Un abono a tarjeta con fecha futura dentro del mes solo resta del proyectado,
+  // igual que un gasto con débito; si no se informa, se asume todo ya pagado.
+  const cardPaymentsToday = cardPaymentsPaidToday ?? cardPaymentsThisMonthTotal;
   const currentDay = parseInt(currentDateStr.split('-')[2], 10);
   const targetYM = currentDateStr.substring(0, 7);
   const [targetYear, targetMonth] = targetYM.split('-').map(Number);
@@ -766,7 +772,7 @@ export function calculateCurrentDebitBalance(
     borrowedCreditedToDebitToday -
     debitExpensesPaidToday -
     paidToCreditorsToday -
-    cardPaymentsThisMonthTotal;
+    cardPaymentsToday;
 
   // 6. Saldo Débito Proyectado a Fin de Mes (al cobrar el sueldo y pagar restantes)
   const totalSalaries = salaries.reduce((acc, curr) => acc + curr.amount, 0);
@@ -797,6 +803,7 @@ export function calculateCurrentDebitBalance(
     debitExpensesTotalMonth,
     debitExpenses: debitExpensesTotalMonth,
     cardPaymentsPaidMonth: cardPaymentsThisMonthTotal,
+    cardPaymentsPaidToday: cardPaymentsToday,
     paidToCreditorsToday,
     paidToCreditorsMonth,
     borrowedCreditedToDebitToday,
@@ -1001,46 +1008,81 @@ export function computeCardBillingAmortization(params: {
     const paymentRem = validPayments.map(p => {
       const isUsd = p.currency === 'USD';
       const nom = p.originalAmount !== undefined ? p.originalAmount : p.amountPaid;
-      const pen = p.amountPen !== undefined 
-        ? p.amountPen 
+      const pen = p.amountPen !== undefined
+        ? p.amountPen
         : (isUsd && p.exchangeRate ? Math.round(nom * p.exchangeRate * 100) / 100 : p.amountPaid);
       return {
         raw: p,
         isUsd,
         remPen: !isUsd ? Math.max(0, pen) : 0,
         remUsd: isUsd ? Math.max(0, nom) : 0,
+        // TC del abono en dólares (para convertir su excedente a soles)
+        rate: isUsd && p.exchangeRate && p.exchangeRate > 1 ? p.exchangeRate : 0,
         targetMonth: p.targetMonth && isMonthKey(p.targetMonth) ? p.targetMonth : null,
         paymentDate: p.paymentDate
       };
     });
+    type PaymentRem = (typeof paymentRem)[number];
+
+    // TC de los consumos en dólares del ciclo (el mismo con que la app valoriza esa deuda)
+    const cycleUsdRateOf = (b: CycleBucket) =>
+      b.billedUsd > 0.005 && b.billedUsdInPen > 0 ? b.billedUsdInPen / b.billedUsd : FALLBACK_USD_PEN_RATE;
+
+    const trackPen = (b: CycleBucket, pPayMonth: string, pen: number) => {
+      if (pPayMonth < b.monthKey) b.paidInAdvancePen += pen;
+      else b.paidInMonthPen += pen;
+    };
+
+    // Aplica un abono a un ciclo: primero a la deuda en su misma moneda y, si sobra,
+    // a la deuda en la otra moneda del MISMO ciclo, convirtiendo (como hace el banco
+    // con un pago en soles cuando también hay deuda en dólares).
+    const applyToBucket = (p: PaymentRem, b: CycleBucket) => {
+      const pPayMonth = p.paymentDate.slice(0, 7);
+
+      if (p.isUsd && p.remUsd > 0.005) {
+        const neededUsd = Math.max(0, b.billedUsd - b.coveredUsd);
+        const appliedUsd = Math.min(neededUsd, p.remUsd);
+        b.coveredUsd += appliedUsd;
+        p.remUsd -= appliedUsd;
+      }
+      if (!p.isUsd && p.remPen > 0.005) {
+        const neededPen = Math.max(0, b.billedPen - b.coveredPen);
+        const appliedPen = Math.min(neededPen, p.remPen);
+        b.coveredPen += appliedPen;
+        p.remPen -= appliedPen;
+        trackPen(b, pPayMonth, appliedPen);
+      }
+
+      // Excedente en soles -> deuda en dólares del ciclo
+      if (!p.isUsd && p.remPen > 0.005) {
+        const neededUsd = Math.max(0, b.billedUsd - b.coveredUsd);
+        if (neededUsd > 0.005) {
+          const rate = cycleUsdRateOf(b);
+          const appliedPen = Math.min(p.remPen, round2(neededUsd * rate));
+          b.coveredUsd += appliedPen / rate;
+          p.remPen -= appliedPen;
+          trackPen(b, pPayMonth, appliedPen);
+        }
+      }
+      // Excedente en dólares -> deuda en soles del ciclo
+      if (p.isUsd && p.remUsd > 0.005) {
+        const neededPen = Math.max(0, b.billedPen - b.coveredPen);
+        if (neededPen > 0.005) {
+          const rate = p.rate || cycleUsdRateOf(b);
+          const appliedUsd = Math.min(p.remUsd, neededPen / rate);
+          b.coveredPen += appliedUsd * rate;
+          p.remUsd -= appliedUsd;
+          trackPen(b, pPayMonth, appliedUsd * rate);
+        }
+      }
+    };
 
     // PASO 1: Imputación explícita (pagos que especifican targetMonth)
     paymentRem.forEach(p => {
       if (!p.targetMonth) return;
       const b = bucketsMap.get(p.targetMonth);
       if (!b) return;
-
-      const pPayMonth = p.paymentDate.slice(0, 7);
-
-      if (p.isUsd && p.remUsd > 0) {
-        const neededUsd = Math.max(0, b.billedUsd - b.coveredUsd);
-        const appliedUsd = Math.min(neededUsd, p.remUsd);
-        b.coveredUsd += appliedUsd;
-        p.remUsd -= appliedUsd;
-      }
-
-      if (!p.isUsd && p.remPen > 0) {
-        const neededPen = Math.max(0, b.billedPen - b.coveredPen);
-        const appliedPen = Math.min(neededPen, p.remPen);
-        b.coveredPen += appliedPen;
-        p.remPen -= appliedPen;
-
-        if (pPayMonth < b.monthKey) {
-          b.paidInAdvancePen += appliedPen;
-        } else {
-          b.paidInMonthPen += appliedPen;
-        }
-      }
+      applyToBucket(p, b);
     });
 
     const sortedBuckets = Array.from(bucketsMap.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
@@ -1089,35 +1131,12 @@ export function computeCardBillingAmortization(params: {
 
     // PASO 2: Amortización cronológica FIFO (pagos sin targetMonth o remanentes)
 
+    // Ciclo por ciclo, del más antiguo al más reciente: cada ciclo se cubre completo
+    // (en ambas monedas) antes de pasar al siguiente.
     paymentRem.forEach(p => {
       if (p.remPen <= 0.005 && p.remUsd <= 0.005) return;
-      const pPayMonth = p.paymentDate.slice(0, 7);
-
       for (const b of sortedBuckets) {
-        if (p.isUsd && p.remUsd > 0.005) {
-          const neededUsd = Math.max(0, b.billedUsd - b.coveredUsd);
-          if (neededUsd > 0.005) {
-            const appliedUsd = Math.min(neededUsd, p.remUsd);
-            b.coveredUsd += appliedUsd;
-            p.remUsd -= appliedUsd;
-          }
-        }
-
-        if (!p.isUsd && p.remPen > 0.005) {
-          const neededPen = Math.max(0, b.billedPen - b.coveredPen);
-          if (neededPen > 0.005) {
-            const appliedPen = Math.min(neededPen, p.remPen);
-            b.coveredPen += appliedPen;
-            p.remPen -= appliedPen;
-
-            if (pPayMonth < b.monthKey) {
-              b.paidInAdvancePen += appliedPen;
-            } else {
-              b.paidInMonthPen += appliedPen;
-            }
-          }
-        }
-
+        applyToBucket(p, b);
         if (p.remPen <= 0.005 && p.remUsd <= 0.005) break;
       }
     });
@@ -1413,7 +1432,8 @@ export function computeMonthlyDebitChain(params: {
     const hasOverride = Object.prototype.hasOwnProperty.call(overrides, key);
     const initial = hasOverride ? overrides[key] : carry;
 
-    const salaryAmt = monthlySalaries[key] || currentSalaryTotal;
+    // Un sueldo definido en 0 para el mes se respeta; solo un mes sin sueldo configurado usa el actual
+    const salaryAmt = Object.prototype.hasOwnProperty.call(monthlySalaries, key) ? monthlySalaries[key] : currentSalaryTotal;
     const effectivePayDay = getEffectiveDayOfMonth(y, m, primaryPayDay);
     const salariesArr = [{ id: 'chain-salary', source: 'salary', amount: salaryAmt, payDay: effectivePayDay }];
     const endOfMonthDate = getEndOfMonthDate(y, m);
@@ -1892,7 +1912,8 @@ export function calculateCardsDebtSummary(
       .reduce((acc, curr) => acc + (curr.originalAmount !== undefined ? curr.originalAmount : curr.amountPaid), 0);
 
     // 3. ESTADO DE DEUDA EN DÓLARES (Bimonetario, incluyendo cuotas diferidas en USD)
-    const totalAccumulatedDebtUsd = Math.max(0, consumedToDateUsd + futureInstallmentsUsd - paidToDateUsd);
+    let totalAccumulatedDebtUsd = Math.max(0, consumedToDateUsd + futureInstallmentsUsd - paidToDateUsd);
+    const usdSurplus = Math.max(0, paidToDateUsd - consumedToDateUsd - futureInstallmentsUsd);
     const hasUsdDebt = totalAccumulatedDebtUsd > 0.009 || consumedThisMonthUsd > 0.009 || futureInstallmentsUsd > 0.009;
 
     // Transacciones en USD ordenadas cronológicamente para amortización FIFO del contravalor en soles
@@ -1926,7 +1947,23 @@ export function calculateCardsDebtSummary(
 
     // 4. BALANCES TOTALES Y CONSOLIDADOS (incluyendo cuotas futuras diferidas)
     const initialDebt = card.initialDebt || 0;
-    const netBalancePen = initialDebt + consumedPenToDate + futureInstallmentsPen - paidPenToDate;
+    let netBalancePen = initialDebt + consumedPenToDate + futureInstallmentsPen - paidPenToDate;
+
+    // Pagos en una moneda que exceden su deuda cubren la deuda en la otra moneda
+    // (mismo criterio que el motor de amortización por ciclo).
+    if (netBalancePen < -0.009 && totalAccumulatedDebtUsd > 0.009 && usdPendingInPen > 0.009) {
+      const rateUsd = usdPendingInPen / totalAccumulatedDebtUsd;
+      const coverPen = Math.min(-netBalancePen, usdPendingInPen);
+      usdPendingInPen = Math.round((usdPendingInPen - coverPen) * 100) / 100;
+      totalAccumulatedDebtUsd = Math.max(0, totalAccumulatedDebtUsd - coverPen / rateUsd);
+      netBalancePen += coverPen;
+    } else if (usdSurplus > 0.009 && netBalancePen > 0.009) {
+      const lastUsdPay = [...cardPayments]
+        .filter(p => matchesCard(p.paymentMethodId) && p.currency === 'USD' && p.exchangeRate && p.exchangeRate > 1)
+        .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate))[0];
+      const rate = lastUsdPay?.exchangeRate || FALLBACK_USD_PEN_RATE;
+      netBalancePen -= Math.min(netBalancePen, usdSurplus * rate);
+    }
     const totalAccumulatedDebtPen = Math.max(0, netBalancePen);
 
     // Balance consolidado en Soles (congelado con tipo de cambio histórico de compra):

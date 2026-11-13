@@ -818,7 +818,7 @@ export class SupabaseDataService {
           description: row.description || '',
           originalAmount: parseFloat(row.original_amount),
           paidAmount: parseFloat(row.paid_amount || '0'),
-          remainingAmount: parseFloat(row.original_amount) - parseFloat(row.paid_amount || '0'),
+          remainingAmount: Math.max(0, parseFloat(row.original_amount) - parseFloat(row.paid_amount || '0')),
           currency: row.currency || 'PEN',
           exchangeRate: row.exchange_rate ? parseFloat(row.exchange_rate) : undefined,
           amountPen: row.amount_pen ? parseFloat(row.amount_pen) : undefined,
@@ -891,7 +891,8 @@ export class SupabaseDataService {
           exchange_rate: r.exchangeRate || 1.0,
           amount_pen: r.amountPen || (r.currency === 'USD' ? r.originalAmount * (r.exchangeRate || 1) : r.originalAmount),
           loan_date: r.loanDate || null,
-          due_date: r.dueDate || null
+          due_date: r.dueDate || null,
+          status: r.status || 'pending'
         })
         .eq('id', r.id);
       return !error;
@@ -1423,28 +1424,32 @@ export class SupabaseDataService {
   // 5. PERIODOS MENSUALES, SALDOS INICIALES Y SUELDO BASE
   // ============================================================================
 
+  // `[salarySet:1]` marca que el sueldo del mes lo definió el usuario (aunque sea 0);
+  // sin la marca, un base_salary en 0 significa "sin configurar" y se hereda.
   public static encodeSalaryNotes(existingNotes?: string | null, source?: string, payDay?: number): string {
     let clean = (existingNotes || '')
       .replace(/\[salarySource:[^\]]*\]/g, '')
       .replace(/\[salaryPayDay:[^\]]*\]/g, '')
+      .replace(/\[salarySet:1\]/g, '')
       .trim();
 
-    const parts: string[] = [];
+    const parts: string[] = ['[salarySet:1]'];
     if (source && source.trim()) parts.push(`[salarySource:${source.trim()}]`);
     if (payDay && !isNaN(payDay)) parts.push(`[salaryPayDay:${payDay}]`);
 
-    if (parts.length === 0) return clean;
     const tagStr = parts.join('');
     return clean ? `${tagStr} ${clean}` : tagStr;
   }
 
-  public static parseSalaryNotes(notes?: string | null): { source?: string; payDay?: number } {
+  public static parseSalaryNotes(notes?: string | null): { source?: string; payDay?: number; salarySet?: boolean; debitOverride?: boolean } {
     if (!notes || typeof notes !== 'string') return {};
     const srcMatch = notes.match(/\[salarySource:([^\]]+)\]/);
     const dayMatch = notes.match(/\[salaryPayDay:(\d+)\]/);
     return {
       source: srcMatch ? srcMatch[1].trim() : undefined,
-      payDay: dayMatch ? parseInt(dayMatch[1], 10) : undefined
+      payDay: dayMatch ? parseInt(dayMatch[1], 10) : undefined,
+      salarySet: notes.includes('[salarySet:1]'),
+      debitOverride: notes.includes('[debitOverride:1]')
     };
   }
 
@@ -1454,6 +1459,10 @@ export class SupabaseDataService {
     baseSalary: number;
     salarySource?: string;
     salaryPayDay?: number;
+    /** El sueldo de este mes lo definió el usuario (puede ser 0). */
+    salarySet?: boolean;
+    /** El saldo inicial de este mes está fijado a mano (puede ser 0 o negativo). */
+    hasDebitOverride?: boolean;
   } | null> {
     if (!supabase || !isSupabaseConfigured) return null;
 
@@ -1473,15 +1482,20 @@ export class SupabaseDataService {
       const initialDebitBalance = data ? parseFloat(data.initial_debit_balance || '0') : 0;
       let salarySource: string | undefined;
       let salaryPayDay: number | undefined;
+      let salarySet = false;
+      let hasDebitOverride = false;
 
       if (data?.notes) {
         const parsed = this.parseSalaryNotes(data.notes);
         salarySource = parsed.source;
         salaryPayDay = parsed.payDay;
+        salarySet = !!parsed.salarySet;
+        hasDebitOverride = !!parsed.debitOverride;
       }
 
-      // Si este mes aún no tiene sueldo propio asignado, heredar el último sueldo vigente conocido (mes en adelante)
-      if (baseSalary === 0 || !salarySource || !salaryPayDay) {
+      // Si este mes aún no tiene sueldo propio asignado, heredar el último sueldo vigente
+      // conocido. Un sueldo definido en 0 a propósito no se reemplaza.
+      if ((baseSalary === 0 && !salarySet) || !salarySource || !salaryPayDay) {
         const { data: periodsWithSalary } = await supabase
           .from('monthly_periods')
           .select('year, month, base_salary, notes')
@@ -1493,7 +1507,7 @@ export class SupabaseDataService {
         if (periodsWithSalary && periodsWithSalary.length > 0) {
           const relevant = periodsWithSalary.find(p => p.year < year || (p.year === year && p.month <= month));
           if (relevant) {
-            if (baseSalary === 0 && relevant.base_salary) {
+            if (baseSalary === 0 && !salarySet && relevant.base_salary) {
               baseSalary = parseFloat(relevant.base_salary);
             }
             if (relevant.notes) {
@@ -1511,7 +1525,9 @@ export class SupabaseDataService {
         initialDebitBalance,
         baseSalary,
         salarySource,
-        salaryPayDay
+        salaryPayDay,
+        salarySet,
+        hasDebitOverride
       };
     } catch (e) {
       this.logSupabaseError('getMonthlyPeriod (catch)', e);
@@ -1527,6 +1543,8 @@ export class SupabaseDataService {
     baseSalary: number;
     salarySource?: string;
     salaryPayDay?: number;
+    salarySet?: boolean;
+    hasDebitOverride?: boolean;
   }> | null> {
     if (!supabase || !isSupabaseConfigured) return null;
 
@@ -1547,7 +1565,7 @@ export class SupabaseDataService {
         return null;
       }
 
-      const map: Record<string, { initialDebitBalance: number; baseSalary: number; salarySource?: string; salaryPayDay?: number }> = {};
+      const map: Record<string, { initialDebitBalance: number; baseSalary: number; salarySource?: string; salaryPayDay?: number; salarySet?: boolean; hasDebitOverride?: boolean }> = {};
       data.forEach((row: any) => {
         const y = parseInt(row.year, 10);
         const m = parseInt(row.month, 10);
@@ -1558,7 +1576,9 @@ export class SupabaseDataService {
           initialDebitBalance: parseFloat(row.initial_debit_balance || '0'),
           baseSalary: parseFloat(row.base_salary || '0'),
           salarySource: parsed.source,
-          salaryPayDay: parsed.payDay
+          salaryPayDay: parsed.payDay,
+          salarySet: !!parsed.salarySet,
+          hasDebitOverride: !!parsed.debitOverride
         };
       });
       return map;
@@ -1568,8 +1588,10 @@ export class SupabaseDataService {
     }
   }
 
-  // PUT: Actualizar saldo débito inicial para un mes específico
-  public static async updateInitialDebitBalance(year: number, month: number, balance: number): Promise<boolean> {
+  // PUT: Actualizar saldo débito inicial para un mes específico. `isOverride` marca el
+  // valor como fijado a mano ([debitOverride:1] en las notas), así un 0 o un negativo
+  // se respetan al recargar; en false vuelve al arrastre automático.
+  public static async updateInitialDebitBalance(year: number, month: number, balance: number, isOverride: boolean = true): Promise<boolean> {
     if (!supabase || !isSupabaseConfigured) return false;
 
     try {
@@ -1580,9 +1602,17 @@ export class SupabaseDataService {
       const periodId = await this.getOrCreateMonthlyPeriod(userId, dateStr);
       if (!periodId) return false;
 
+      const { data: currentPeriod } = await supabase
+        .from('monthly_periods')
+        .select('notes')
+        .eq('id', periodId)
+        .maybeSingle();
+      const baseNotes = (currentPeriod?.notes || '').replace(/\[debitOverride:1\]/g, '').trim();
+      const notes = isOverride ? `${baseNotes} [debitOverride:1]`.trim() : baseNotes;
+
       const { error } = await supabase
         .from('monthly_periods')
-        .update({ initial_debit_balance: balance })
+        .update({ initial_debit_balance: isOverride ? balance : 0, notes: notes || null })
         .eq('id', periodId);
 
       if (error) {

@@ -19,7 +19,9 @@ import {
   ApplyPrepaymentParams,
   ApplyPrepaymentResult,
   PrepaymentMode,
-  ReceivablePayment
+  ReceivablePayment,
+  LiquidatedInstallment,
+  PrepaymentUndoInfo
 } from '@/types';
 import { FALLBACK_USD_PEN_RATE } from './constants';
 import { generateUUID } from './utils';
@@ -2334,13 +2336,13 @@ export function getActiveInstallmentPlansForCard(
  *   hacia abajo el importe de cada una de las cuotas restantes.
  */
 export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): ApplyPrepaymentResult {
-  const { allTransactions, planId, prepaymentAmount, mode, paymentDate, cardPayments, paymentMethods, cardAmortization } = params;
+  const { allTransactions, planId, mode, paymentDate, cardPayments, paymentMethods, cardAmortization, prepaymentId } = params;
   const now = new Date();
   const sysTodayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
   const todayStr = paymentDate || sysTodayStr;
 
   const planTxs = allTransactions.filter(t => isInstallmentTx(t) && getInstallmentPlanId(t, allTransactions) === planId);
-  if (planTxs.length === 0 || prepaymentAmount <= 0) {
+  if (planTxs.length === 0 || params.prepaymentAmount <= 0) {
     return {
       updatedTransactions: [],
       deletedTransactionIds: [],
@@ -2355,6 +2357,20 @@ export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): Apply
 
   const baseDesc = getInstallmentBaseDescription(planTxs[0].description) || 'Compra en cuotas';
   const currency = planTxs[0].currency || 'PEN';
+
+  // El abono puede venir en otra moneda que el plan (p. ej. soles para un plan en
+  // dólares): se convierte con el TC del abono, o con el del plan si el abono es en soles.
+  const planRate = planTxs.find(t => t.currency === 'USD' && t.exchangeRate > 1)?.exchangeRate || FALLBACK_USD_PEN_RATE;
+  const payCurrency = params.prepaymentCurrency || currency;
+  let prepaymentAmount = params.prepaymentAmount;
+  if (payCurrency !== currency) {
+    const rate = payCurrency === 'USD' && params.exchangeRate && params.exchangeRate > 1 ? params.exchangeRate : planRate;
+    prepaymentAmount = Math.round((currency === 'USD' ? prepaymentAmount / rate : prepaymentAmount * rate) * 100) / 100;
+  }
+
+  // Cada cambio queda marcado con el id del abono para poder deshacer solo este prepago.
+  const tagId = prepaymentId ? ` #${prepaymentId}` : '';
+  const liquidated: LiquidatedInstallment[] = [];
 
   const schedule = cardAmortization || (cardPayments && paymentMethods ? computeCardBillingAmortization({
     transactions: allTransactions,
@@ -2395,8 +2411,17 @@ export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): Apply
       const lastTxAmt = currency === 'USD' ? (lastTx.originalAmount || 0) : (lastTx.amountPen || 0);
 
       if (fundsToApply >= lastTxAmt - 0.009) {
-        // Cuota completamente liquidada: se elimina
+        // Cuota completamente liquidada: se elimina, guardando lo necesario para recrearla
         deletedTransactionIds.push(lastTx.id);
+        liquidated.push({
+          id: lastTx.id,
+          date: lastTx.date,
+          paymentDueDate: lastTx.paymentDueDate,
+          originalAmount: lastTx.originalAmount,
+          amountPen: lastTx.amountPen,
+          exchangeRate: lastTx.exchangeRate,
+          createdAt: lastTx.createdAt
+        });
         survivingPending.pop();
         fundsToApply = Math.max(0, fundsToApply - lastTxAmt);
       } else {
@@ -2407,7 +2432,7 @@ export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): Apply
           ...lastTx,
           originalAmount: newAmt,
           amountPen: currency === 'USD' ? Math.round(newAmt * (lastTx.exchangeRate || 1) * 100) / 100 : newAmt,
-          notes: `${lastTx.notes || ''} [prepago: cuota reducida de ${lastTxAmt} a ${newAmt}]`.trim()
+          notes: `${lastTx.notes || ''} [prepago: cuota reducida de ${lastTxAmt} a ${newAmt}${tagId}]`.trim()
         };
         survivingPending[survivingPending.length - 1] = updatedLast;
         updatedTransactions.push(updatedLast);
@@ -2473,7 +2498,7 @@ export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): Apply
           ...tx,
           originalAmount: txAmt,
           amountPen: currency === 'USD' ? Math.round(txAmt * (tx.exchangeRate || 1) * 100) / 100 : txAmt,
-          notes: `${tx.notes || ''} [prepago: cuota mensual reducida de ${oldAmt} a ${txAmt}]`.trim()
+          notes: `${tx.notes || ''} [prepago: cuota mensual reducida de ${oldAmt} a ${txAmt}${tagId}]`.trim()
         });
       }
     }
@@ -2488,10 +2513,25 @@ export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): Apply
     .filter(t => !deletedSet.has(t.id))
     .map(t => updatedMap.get(t.id) || t);
 
+  const templateTx = planTxs[0];
+  const undo: PrepaymentUndoInfo = {
+    planId,
+    liquidated,
+    template: {
+      description: baseDesc,
+      categoryId: templateTx.categoryId,
+      paymentMethodId: templateTx.paymentMethodId,
+      currency,
+      originalTotalAmount: templateTx.originalTotalAmount,
+      hasInterest: templateTx.hasInterest
+    }
+  };
+
   return {
     updatedTransactions,
     deletedTransactionIds,
     newTransactionsList,
+    undo,
     summary: {
       planDescription: baseDesc,
       previousRemainingDebt: prevRemainingDebt,
@@ -2507,60 +2547,191 @@ export function applyInstallmentPrepayment(params: ApplyPrepaymentParams): Apply
 
 export interface RevertPrepaymentResult {
   updatedTransactions: Transaction[];
+  /** Cuotas liquidadas por el prepago que se vuelven a crear al revertirlo. */
+  createdTransactions: Transaction[];
   newTransactionsList: Transaction[];
 }
 
+// Nota que deja un prepago en cada cuota que modifica. Los prepagos nuevos terminan
+// en "#<id del abono>"; los antiguos no tienen id.
+const prepagoTagRegex = () =>
+  /\[prepago:\s*(?:cuota mensual reducida de|cuota reducida de)\s*([\d.]+)\s*a\s*([\d.]+)([^\]]*)\]/gi;
+const PREPAGO_ID_RE = /#([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+
+const withInstallmentAmount = (tx: Transaction, amount: number, notes: string): Transaction => {
+  const amt = Math.round(amount * 100) / 100;
+  return {
+    ...tx,
+    originalAmount: amt,
+    amountPen: tx.currency === 'USD' ? Math.round(amt * (tx.exchangeRate || 1) * 100) / 100 : amt,
+    notes: notes.replace(/\s{2,}/g, ' ').trim() || undefined
+  };
+};
+
+/** Serializa los datos para deshacer un prepago como etiqueta de las notas del abono. */
+export function encodePrepaymentUndo(info: PrepaymentUndoInfo): string {
+  return `[undo:${encodeURIComponent(JSON.stringify(info))}]`;
+}
+
+/** Lee los datos para deshacer un prepago desde las notas de su abono (null si no hay). */
+export function decodePrepaymentUndo(notes?: string): PrepaymentUndoInfo | null {
+  const match = (notes || '').match(/\[undo:([^\]\s]+)\]/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(match[1]));
+    return parsed && typeof parsed.planId === 'string' && Array.isArray(parsed.liquidated) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Revierte una amortización anticipada (prepago) de un plan de compras en cuotas.
- * Restaura las cuotas pendientes a su importe original previo al prepago (extrayéndolo de la nota [prepago: ...])
- * y elimina los tags de prepago en las notas.
+ * Revierte UN prepago de un plan de compras en cuotas.
+ *
+ * - Prepago nuevo (con id): suma de vuelta a cada cuota lo que ESTE prepago le
+ *   descontó y quita solo su nota, sin tocar otros prepagos del mismo plan. Las
+ *   cuotas que liquidó ("reducir plazo") se recrean desde `undo` y el plan se
+ *   renumera (Cuota i/N).
+ * - Prepago antiguo (sin id): vuelve cada cuota al importe previo al primer prepago
+ *   antiguo, solo dentro de su plan.
+ * Sin plan identificable no se modifica nada.
  */
 export function revertInstallmentPrepayment(params: {
   allTransactions: Transaction[];
   planId?: string;
+  prepaymentId?: string;
+  undo?: PrepaymentUndoInfo | null;
 }): RevertPrepaymentResult {
-  const { allTransactions, planId } = params;
-  const updatedTransactions: Transaction[] = [];
+  const { allTransactions, prepaymentId, undo } = params;
+  const planId = params.planId || undo?.planId;
+  if (!planId) {
+    return { updatedTransactions: [], createdTransactions: [], newTransactionsList: allTransactions };
+  }
 
-  const newTransactionsList = allTransactions.map(tx => {
-    if (!isInstallmentTx(tx)) return tx;
-    if (planId && getInstallmentPlanId(tx, allTransactions) !== planId) return tx;
+  const inPlan = (tx: Transaction, list: Transaction[]) =>
+    isInstallmentTx(tx) && getInstallmentPlanId(tx, list) === planId;
+  const marker = prepaymentId ? `#${prepaymentId.toLowerCase()}` : '';
+  const hasOwnTags = !!marker && allTransactions.some(tx => inPlan(tx, allTransactions) && (tx.notes || '').toLowerCase().includes(marker));
+  const isNewFormat = !!undo || hasOwnTags;
 
-    // Detectar si la transacción tiene nota de reducción de cuota
-    const prepagoMatch = (tx.notes || '').match(/\[prepago:\s*(?:cuota mensual reducida de|cuota reducida de)\s*([\d.]+)\s*a\s*[\d.]+(?:[^\]]*)\]/i);
-    const isTvSamsung = /tv\s*samsung/i.test(tx.description);
+  const updated = new Map<string, Transaction>();
+  let list = allTransactions.map(tx => {
+    if (!inPlan(tx, allTransactions) || !(tx.notes || '').includes('[prepago:')) return tx;
+    let amount = tx.originalAmount;
+    let changed = false;
+    let firstLegacyFrom: number | null = null;
 
-    let needsReversion = false;
-    let targetAmount = tx.originalAmount;
+    const notes = (tx.notes || '').replace(prepagoTagRegex(), (full, from: string, to: string, rest: string) => {
+      if (isNewFormat) {
+        if (!marker || !rest.toLowerCase().includes(marker)) return full;
+        amount += parseFloat(from) - parseFloat(to);
+        changed = true;
+        return '';
+      }
+      if (PREPAGO_ID_RE.test(rest)) return full;
+      if (firstLegacyFrom === null) firstLegacyFrom = parseFloat(from);
+      changed = true;
+      return '';
+    });
+    if (firstLegacyFrom !== null) amount = firstLegacyFrom;
+    if (!changed || !(amount > 0)) return tx;
 
-    if (prepagoMatch) {
-      needsReversion = true;
-      targetAmount = parseFloat(prepagoMatch[1]);
-    } else if (isTvSamsung && Math.abs(tx.originalAmount - 718.11) > 0.01) {
-      needsReversion = true;
-      targetAmount = 718.11;
-    }
-
-    if (needsReversion && !isNaN(targetAmount) && targetAmount > 0) {
-      const cleanedNotes = (tx.notes || '').replace(/\[prepago:[^\]]+\]/gi, '').trim() || undefined;
-      const currency = tx.currency || 'PEN';
-      const updatedTx: Transaction = {
-        ...tx,
-        originalAmount: targetAmount,
-        amountPen: currency === 'USD' ? Math.round(targetAmount * (tx.exchangeRate || 1) * 100) / 100 : targetAmount,
-        notes: cleanedNotes
-      };
-      updatedTransactions.push(updatedTx);
-      return updatedTx;
-    }
-
-    return tx;
+    const next = withInstallmentAmount(tx, amount, notes);
+    updated.set(tx.id, next);
+    return next;
   });
 
+  // Recrear las cuotas que el prepago liquidó ("reducir plazo")
+  let created: Transaction[] = [];
+  if (undo && undo.liquidated.length > 0) {
+    const existingIds = new Set(list.map(t => t.id));
+    const base = list.find(t => inPlan(t, list));
+    const tpl = undo.template;
+    const origTotal = base?.originalTotalAmount ?? tpl?.originalTotalAmount;
+    created = undo.liquidated
+      .filter(l => !existingIds.has(l.id))
+      .map(l => ({
+        id: l.id,
+        date: l.date,
+        description: base?.description || tpl?.description || 'Compra en cuotas',
+        categoryId: base?.categoryId || tpl?.categoryId || '',
+        paymentMethodId: base?.paymentMethodId || tpl?.paymentMethodId || '',
+        currency: base?.currency || tpl?.currency || 'PEN',
+        originalAmount: l.originalAmount,
+        exchangeRate: l.exchangeRate,
+        amountPen: l.amountPen,
+        paymentDueDate: l.paymentDueDate,
+        isInstallment: true,
+        installmentPlanId: planId,
+        originalTotalAmount: origTotal,
+        hasInterest: base?.hasInterest ?? tpl?.hasInterest,
+        notes: `[isInstallment:true] [instNum:0] [instTotal:0] [planId:${planId}]${origTotal ? ` [origTotal:${origTotal}]` : ''}`,
+        createdAt: l.createdAt
+      }));
+    list = [...list, ...created];
+
+    // Renumerar el plan completo por fecha de vencimiento (Cuota i/N)
+    const planTxs = list
+      .filter(t => inPlan(t, list))
+      .sort((a, b) => (a.paymentDueDate || a.date).localeCompare(b.paymentDueDate || b.date) || a.date.localeCompare(b.date));
+    const total = planTxs.length;
+    const baseDesc = getInstallmentBaseDescription(base?.description || tpl?.description) || 'Compra en cuotas';
+    const renumbered = new Map<string, Transaction>();
+    planTxs.forEach((t, i) => {
+      const n = i + 1;
+      const description = `${baseDesc} (Cuota ${n}/${total})`;
+      const notes = (t.notes || '')
+        .replace(/\[instNum:\d+\]/, `[instNum:${n}]`)
+        .replace(/\[instTotal:\d+\]/, `[instTotal:${total}]`);
+      if (t.description !== description || t.currentInstallment !== n || t.totalInstallments !== total || notes !== (t.notes || '')) {
+        renumbered.set(t.id, { ...t, description, currentInstallment: n, totalInstallments: total, notes: notes || undefined });
+      }
+    });
+    list = list.map(t => renumbered.get(t.id) || t);
+    const createdIds = new Set(created.map(c => c.id));
+    created = created.map(c => renumbered.get(c.id) || c);
+    renumbered.forEach((t, id) => { if (!createdIds.has(id)) updated.set(id, t); });
+  }
+
   return {
-    updatedTransactions,
-    newTransactionsList
+    updatedTransactions: Array.from(updated.values()),
+    createdTransactions: created,
+    newTransactionsList: list
   };
+}
+
+/**
+ * Repara una cuota con notas de prepagos cuyo abono ya no existe (borrado desde otro
+ * dispositivo o con una versión anterior): devuelve la cuota corregida o null si no
+ * hay nada que reparar. Solo debe usarse con TODO el historial de abonos cargado.
+ */
+export function healOrphanPrepaymentTags(
+  t: Transaction,
+  existingPaymentIds: Set<string>,
+  planHasActivePrepayment: boolean
+): Transaction | null {
+  if (!isInstallmentTx(t) || !(t.notes || '').includes('[prepago:')) return null;
+  let amount = t.originalAmount;
+  let changed = false;
+  let firstLegacyFrom: number | null = null;
+
+  const notes = (t.notes || '').replace(prepagoTagRegex(), (full, from: string, to: string, rest: string) => {
+    const idMatch = rest.match(PREPAGO_ID_RE);
+    if (idMatch) {
+      if (existingPaymentIds.has(idMatch[1].toLowerCase())) return full;
+      amount += parseFloat(from) - parseFloat(to);
+      changed = true;
+      return '';
+    }
+    // Prepago antiguo sin id: solo se repara si el plan ya no tiene ningún prepago
+    if (planHasActivePrepayment) return full;
+    if (firstLegacyFrom === null) firstLegacyFrom = parseFloat(from);
+    changed = true;
+    return '';
+  });
+  if (firstLegacyFrom !== null) amount = firstLegacyFrom;
+  if (!changed || !(amount > 0)) return null;
+  return withInstallmentAmount(t, amount, notes);
 }
 
 export function formatSoles(amount?: number | null): string {

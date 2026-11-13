@@ -345,27 +345,48 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
     setIsPayablePaymentModalOpen(true);
   };
 
-  const handleCascadePay = (creditorName: string, amountToPay: number, payDate?: string, payNotes?: string) => {
+  // Fecha de pago por defecto: hoy en el mes en curso o el día 1 del mes visible
+  // (siempre un día válido del mes).
+  const getDefaultPayDate = () => {
+    const now = new Date();
+    const isCurrentActiveMonth = currentYear === now.getFullYear() && currentMonth === (now.getMonth() + 1);
+    const safeDay = getEffectiveDayOfMonth(currentYear, currentMonth, isCurrentActiveMonth ? now.getDate() : 1).toString().padStart(2, '0');
+    return `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${safeDay}`;
+  };
+
+  // `inputCurrency` es la moneda del monto pagado. Cada deuda se abona en su propia
+  // moneda, convirtiendo con su tipo de cambio cuando difiere.
+  const handleCascadePay = (creditorName: string, amountToPay: number, payDate?: string, payNotes?: string, inputCurrency: CurrencyCode = 'PEN') => {
     let remainingToApply = amountToPay;
     const targetGroup = creditorGroups.find(g => g.creditorName.toLowerCase() === creditorName.toLowerCase());
     if (!targetGroup) return;
 
     const itemsToPay = targetGroup.items.filter(i => (i.remainingAmount ?? (i.totalAmount ?? i.originalAmount)) > 0);
-    const dateStr = payDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`;
+    const dateStr = payDate || getDefaultPayDate();
     const updates = new Map<string, { newPaid: number; newRem: number; isDone: boolean; paymentRecord: PayablePayment }>();
 
     for (const item of itemsToPay) {
-      if (remainingToApply <= 0) break;
-      const itemTotal = item.totalAmount ?? item.originalAmount ?? 0;
-      const curRem = item.remainingAmount ?? itemTotal;
-      const pay = Math.min(curRem, remainingToApply);
-      const newPaid = (item.paidAmount ?? 0) + pay;
+      if (remainingToApply <= 0.005) break;
+      const isUsd = item.currency === 'USD';
+      const itemTotal = (isUsd && item.originalAmount) ? item.originalAmount : (item.totalAmount ?? item.originalAmount ?? 0);
+      const paidSoFar = item.paidAmount ?? 0;
+      // Mismo criterio que la ficha: saldos USD antiguos guardados en soles se recalculan
+      const curRem = (isUsd && item.remainingAmount > itemTotal) ? Math.max(0, itemTotal - paidSoFar) : (item.remainingAmount ?? itemTotal);
+      const itemCurrency: CurrencyCode = isUsd ? 'USD' : 'PEN';
+      const rate = item.exchangeRate || FALLBACK_USD_PEN_RATE;
+      const toInput = (amt: number) => (itemCurrency === inputCurrency ? amt : itemCurrency === 'USD' ? amt * rate : amt / rate);
+      const toItem = (amt: number) => (itemCurrency === inputCurrency ? amt : itemCurrency === 'USD' ? amt / rate : amt * rate);
+      const curRemInput = toInput(curRem);
+      const payInput = Math.min(curRemInput, remainingToApply);
+      const pay = payInput >= curRemInput - 0.005 ? curRem : Math.round(toItem(payInput) * 100) / 100;
+      if (pay <= 0) continue;
+      const newPaid = paidSoFar + pay;
       const newRem = Math.max(0, itemTotal - newPaid);
-      const isDone = newRem <= 0;
+      const isDone = newRem <= 0.005;
 
       const nowIso = new Date().toISOString();
       const pRecord: PayablePayment = {
-        id: `ppay-${Date.now()}-${item.id}`,
+        id: generateUUID(),
         payableId: item.id,
         amountPaid: pay,
         amount: pay,
@@ -376,7 +397,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
       };
 
       updates.set(item.id, { newPaid, newRem, isDone, paymentRecord: pRecord });
-      remainingToApply -= pay;
+      remainingToApply -= payInput;
     }
 
     setPayables(prev =>
@@ -415,7 +436,9 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
 
   const executePayPayable = (num: number) => {
     if (payingCreditorGroup) {
-      handleCascadePay(payingCreditorGroup.creditorName, num, payablePaymentDate, payablePaymentNotes);
+      // El monto se pidió en dólares solo si todas sus deudas son en USD
+      const groupCurrency: CurrencyCode = payingCreditorGroup.hasUsd && payingCreditorGroup.isPureUsd ? 'USD' : 'PEN';
+      handleCascadePay(payingCreditorGroup.creditorName, num, payablePaymentDate, payablePaymentNotes, groupCurrency);
       setIsPayablePaymentModalOpen(false);
       setPayingCreditorGroup(null);
       setPayablePaymentAmount('');
@@ -426,11 +449,11 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
     if (payingPayable) {
       const nowIso = new Date().toISOString();
       const payRecord: PayablePayment = {
-        id: `ppay-${Date.now()}`,
+        id: generateUUID(),
         payableId: payingPayable.id,
         amountPaid: num,
         amount: num,
-        paymentDate: payablePaymentDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`,
+        paymentDate: payablePaymentDate || getDefaultPayDate(),
         paymentMethodId: 'pm-1',
         notes: payablePaymentNotes || undefined,
         createdAt: nowIso
@@ -490,7 +513,7 @@ export function usePayables({ currentYear, currentMonth, onCreditToDebit, setDeb
         currency: isUsd ? 'USD' : 'PEN',
         exchangeRate: exRate,
         amountPen: isUsd ? num * exRate : num,
-        date: payablePaymentDate || `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`,
+        date: payablePaymentDate || getDefaultPayDate(),
         currentRemaining: rawRem,
         newRemaining: Math.max(0, rawRem - num),
         notes: payablePaymentNotes || undefined,

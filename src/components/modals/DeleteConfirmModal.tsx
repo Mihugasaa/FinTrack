@@ -8,7 +8,7 @@ import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 /** Registro que el usuario está por eliminar (gasto, ingreso o préstamo). */
 export interface DeleteConfirmItem {
   id: string;
-  type: 'transaction' | 'income' | 'receivable';
+  type: 'transaction' | 'income' | 'receivable' | 'payable';
   description: string;
   amount: number;
   currency?: string;
@@ -21,7 +21,16 @@ export interface DeleteConfirmItem {
   collectedAmount?: number;
   collectionsCount?: number;
   linkedTransaction?: { id: string; date: string; amountPen: number };
+  payablePaidPen?: number;
+  payableCreditedPen?: number;
 }
+
+const DELETE_TITLES: Record<DeleteConfirmItem['type'], string> = {
+  transaction: '¿Eliminar este gasto?',
+  income: '¿Eliminar este ingreso?',
+  receivable: '¿Eliminar este préstamo?',
+  payable: '¿Eliminar esta deuda?'
+};
 
 export const DeleteConfirmModal: React.FC = () => {
   const {
@@ -60,6 +69,11 @@ export const DeleteConfirmModal: React.FC = () => {
     item.currency === 'USD' ? `$ ${amt.toFixed(2)} USD` : formatSoles(amt)
   );
 
+  // Deuda propia: lo que deja de contar en el saldo si se elimina
+  const isPayable = item.type === 'payable';
+  const payablePaid = isPayable ? (item.payablePaidPen ?? 0) : 0;
+  const payableCredited = isPayable ? (item.payableCreditedPen ?? 0) : 0;
+
   return (
     <div
       className="modal-overlay"
@@ -85,7 +99,7 @@ export const DeleteConfirmModal: React.FC = () => {
             </div>
             <div>
               <h2 id="modal-delete-title" className="modal-title" style={{ fontSize: '1.05rem', margin: 0 }}>
-                ¿Eliminar este {item.type === 'transaction' ? 'gasto' : item.type === 'income' ? 'ingreso' : 'préstamo'}?
+                {DELETE_TITLES[item.type]}
               </h2>
               <p style={{ margin: '3px 0 0 0', fontSize: '0.775rem', color: 'var(--text-muted)' }}>
                 {hasCollections
@@ -138,7 +152,7 @@ export const DeleteConfirmModal: React.FC = () => {
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--accent-danger)' }} className="tabular-nums">
-                {formatSoles(item.amount)}
+                {formatItemAmount(item.amount)}
               </span>
             </div>
           </div>
@@ -162,6 +176,16 @@ export const DeleteConfirmModal: React.FC = () => {
             </div>
             <p style={{ margin: 0, fontSize: '0.775rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
               Existen pagos programados en los meses posteriores. Puedes eliminar únicamente el registro de este mes o cancelar los pagos de este mes en adelante.
+            </p>
+          </div>
+        )}
+
+        {/* Deuda propia: qué deja de contar en el saldo al eliminarla */}
+        {isPayable && (payablePaid > 0.005 || payableCredited > 0.005) && (
+          <div className="delete-alt-notice is-danger">
+            <p className="delete-alt-notice-text">
+              {payablePaid > 0.005 && `Se borran también sus pagos (${formatSoles(payablePaid)}) y dejan de descontarse de tu saldo. `}
+              {payableCredited > 0.005 && `El dinero que entró a tu cuenta (${formatSoles(payableCredited)}) deja de sumar a tu saldo.`}
             </p>
           </div>
         )}

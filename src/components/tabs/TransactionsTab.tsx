@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { FALLBACK_USD_PEN_RATE } from '@/lib/constants';
 import {
-  getFallbackReceivablePaymentDate,
+  getReceivableCollectionEntries,
   isInstallmentPrepayment,
   isInstallmentTx,
   getInstallmentPlanId,
@@ -95,12 +95,9 @@ export const TransactionsTab: React.FC = () => {
 
   const currentMonthReceivablePaymentsCount = React.useMemo(() => {
     return receivables.reduce((acc, r) => {
-      const eff = (r.payments && r.payments.length > 0)
-        ? r.payments
-        : (r.paidAmount > 0 ? [{ paymentDate: getFallbackReceivablePaymentDate(r, monthKey, currentDateStr) }] : []);
-      return acc + eff.filter(pay => (pay.paymentDate || '').split('T')[0].startsWith(monthKey)).length;
+      return acc + getReceivableCollectionEntries(r).filter(e => e.date.startsWith(monthKey)).length;
     }, 0);
-  }, [receivables, monthKey, currentDateStr]);
+  }, [receivables, monthKey]);
   const [naturalText, setNaturalText] = useState('');
   const isItemFuture = (sortDate: string) => {
     if (isCurrentMonthViewed) {

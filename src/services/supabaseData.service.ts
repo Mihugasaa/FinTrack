@@ -797,7 +797,8 @@ export class SupabaseDataService {
         data = fallbackRes.data;
       }
 
-      if (!data || data.length === 0) return null;
+      // [] = consulta exitosa sin préstamos; null queda reservado para errores.
+      if (!data || data.length === 0) return [];
 
       return data.map((row: any) => {
         const rawPayments: any[] = Array.isArray(row.receivable_payments) ? row.receivable_payments : [];
@@ -860,8 +861,13 @@ export class SupabaseDataService {
       if (isUUID(r.id)) {
         payload.id = r.id;
       }
+      // Conserva la fecha de registro original (p. ej. al restaurar un préstamo).
+      if (r.createdAt && !isNaN(Date.parse(r.createdAt))) {
+        payload.created_at = r.createdAt;
+      }
 
       const { error } = await supabase.from('receivables').insert(payload);
+      if (error) this.logSupabaseError('createReceivable', error.message);
       return !error;
     } catch (e) {
       this.logSupabaseError('createReceivable (catch)', e);
@@ -1010,6 +1016,40 @@ export class SupabaseDataService {
       return !error;
     } catch (e) {
       this.logSupabaseError('deleteReceivablePayment (catch)', e);
+      return false;
+    }
+  }
+
+  // DELETE: Revertir TODOS los cobros de un préstamo (vuelve a pendiente sin borrarlo)
+  public static async revertAllReceivablePayments(receivableId: string): Promise<boolean> {
+    if (!supabase || !isSupabaseConfigured) return false;
+    if (!isUUID(receivableId)) return false;
+
+    try {
+      const { error: payError } = await supabase
+        .from('receivable_payments')
+        .delete()
+        .eq('receivable_id', receivableId);
+      if (payError) {
+        this.logSupabaseError('revertAllReceivablePayments (delete payments)', payError.message);
+        return false;
+      }
+
+      const { error } = await supabase
+        .from('receivables')
+        .update({
+          paid_amount: 0,
+          status: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', receivableId);
+      if (error) {
+        this.logSupabaseError('revertAllReceivablePayments (update)', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      this.logSupabaseError('revertAllReceivablePayments (catch)', e);
       return false;
     }
   }

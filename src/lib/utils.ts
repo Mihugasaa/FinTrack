@@ -1,5 +1,52 @@
-import { Transaction, PaymentMethod } from '@/types';
+import { Transaction, PaymentMethod, Receivable } from '@/types';
 import { initialPaymentMethods } from '@/lib/defaults';
+
+// Salida de dinero generada al registrar un préstamo: sus notas guardan el id del
+// préstamo ("Desembolso de préstamo registrado en FinTrack (#<uuid>)").
+const LOAN_DISBURSEMENT_REGEX = /Desembolso de préstamo registrado en FinTrack \(#([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)/i;
+
+/** Id del préstamo al que pertenece una salida de desembolso, o null si no lo es. */
+export const getLoanDisbursementReceivableId = (t: Pick<Transaction, 'notes'>): string | null => {
+  const match = (t.notes || '').match(LOAN_DISBURSEMENT_REGEX);
+  return match ? match[1].toLowerCase() : null;
+};
+
+/**
+ * Reconstruye un préstamo (pendiente de cobro) a partir de su salida de desembolso:
+ * mismo id, deudor, descripción, monto, moneda y fecha. Sirve para recuperar
+ * préstamos borrados cuya salida sigue registrada en Movimientos.
+ */
+export const buildReceivableFromDisbursement = (t: Transaction): Receivable | null => {
+  const id = getLoanDisbursementReceivableId(t);
+  if (!id) return null;
+
+  // La descripción se generó como "Préstamo a <deudor>[ - <detalle>]"
+  const body = (t.description || '').replace(/^Préstamo a\s+/i, '').trim();
+  const sepIdx = body.indexOf(' - ');
+  const debtorName = (sepIdx >= 0 ? body.slice(0, sepIdx) : body).trim() || 'Deudor';
+  const description = sepIdx >= 0 ? body.slice(sepIdx + 3).trim() || 'Préstamo' : 'Préstamo';
+
+  const isUsd = t.currency === 'USD';
+  const createdAt = (t.notes || '').match(/\[created:([^\]]+)\]/)?.[1] || t.createdAt || `${t.date}T12:00:00.000Z`;
+
+  return {
+    id,
+    debtorName,
+    description,
+    originalAmount: t.originalAmount,
+    paidAmount: 0,
+    remainingAmount: t.originalAmount,
+    currency: t.currency || 'PEN',
+    exchangeRate: isUsd ? t.exchangeRate : undefined,
+    amountPen: t.amountPen,
+    loanDate: t.date,
+    status: 'pending',
+    isDebitedFromAccount: true,
+    fundingPaymentMethodId: t.paymentMethodId,
+    createdAt,
+    payments: []
+  };
+};
 
 // Generador de UUID estándar RFC4122 (compatible con Supabase)
 export const generateUUID = (): string => {

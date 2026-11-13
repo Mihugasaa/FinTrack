@@ -18,7 +18,8 @@ import {
   ActiveInstallmentPlanInfo,
   ApplyPrepaymentParams,
   ApplyPrepaymentResult,
-  PrepaymentMode
+  PrepaymentMode,
+  ReceivablePayment
 } from '@/types';
 import { FALLBACK_USD_PEN_RATE } from './constants';
 import { generateUUID } from './utils';
@@ -626,7 +627,10 @@ export interface DebitBalanceResult {
   otherIncomesReceivedToday: number;
   otherIncomesPending: number;
   otherIncomesTotalMonth: number;
+  /** Cobros a deudores con fecha de abono dentro del mes (total del mes). */
   collectedFromDebtors: number;
+  /** Cobros a deudores del mes ya recibidos a la fecha de corte. */
+  collectedFromDebtorsToday: number;
   debitExpensesPaidToday: number;
   debitExpensesPendingFuture: number;
   debitExpensesTotalMonth: number;
@@ -688,13 +692,20 @@ export function calculateCurrentDebitBalance(
     }
   });
 
-  // 3. Cobranzas a terceros ya cobradas (con paridad cambiaria en USD)
-  const collectedFromDebtors = receivables.reduce((acc, curr) => {
-    const isUsd = curr.currency === 'USD';
-    const exRate = curr.exchangeRate || FALLBACK_USD_PEN_RATE;
-    const paidPen = isUsd ? curr.paidAmount * exRate : curr.paidAmount;
-    return acc + paidPen;
-  }, 0);
+  // 3. Cobranzas a terceros: cada abono entra en el mes de SU fecha de cobro (no en
+  // el mes en que se registró el préstamo), con paridad cambiaria en USD. Un abono
+  // con fecha posterior a hoy solo suma al proyectado, igual que los ingresos extra.
+  let collectedFromDebtors = 0;
+  let collectedFromDebtorsToday = 0;
+  receivables.forEach(r => {
+    getReceivableCollectionEntries(r).forEach(entry => {
+      if (!entry.date.startsWith(targetYM)) return;
+      collectedFromDebtors += entry.amountPen;
+      if (entry.isLegacy || entry.date <= currentDateStr) {
+        collectedFromDebtorsToday += entry.amountPen;
+      }
+    });
+  });
 
   // 3.b Deudas mías personales (Préstamos recibidos que entraron a débito, y pagos que hice)
   let borrowedCreditedToDebitToday = 0;
@@ -749,7 +760,7 @@ export function calculateCurrentDebitBalance(
     initialBalance +
     salariesReceivedToday +
     otherIncomesReceivedToday +
-    collectedFromDebtors +
+    collectedFromDebtorsToday +
     borrowedCreditedToDebitToday -
     debitExpensesPaidToday -
     paidToCreditorsToday -
@@ -778,6 +789,7 @@ export function calculateCurrentDebitBalance(
     otherIncomesPending: Math.max(0, otherIncomesTotalMonth - otherIncomesReceivedToday),
     otherIncomesTotalMonth,
     collectedFromDebtors,
+    collectedFromDebtorsToday,
     debitExpensesPaidToday,
     debitExpensesPendingFuture,
     debitExpensesTotalMonth,
@@ -790,16 +802,77 @@ export function calculateCurrentDebitBalance(
   };
 }
 
+export interface ReceivableCollectionEntry {
+  /** Registro de abono efectivo (con el monto ya acotado al total cobrado). */
+  payment: ReceivablePayment;
+  /** Fecha del abono (YYYY-MM-DD). */
+  date: string;
+  /** Monto en la moneda del préstamo. */
+  amount: number;
+  /** Contravalor en soles. */
+  amountPen: number;
+  /** Cobro antiguo sin fecha propia: se atribuye al mes de respaldo. */
+  isLegacy: boolean;
+}
+
 /**
- * Mes (YYYY-MM) al que se atribuye la cobranza de una cuenta por cobrar.
+ * Cobros efectivos de un préstamo, cada uno con su fecha real de abono.
  *
- * Los `Receivable` no guardan la fecha en que se recibió el pago, solo el monto
- * cobrado acumulado. Para que ese cobro se cuente UNA sola vez en el saldo de
- * débito (y no se duplique en cada mes que se visita), lo atribuimos de forma
- * determinista a un único mes: vencimiento pactado → creación → préstamo.
+ * `paidAmount` es el total autoritativo de lo cobrado. Los abonos del historial se
+ * asignan del más antiguo al más reciente hasta cubrir ese total; si sobra historial
+ * (filas que quedaron al revertir un cobro antes de sincronizar) se ignora. Si falta
+ * (préstamos cobrados antes de que existiera receivable_payments, sin fecha propia)
+ * el resto se fija a una única fecha de respaldo, vencimiento pactado → creación →
+ * préstamo, para que se cuente una sola vez y no en cada mes que se visita.
+ * Es la única fuente de verdad que comparten el saldo de débito, Movimientos y el
+ * desglose de préstamos, para que el cobro aparezca en el mismo mes en todas partes.
  */
-export function getReceivableCollectionMonth(r: Receivable): string {
-  return (r.dueDate || r.createdAt || r.loanDate || '').slice(0, 7);
+export function getReceivableCollectionEntries(r: Receivable): ReceivableCollectionEntry[] {
+  const total = Math.max(0, r.paidAmount || 0);
+  if (total <= 0.005) return [];
+
+  const isUsd = r.currency === 'USD';
+  const exRate = r.exchangeRate || FALLBACK_USD_PEN_RATE;
+  const toPen = (amt: number) => (isUsd ? amt * exRate : amt);
+
+  const sorted = [...(r.payments || [])]
+    .map(p => ({ p, date: (p.paymentDate || '').split('T')[0] }))
+    .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.date))
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.p.createdAt || '').localeCompare(b.p.createdAt || ''));
+
+  const entries: ReceivableCollectionEntry[] = [];
+  let pending = total;
+  for (const { p, date } of sorted) {
+    if (pending <= 0.005) break;
+    const raw = p.amount || p.amountPaid || 0;
+    const amount = Math.round(Math.min(raw, pending) * 100) / 100;
+    if (amount <= 0.005) continue;
+    entries.push({ payment: { ...p, amount, amountPaid: amount }, date, amount, amountPen: toPen(amount), isLegacy: false });
+    pending -= amount;
+  }
+
+  if (pending > 0.005) {
+    const date = (r.dueDate || r.createdAt || r.loanDate || '').split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const amount = Math.round(pending * 100) / 100;
+      entries.push({
+        payment: {
+          id: `legacy-${r.id}`,
+          receivableId: r.id,
+          amount,
+          amountPaid: amount,
+          paymentDate: date,
+          notes: 'Cobro registrado'
+        },
+        date,
+        amount,
+        amountPen: toPen(amount),
+        isLegacy: true
+      });
+    }
+  }
+
+  return entries.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /**
@@ -1302,11 +1375,12 @@ export function computeMonthlyDebitChain(params: {
     scheduledDueByMonth.set(targetKey, (scheduledDueByMonth.get(targetKey) || 0) + Math.max(0, pen));
   });
 
+  // Préstamos indexados por cada mes en que recibieron un abono (fecha real de
+  // cobro). calculateCurrentDebitBalance suma solo los abonos del mes evaluado.
   const recByMonth = new Map<string, Receivable[]>();
   receivables.forEach(r => {
-    if (!r.paidAmount) return; // sin cobro no aporta caja
-    const k = getReceivableCollectionMonth(r);
-    if (isMonthKey(k)) pushTo(recByMonth, k, r);
+    const months = new Set(getReceivableCollectionEntries(r).map(e => e.date.slice(0, 7)));
+    months.forEach(k => { if (isMonthKey(k)) pushTo(recByMonth, k, r); });
   });
 
   // Universo de meses relevantes: overrides, gastos (por fecha y por vencimiento),
@@ -1419,12 +1493,11 @@ export function calculateMonthlyDiagnostic(
   const simpleRemaining = totalIncome - totalExpensesConsumed;
   const savingsRatePercentage = totalIncome > 0 ? (simpleRemaining / totalIncome) * 100 : 0;
 
-  // 4. Cobranzas a terceros cobradas (con paridad cambiaria en USD)
+  // 4. Cobranzas a terceros con fecha de abono en este mes (con paridad cambiaria en USD)
   const collectedReceivables = receivables.reduce((acc, curr) => {
-    const isUsd = curr.currency === 'USD';
-    const exRate = curr.exchangeRate || FALLBACK_USD_PEN_RATE;
-    const paidPen = isUsd ? curr.paidAmount * exRate : curr.paidAmount;
-    return acc + paidPen;
+    return acc + getReceivableCollectionEntries(curr)
+      .filter(entry => entry.date.startsWith(targetYearMonth))
+      .reduce((sum, entry) => sum + entry.amountPen, 0);
   }, 0);
 
   // 4.b Préstamos recibidos acreditados a débito ESTE mes: entran como caja real
@@ -2493,27 +2566,6 @@ export function revertInstallmentPrepayment(params: {
 export function formatSoles(amount?: number | null): string {
   const num = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
   return `S/ ${num.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-/**
- * Determina la fecha de cobro para préstamos históricos que no cuenten con tabla
- * de amortizaciones hija (receivable_payments).
- * Si updatedAt coincide con la fecha de desembolso (loanDate) o de creación,
- * NO es la fecha de pago (es solo la fecha en que se registró el préstamo original);
- * en tal caso retorna currentDateStr.
- */
-export function getFallbackReceivablePaymentDate(r: Receivable, monthKey: string, currentDateStr: string): string {
-  const upDay = r.updatedAt ? r.updatedAt.split('T')[0] : '';
-  const loanDay = r.loanDate || '';
-  const createdDay = r.createdAt ? r.createdAt.split('T')[0] : '';
-
-  if (upDay && upDay !== loanDay && upDay !== createdDay && upDay.startsWith(monthKey)) {
-    return upDay;
-  }
-  if (currentDateStr.startsWith(monthKey)) {
-    return currentDateStr;
-  }
-  return `${monthKey}-01`;
 }
 
 /**

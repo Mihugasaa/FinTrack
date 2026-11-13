@@ -363,16 +363,19 @@ export const ReceivablesTab: React.FC = () => {
             const totalPen = orphanLoanDisbursements.reduce((acc, r) => acc + (r.amountPen ?? r.originalAmount), 0);
             const names = Array.from(new Set(orphanLoanDisbursements.map(r => r.debtorName)));
             const namesLabel = names.length <= 2 ? names.join(' y ') : `${names.slice(0, 2).join(', ')} y ${names.length - 2} más`;
+            // Fechas cortas (DD/MM) si son del año en curso; completas si no.
+            const thisYear = String(new Date().getFullYear());
+            const shortDate = (d: string) => (d.startsWith(thisYear) ? formatDisplayDate(d).slice(0, 5) : formatDisplayDate(d));
             const dates = orphanLoanDisbursements.map(r => r.loanDate || '').filter(Boolean);
             const dateLabel = dates.length > 1 && dates[0] !== dates[dates.length - 1]
-              ? `del ${formatDisplayDate(dates[0])} al ${formatDisplayDate(dates[dates.length - 1])}`
-              : dates.length > 0 ? `del ${formatDisplayDate(dates[0])}` : '';
+              ? `del ${shortDate(dates[0])} al ${shortDate(dates[dates.length - 1])}`
+              : dates.length > 0 ? `del ${shortDate(dates[0])}` : '';
             return (
               <div className="loans-info-banner warning-tint" id="orphan-loans-banner">
                 <div className="loans-info-banner-left">
                   <RotateCcw size={16} color="var(--accent-warning)" style={{ flexShrink: 0 }} />
                   <span>
-                    {count === 1 ? 'Hay 1 préstamo borrado' : `Hay ${count} préstamos borrados`} a <strong>{namesLabel}</strong> ({formatSoles(totalPen)} {dateLabel}) {count === 1 ? 'cuya salida sigue' : 'cuyas salidas siguen'} en Movimientos. {count === 1 ? 'Puedes restaurarlo como pendiente' : 'Puedes restaurarlos como pendientes'} sin duplicar {count === 1 ? 'esa salida' : 'esas salidas'}.
+                    <strong>{namesLabel}</strong> {names.length === 1 ? 'tiene' : 'tienen'} {count === 1 ? '1 préstamo eliminado' : `${count} préstamos eliminados`} ({formatSoles(totalPen)}, {dateLabel}) con su salida todavía en Movimientos. {count === 1 ? 'Si lo restauras, vuelve' : 'Si los restauras, vuelven'} a Pendientes sin descontar el dinero otra vez.
                   </span>
                 </div>
                 <div className="loans-info-banner-right" style={{ display: 'flex', gap: '8px' }}>
@@ -381,7 +384,7 @@ export const ReceivablesTab: React.FC = () => {
                     className="btn-secondary"
                     style={{ padding: '6px 12px', fontSize: '0.78rem' }}
                     onClick={dismissOrphanLoans}
-                    title="No restaurar: la salida se queda en Movimientos sin préstamo asociado"
+                    title="Ocultar este aviso. Las salidas se quedan en Movimientos."
                   >
                     Descartar
                   </button>
@@ -394,7 +397,7 @@ export const ReceivablesTab: React.FC = () => {
                       restoreOrphanLoans();
                       setReceivablesFilter('pending');
                     }}
-                    title="Volver a crear estos préstamos como pendientes de cobro, con su fecha y monto originales"
+                    title="Volver a crear estos préstamos como pendientes, con su fecha y monto originales"
                   >
                     <RotateCcw size={13} />
                     <span>Restaurar</span>

@@ -89,7 +89,7 @@ export const DeleteConfirmModal: React.FC = () => {
               </h2>
               <p style={{ margin: '3px 0 0 0', fontSize: '0.775rem', color: 'var(--text-muted)' }}>
                 {hasCollections
-                  ? 'Puedes revertir sus cobros en lugar de borrarlo.'
+                  ? 'Ya tiene cobros registrados.'
                   : 'Esta acción no se puede deshacer.'}
               </p>
             </div>
@@ -177,7 +177,7 @@ export const DeleteConfirmModal: React.FC = () => {
               </span>
             </div>
             <p className="delete-alt-notice-text">
-              Si quieres volver a cobrarlo, revierte los cobros y el préstamo regresa a Pendientes con su salida intacta en Movimientos. Eliminarlo borra también su historial de cobros.
+              Si reviertes los cobros, el préstamo vuelve a Pendientes y su salida se queda en Movimientos. Eliminarlo borra también su historial.
             </p>
           </div>
         )}
@@ -192,9 +192,9 @@ export const DeleteConfirmModal: React.FC = () => {
               onChange={e => setDeleteLinkedTx(e.target.checked)}
             />
             <span className="delete-linked-option-copy">
-              <strong>{hasCollections ? 'Al eliminar, borrar también la salida' : 'Eliminar también la salida en Movimientos'}</strong>
+              <strong>{hasCollections ? 'Si lo eliminas, borrar también su salida' : 'Borrar también su salida en Movimientos'}</strong>
               <span>
-                {formatSoles(linkedTx.amountPen)} del {formatDisplayDate(linkedTx.date)}. Si la conservas, ese dinero sigue descontado de tu saldo.
+                {formatSoles(linkedTx.amountPen)} del {formatDisplayDate(linkedTx.date)}. Si la dejas, sigue descontada de tu saldo.
               </span>
             </span>
           </label>
@@ -210,7 +210,7 @@ export const DeleteConfirmModal: React.FC = () => {
                 className="btn-primary"
                 onClick={handleRevertReceivableFromDelete}
                 style={{ padding: '10px 14px', fontSize: '0.825rem' }}
-                title="Quitar los cobros registrados y devolver el préstamo a Pendientes"
+                title="Quitar los cobros y devolver el préstamo a Pendientes"
               >
                 <RotateCcw size={14} />
                 <span>Revertir cobros</span>

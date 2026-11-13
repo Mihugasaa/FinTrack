@@ -33,6 +33,7 @@ export const ExpenseModal: React.FC = () => {
     setSelectedCategoryId,
     isRecurring,
     setIsRecurring,
+    futureRecurringCopiesCount,
     amount,
     setAmount,
     currency,
@@ -266,11 +267,16 @@ export const ExpenseModal: React.FC = () => {
                 id="input-expense-amount"
                 type="number"
                 step="0.01"
+                min="0.01"
                 placeholder="0.00"
                 className="form-input"
                 required
                 value={amount}
-                onChange={e => setAmount(e.target.value)}
+                onChange={e => {
+                  e.currentTarget.setCustomValidity('');
+                  setAmount(e.target.value);
+                }}
+                onInvalid={e => e.currentTarget.setCustomValidity('Ingresa un monto mayor a 0.')}
               />
             </div>
 
@@ -332,13 +338,17 @@ export const ExpenseModal: React.FC = () => {
                     id="input-expense-exchange-rate"
                     type="number"
                     step="0.0001"
+                    min="0.0001"
+                    required
                     className="form-input"
                     style={{ paddingRight: '40px' }}
                     value={exchangeRate}
                     onChange={e => {
+                      e.currentTarget.setCustomValidity('');
                       setExchangeRate(e.target.value);
                       setHasUserManuallyEditedTc(true);
                     }}
+                    onInvalid={e => e.currentTarget.setCustomValidity('Ingresa el tipo de cambio del día.')}
                     placeholder="3.3620"
                   />
                   {isFetchingTc && (
@@ -486,6 +496,11 @@ export const ExpenseModal: React.FC = () => {
                 <span className="modal-footnote-note">
                   Se proyectará cada mes en tu presupuesto y flujo de caja.
                 </span>
+                {futureRecurringCopiesCount > 0 && (
+                  <span className="modal-footnote-note" style={{ color: 'var(--accent-warning)', fontWeight: 600 }}>
+                    Al guardar se {futureRecurringCopiesCount === 1 ? 'quita su cargo' : `quitan sus ${futureRecurringCopiesCount} cargos`} de los meses siguientes.
+                  </span>
+                )}
               </div>
             </div>
           )}

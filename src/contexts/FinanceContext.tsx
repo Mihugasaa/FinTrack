@@ -436,7 +436,8 @@ function useFinanceController() {
     handleParseNaturalExpense,
     handleCreateTransaction,
     deleteTransactionById,
-    deleteTransactionAndFuture
+    deleteTransactionAndFuture,
+    futureRecurringCopiesCount
   } = useTransactions({
     monthKey,
     currentUser,
@@ -2808,6 +2809,7 @@ function useFinanceController() {
     handleCreateTransaction,
     deleteTransactionById,
     deleteTransactionAndFuture,
+    futureRecurringCopiesCount,
     handleDeleteTransaction,
     promptDeleteTransaction,
 

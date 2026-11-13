@@ -234,6 +234,18 @@ export function getDaysInMonth(year: number, month: number): number {
 }
 
 /**
+ * Días de calendario desde hoy (fecha local) hasta una fecha AAAA-MM-DD:
+ * 0 = hoy, 1 = mañana, negativo = ya pasó. No depende de la hora del día ni de
+ * la zona horaria (una fecha sin hora no se interpreta como medianoche UTC).
+ */
+export function daysUntilDate(dateStr: string, from: Date = new Date()): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const target = new Date(y, m - 1, d);
+  const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+/**
  * Obtiene las fechas bancarias reales de un ciclo de facturación (fecha de corte,
  * fecha de inicio y fecha de vencimiento) a partir de la tarjeta y el mes de vencimiento (YYYY-MM).
  */
@@ -548,9 +560,7 @@ export function getBestCardRecommendation(
 
   const evaluated = creditCards.map(card => {
     const dueDateStr = calculatePaymentDueDate(todayStr, card);
-    const dueDate = new Date(dueDateStr);
-    const diffTime = dueDate.getTime() - referenceDate.getTime();
-    const creditDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+    const creditDays = Math.max(0, daysUntilDate(dueDateStr, referenceDate));
 
     // Días hasta el próximo corte considerando ajuste a día hábil anterior
     const curYear = referenceDate.getFullYear();
@@ -568,9 +578,7 @@ export function getBestCardRecommendation(
       const closeNextMonth = getEffectiveBillingCloseDate(nextMonthYear, nextMonth, card.billingCloseDay || 1);
       nextEffectiveCloseDateStr = closeNextMonth.effectiveDate;
     }
-    const [cYear, cMonth, cDay] = nextEffectiveCloseDateStr.split('-').map(Number);
-    const closeDateObj = new Date(cYear, cMonth - 1, cDay, 12, 0, 0);
-    const daysUntilClose = Math.max(0, Math.ceil((closeDateObj.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const daysUntilClose = Math.max(0, daysUntilDate(nextEffectiveCloseDateStr, referenceDate));
 
     const utilization = Math.max(0, Math.min(100, utilizationByCard[card.id] ?? 0));
 
@@ -2011,9 +2019,7 @@ export function calculateCardsDebtSummary(
       }
       nextEffectiveCloseDateStr = getEffectiveBillingCloseDate(nextCloseYear, nextCloseMonth, card.billingCloseDay || 1).effectiveDate;
     }
-    const [cYear, cMonth, cDay] = nextEffectiveCloseDateStr.split('-').map(Number);
-    const closeDate = new Date(cYear, cMonth - 1, cDay, 12, 0, 0);
-    const daysUntilClose = Math.max(0, Math.ceil((closeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    const daysUntilClose = Math.max(0, daysUntilDate(nextEffectiveCloseDateStr, now));
 
     const daysInCurMonth = getDaysInMonth(currentYear, currentMonth);
     const effPayDay = Math.min(card.paymentDueDay || 1, daysInCurMonth);
@@ -2028,12 +2034,11 @@ export function calculateCardsDebtSummary(
     }
     const daysInPayMonth = getDaysInMonth(nextPayYear, nextPayMonth);
     const finalPayDay = Math.min(card.paymentDueDay || 1, daysInPayMonth);
-    const paymentDate = new Date(nextPayYear, nextPayMonth - 1, finalPayDay);
-    const daysUntilPayment = Math.max(0, Math.ceil((paymentDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    const paymentDateStr = `${nextPayYear}-${nextPayMonth.toString().padStart(2, '0')}-${finalPayDay.toString().padStart(2, '0')}`;
+    const daysUntilPayment = Math.max(0, daysUntilDate(paymentDateStr, now));
 
     const dueDateStr = calculatePaymentDueDate(todayStr, card);
-    const dueDate = new Date(dueDateStr);
-    const creditDaysAdvantage = Math.max(0, Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    const creditDaysAdvantage = Math.max(0, daysUntilDate(dueDateStr, now));
 
     // ==========================================
     // CRONOGRAMA MENSUAL DE VENCIMIENTOS (targetYM)
@@ -2173,10 +2178,18 @@ export function generateInstallmentTransactions(
   let currentMonth = parseInt(baseMStr, 10); // 1-12
   const day = parseInt(baseDStr, 10);
 
+  // Sin cuota con interés, la última absorbe los céntimos del redondeo para que la
+  // suma de las cuotas sea exactamente el total (p. ej. 1000 en 3: 333.33 + 333.33 + 333.34).
+  const hasOverride = !!(monthlyInstallmentOverride && monthlyInstallmentOverride > 0);
+  const lastAmount = hasOverride
+    ? monthlyAmount
+    : Math.round((totalAmount - monthlyAmount * (totalInstallments - 1)) * 100) / 100;
+
   for (let i = 1; i <= totalInstallments; i++) {
     const monthStr = currentMonth.toString().padStart(2, '0');
     const actualDay = getEffectiveDayOfMonth(currentYear, currentMonth, day).toString().padStart(2, '0');
     const txDate = `${currentYear}-${monthStr}-${actualDay}`;
+    const instAmount = i === totalInstallments ? lastAmount : monthlyAmount;
 
     // Calcular la fecha de pago bancaria según el ciclo de la tarjeta
     const paymentDueDate = calculatePaymentDueDate(txDate, method);
@@ -2187,9 +2200,9 @@ export function generateInstallmentTransactions(
       ...baseTx,
       id,
       date: txDate,
-      originalAmount: monthlyAmount,
+      originalAmount: instAmount,
       exchangeRate,
-      amountPen: baseTx.currency === 'USD' ? Number((monthlyAmount * exchangeRate).toFixed(2)) : monthlyAmount,
+      amountPen: baseTx.currency === 'USD' ? Number((instAmount * exchangeRate).toFixed(2)) : instAmount,
       paymentDueDate,
       isInstallment: true,
       totalInstallments,

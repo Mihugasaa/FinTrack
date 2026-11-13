@@ -480,6 +480,8 @@ export function useReceivables({ currentYear, currentMonth, setDebtConfirmData, 
     // Modo edición: actualiza el préstamo conservando los abonos ya cobrados.
     if (editingReceivableId) {
       const existing = receivables.find(r => r.id === editingReceivableId);
+      // El monto no puede quedar por debajo de lo ya cobrado (saldo negativo)
+      if (existing && orig < (existing.paidAmount || 0) - 0.005) return;
       if (existing) {
         const paid = existing.paidAmount || 0;
         const rem = Math.max(0, orig - paid);
